@@ -15,7 +15,7 @@ const ParticipantSchema = new mongoose.Schema(
     },
 
     last_read_message_id: {
-      type: Number,
+      type: String,
       required: true,
       default: 0,
     },
@@ -41,8 +41,8 @@ const ParticipantSchema = new mongoose.Schema(
       },
       notification_status: {
         type: String,
-        enum: ["ON", "MUTE", "OFF"],
-        default: "ON",
+        enum: ["on", "mute", "off"],
+        default: "on",
       },
       mute_until: {
         type: Date,
@@ -62,8 +62,8 @@ const ParticipantSchema = new mongoose.Schema(
 
     roles: {
       type: String,
-      enum: ["ADMIN", "USER"],
-      default: "USER",
+      enum: ["admin", "user"],
+      default: "user",
     },
   },
   {

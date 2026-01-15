@@ -1,10 +1,12 @@
 const mongoose = require("mongoose");
+const { generateId } = require("../utils/snowflake");
 
 const MessageSchema = new mongoose.Schema(
   {
     msg_id: {
-      type: Number,
-      required: true,
+      type: String,
+      default: generateId,
+      unique: true,
     },
 
     conversation_id: {
@@ -21,14 +23,14 @@ const MessageSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["text", "image", "video", "file", "system"],
+      enum: ["text", "image", "video", "file"],
       default: "text",
     },
 
     content: [{ type: String }],
     size: { type: Number, default: 0 },
 
-    reply_to_msg_id: { type: Number, default: null },
+    reply_to_msg_id: { type: String, default: null },
 
     reactions: [
       {
@@ -45,7 +47,6 @@ const MessageSchema = new mongoose.Schema(
   }
 );
 
-MessageSchema.index({ conversation_id: 1, msg_id: 1 }, { unique: true });
 MessageSchema.index({ conversation_id: 1, msg_id: -1 });
 
 module.exports = mongoose.model("Message", MessageSchema);

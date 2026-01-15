@@ -4,8 +4,8 @@ const ConversationSchema = new mongoose.Schema(
   {
     type: {
       type: String,
-      enum: ["PRIVATE", "GROUP"],
-      required: true,
+      enum: ["private", "group"],
+      default: "private",
     },
 
     name: { type: String, default: "" },
@@ -23,11 +23,15 @@ const ConversationSchema = new mongoose.Schema(
     },
 
     last_message: {
-      msg_id: { type: Number },
+      msg_id: { type: String, ref: "Message" },
       sender_id: { type: String, ref: "User" },
       content: { type: String },
-      type: { type: String, enum: ["text", "image", "video", "file"] },
-      created_at: { type: Date },
+      type: {
+        type: String,
+        enum: ["text", "image", "video", "file"],
+        default: "text",
+      },
+      createdAt: { type: Date },
     },
 
     is_deleted: {
