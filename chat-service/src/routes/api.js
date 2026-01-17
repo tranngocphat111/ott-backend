@@ -10,7 +10,6 @@ router.post("/users/sync", UserController.syncUser);
 router.get("/users", UserController.getAllUsers);
 
 router.post("/conversations", ConversationController.createConversation);
-router.post("/conversations/add-member", ConversationController.addMember);
 
 router.get(
   "/participants/:userId",
