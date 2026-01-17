@@ -13,7 +13,7 @@ exports.sendMessage = async (req, res) => {
 
     req.io.to(conversationId).emit("tin_nhan", savedMessage);
     console.log(
-      `${senderId} gui tin nhan : ${content} vao cuoc trof chuyen ${conversationId}`,
+      `${senderId} gui tin nhan ${content} vao cuoc tro chuyen ${conversationId}`,
     );
 
     res.status(201).json(savedMessage);
