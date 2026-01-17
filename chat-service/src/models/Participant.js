@@ -1,0 +1,78 @@
+const mongoose = require("mongoose");
+
+const ParticipantSchema = new mongoose.Schema(
+  {
+    user_id: {
+      type: String,
+      required: true,
+      ref: "User",
+    },
+
+    conversation_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      ref: "Conversation",
+    },
+
+    last_read_message_id: {
+      type: String,
+      required: true,
+      default: 0,
+    },
+
+    last_read_at: {
+      type: Date,
+      required: true,
+      default: Date.now,
+    },
+
+    deleted_msg_id: {
+      type: Number,
+      default: 0,
+    },
+
+    settings: {
+      is_pinned: {
+        type: Boolean,
+        default: false,
+      },
+      pinned_at: {
+        type: Date,
+      },
+      notification_status: {
+        type: String,
+        enum: ["on", "mute", "off"],
+        default: "on",
+      },
+      mute_until: {
+        type: Date,
+        default: null,
+      },
+    },
+
+    nickname: { type: String },
+
+    joined_at: {
+      type: Date,
+      required: true,
+      default: Date.now,
+    },
+
+    added_by: { type: String },
+
+    roles: {
+      type: String,
+      enum: ["admin", "user"],
+      default: "user",
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+ParticipantSchema.index({ conversation_id: 1, user_id: 1 }, { unique: true });
+ParticipantSchema.index({ user_id: 1 });
+ParticipantSchema.index({ conversation_id: 1 });
+
+module.exports = mongoose.model("Participant", ParticipantSchema);
