@@ -12,16 +12,8 @@ connectDB();
 const app = express();
 const server = http.createServer(app);
 
-const { createClient } = require("redis");
-const { createAdapter } = require("@socket.io/redis-adapter");
-
 app.use(cors());
 app.use(express.json());
-
-const pubClient = createClient({
-  url: process.env.REDIS_URI,
-});
-const subClient = pubClient.duplicate();
 
 const io = new Server(server, {
   cors: {
@@ -30,31 +22,22 @@ const io = new Server(server, {
   },
 });
 
-Promise.all([pubClient.connect(), subClient.connect()]).then(() => {
-  io.adapter(createAdapter(pubClient, subClient));
-  console.log("Redis da ket noi");
+app.use((req, res, next) => {
+  req.io = io;
+  next();
 });
 
 io.on("connection", (socket) => {
   console.log("User moi vua ket noi:", socket.id);
 
-  socket.on("join_conversation", (conversationId) => {
+  socket.on("tham_gia_nhom", (conversationId) => {
     socket.join(conversationId);
     console.log(`User tham gia vao phong: ${conversationId}`);
-  });
-
-  socket.on("send_message", (data) => {
-    socket.to(data.conversationId).emit("receive_message", data);
   });
 
   socket.on("disconnect", () => {
     console.log("User ngat ket noi");
   });
-});
-
-app.use((req, res, next) => {
-  req.io = io;
-  next();
 });
 
 app.use("/api", apiRoutes);

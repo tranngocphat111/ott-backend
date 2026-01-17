@@ -1,6 +1,6 @@
 const Participant = require("../models/Participant");
 
-exports.addParticipant = async ({ conversationId, userId, role = "user" }) => {
+exports.addParticipant = async ({ conversationId, userId, role }) => {
   const existing = await Participant.findOne({
     conversation_id: conversationId,
     user_id: userId,
