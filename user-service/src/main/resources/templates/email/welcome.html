@@ -1,0 +1,132 @@
+
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to [[${appName}]]</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            padding-bottom: 30px;
+            border-bottom: 3px solid #4F46E5;
+        }
+        .logo {
+            font-size: 36px;
+            font-weight: bold;
+            color: #4F46E5;
+            margin-bottom: 10px;
+        }
+        .welcome-title {
+            font-size: 28px;
+            color: #1F2937;
+            margin: 30px 0 20px 0;
+            text-align: center;
+        }
+        .content {
+            margin: 30px 0;
+            color: #4B5563;
+        }
+        .button {
+            display: inline-block;
+            padding: 14px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-weight: 600;
+            text-align: center;
+        }
+        .features {
+            background: #F9FAFB;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .feature-item {
+            margin: 15px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+        .feature-item:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #10B981;
+            font-weight: bold;
+            font-size: 20px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #E5E7EB;
+            color: #6B7280;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="logo">[[${appName}]]</div>
+        <p style="color: #6B7280; margin: 0;">Your Social Media Platform</p>
+    </div>
+
+    <h1 class="welcome-title">🎉 Welcome, [[${fullName}]]!</h1>
+
+    <div class="content">
+        <p>We're thrilled to have you join our community! Your account has been successfully created.</p>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <a th:href="${websiteUrl}" class="button">Get Started Now</a>
+        </div>
+
+        <div class="features">
+            <h3 style="margin-top: 0; color: #1F2937;">What you can do:</h3>
+            <div class="feature-item">Connect with friends and family</div>
+            <div class="feature-item">Share your moments and stories</div>
+            <div class="feature-item">Discover interesting content</div>
+            <div class="feature-item">Join communities with similar interests</div>
+            <div class="feature-item">Stay updated with real-time notifications</div>
+        </div>
+
+        <h3 style="color: #1F2937;">Security Tips:</h3>
+        <ul style="color: #4B5563;">
+            <li>Keep your password secure and unique</li>
+            <li>Enable two-factor authentication for extra security</li>
+            <li>Never share your login credentials with anyone</li>
+            <li>Review your privacy settings regularly</li>
+        </ul>
+    </div>
+
+    <div class="footer">
+        <p>Need help? Contact us at <a th:href="'mailto:' + ${supportEmail}" style="color: #4F46E5;">[[${supportEmail}]]</a></p>
+        <p style="margin-top: 20px;">
+            <a th:href="${websiteUrl}" style="color: #4F46E5; text-decoration: none; margin: 0 10px;">Visit Website</a> |
+            <a th:href="${websiteUrl + '/help'}" style="color: #4F46E5; text-decoration: none; margin: 0 10px;">Help Center</a> |
+            <a th:href="${websiteUrl + '/privacy'}" style="color: #4F46E5; text-decoration: none; margin: 0 10px;">Privacy Policy</a>
+        </p>
+        <p style="margin-top: 20px; color: #9CA3AF;">
+            © [[${currentYear}]] [[${appName}]]. All rights reserved.
+        </p>
+    </div>
+</div>
+</body>
+</html>
