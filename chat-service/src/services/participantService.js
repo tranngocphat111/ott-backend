@@ -41,4 +41,39 @@ exports.updateLastRead = async (conversationId, userId, msgId) => {
   );
 };
 
+exports.updateConversationCategory = async (conversationId, userId, categoryId) => {
+  return await Participant.findOneAndUpdate(
+    { conversation_id: conversationId, user_id: userId },
+    { category_id: categoryId },
+    { new: true }
+  );
+};
+
+exports.updateNotificationStatus = async (conversationId, userId, status, muteUntil) => {
+  const updateData = {
+    "settings.notification_status": status,
+  };
+  
+  if (muteUntil) {
+    updateData["settings.mute_until"] = muteUntil;
+  }
+  
+  return await Participant.findOneAndUpdate(
+    { conversation_id: conversationId, user_id: userId },
+    updateData,
+    { new: true }
+  );
+};
+
+exports.updatePinStatus = async (conversationId, userId, isPinned) => {
+  return await Participant.findOneAndUpdate(
+    { conversation_id: conversationId, user_id: userId },
+    {
+      "settings.is_pinned": isPinned,
+      "settings.pinned_at": isPinned ? new Date() : null,
+    },
+    { new: true }
+  );
+};
+
 

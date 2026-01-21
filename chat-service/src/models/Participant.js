@@ -14,6 +14,12 @@ const ParticipantSchema = new mongoose.Schema(
       ref: "Conversation",
     },
 
+    category_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "UserCategory",
+      default: null,
+    },
+
     last_read_message_id: {
       type: String,
       required: true,

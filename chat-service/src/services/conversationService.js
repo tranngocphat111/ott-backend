@@ -1,9 +1,14 @@
 const Conversation = require("../models/Conversation");
 
-exports.createConversation = async ({ creatorId, type }) => {
+exports.createConversation = async ({ creatorId, type, name, avatar, memberCount }) => {
   const newConversation = new Conversation({
     type: type,
+    name: name || "",
+    avatar: avatar || "",
     created_by: creatorId,
+    member_count: memberCount || 2,
+    is_deleted: false,
+    background: "",
   });
 
   return await newConversation.save();
@@ -27,4 +32,8 @@ exports.updateLastMessage = async (conversationId, message) => {
     },
     { new: true }
   );
+};
+
+exports.getConversationById = async (conversationId) => {
+  return await Conversation.findById(conversationId);
 };
