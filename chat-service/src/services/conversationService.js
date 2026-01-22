@@ -19,18 +19,39 @@ exports.getAllConversations = async () => {
 };
 
 exports.updateLastMessage = async (conversationId, message) => {
+  let displayContent = "";
+
+  switch (message.type) {
+    case "image":
+      displayContent = "[Hình ảnh]";
+      break;
+    case "video":
+      displayContent = "[Video]";
+      break;
+    case "file":
+      displayContent = "[Tệp tin]";
+      break;
+    default:
+      const rawContent = message.content[0] || "";
+      displayContent =
+        rawContent.length > 50
+          ? rawContent.substring(0, 50) + "..."
+          : rawContent;
+      break;
+  }
+
   return await Conversation.findByIdAndUpdate(
     conversationId,
     {
       last_message: {
         msg_id: message.msg_id,
         sender_id: message.sender_id,
-        content: message.content[0],
+        content: displayContent,
         type: message.type,
         createdAt: message.createdAt,
       },
     },
-    { new: true }
+    { new: true },
   );
 };
 

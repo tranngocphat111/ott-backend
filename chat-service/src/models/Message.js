@@ -23,7 +23,7 @@ const MessageSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["text", "image", "video", "file"],
+      enum: ["text", "image", "video", "file", "system_add"],
       default: "text",
     },
 
@@ -44,7 +44,7 @@ const MessageSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 MessageSchema.index({ conversation_id: 1, msg_id: -1 });

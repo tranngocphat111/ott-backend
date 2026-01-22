@@ -21,6 +21,7 @@ router.put("/participants/category", ParticipantController.updateConversationCat
 router.put("/participants/notification", ParticipantController.updateNotificationStatus);
 router.put("/participants/pin", ParticipantController.updatePinStatus);
 
+router.post("/messages/presigned-url", MessageController.generatePresignedUrl);
 router.post("/messages", MessageController.sendMessage);
 router.get("/messages/:conversationId", MessageController.getMessages);
 

@@ -35,6 +35,25 @@ io.on("connection", (socket) => {
     console.log(`User tham gia vao phong: ${conversationId}`);
   });
 
+   socket.on("bat_dau_goi", ({ conversationId, callerId, offer }) => {
+     socket
+       .to(conversationId)
+       .emit("cuoc_goi_den", { conversationId, callerId, offer });
+   });
+
+   socket.on("tra_loi_goi", ({ conversationId, answer }) => {
+     socket.to(conversationId).emit("chap_nhan_goi", { answer });
+   });
+
+   socket.on("trao_doi_duong_truyen", ({ conversationId, candidate }) => {
+     socket.to(conversationId).emit("nhan_duong_truyen", { candidate });
+   });
+
+   socket.on("ket_thuc_goi", ({ conversationId }) => {
+     socket.to(conversationId).emit("ket_thuc_phong_goi");
+     console.log(`Cuoc goi ket thuc tai phong ${conversationId}`);
+   });
+
   socket.on("disconnect", () => {
     console.log("User ngat ket noi");
   });
