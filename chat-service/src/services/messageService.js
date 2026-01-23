@@ -30,9 +30,7 @@ exports.generatePresignedUrl = async (fileName, fileType) => {
 
   const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
 
-  const fileUrl = `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
-
-  return { uploadUrl, fileUrl, key };
+  return { uploadUrl, fileCategory, key };
 };
 
 exports.sendMessage = async ({ conversationId, senderId, content, type, size }) => {
