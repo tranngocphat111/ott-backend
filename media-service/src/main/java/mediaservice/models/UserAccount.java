@@ -1,50 +1,28 @@
 package mediaservice.models;
 
-
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.ToString;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
+import lombok.*;
 
-import java.time.LocalDateTime;
 import java.util.Set;
 
-@Table(name = "user_accounts")
+@Table(name = "users")
 
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-public class UserAccount {
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private String id;
-
-    private String username;
-    private String displayName;
-
-    private String email;
-
-    private String avatarUrl;
-    private String coverUrl;
-
-    private String bio;
-
+@EqualsAndHashCode(callSuper = false)
+@DiscriminatorValue("USER")
+public class UserAccount extends Account{
     private boolean isCreator;
 
     @ToString.Exclude
     @OneToOne(mappedBy = "user")
     private CreatorProfile creatorProfile;
 
-    @ToString.Exclude
-    @OneToMany(mappedBy = "follower", fetch = FetchType.LAZY)
-    private Set<Follow> followings;
-
     @OneToMany(mappedBy = "ownerUser", fetch = FetchType.LAZY)
     private Set<OfficialAccount> officialAccounts;
+
 
     @OneToMany(mappedBy = "requester", fetch = FetchType.LAZY)
     private Set<Relationship> requestedRelationship;
@@ -52,13 +30,8 @@ public class UserAccount {
     @OneToMany(mappedBy = "receiver", fetch = FetchType.LAZY)
     private Set<Relationship> receivedRelationship;
 
-    @CreationTimestamp
-    @Column(updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    private LocalDateTime updatedAt;
-
-
+    @ToString.Exclude
+    @OneToMany(mappedBy = "follower", fetch = FetchType.LAZY)
+    private Set<Follow> followings;
 
 }

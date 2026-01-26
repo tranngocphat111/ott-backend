@@ -25,12 +25,12 @@ public class Mention {
     private String targetId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tagged_user_id")
-    private UserAccount taggedUser;
+    @JoinColumn(name = "tagged_account_id")
+    private Account taggedAccount;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tagged_by_user_id")
-    private UserAccount taggedByUser;
+    @JoinColumn(name = "tagged_by_account_id")
+    private Account taggedByAccount;
 
     @CreationTimestamp
     @Column(updatable = false)

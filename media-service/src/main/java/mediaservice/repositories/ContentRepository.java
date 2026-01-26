@@ -13,6 +13,5 @@ import java.util.List;
 public interface ContentRepository extends JpaRepository<Content, String> {
     List<Content> findByStatus(ContentStatusType status);
     List<Content> findByVisibility(VisibilityType visibility);
-    List<Content> findByTargetIdAndTargetType(String targetId, ContentTargetType targetType);
 }
 

@@ -31,6 +31,11 @@ public class Comment {
     @OneToMany(mappedBy = "parentComment")
     private Set<Comment> childCommentSet;
 
+
+    @JoinColumn(name = "account_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Account account;
+
     private boolean isEdited;
 
     private boolean isDeleted;

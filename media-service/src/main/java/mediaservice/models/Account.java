@@ -1,39 +1,42 @@
 package mediaservice.models;
 
+
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import mediaservice.models.enums.ReactionTargetType;
-import mediaservice.models.enums.ReactionType;
+import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
-@Table(name = "reactions")
+@Table(name = "accounts")
 
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
-
-public class Reaction {
+@Inheritance(strategy = InheritanceType.JOINED)
+@DiscriminatorColumn(name = "type", discriminatorType = DiscriminatorType.STRING)
+public abstract class Account {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
-    @ManyToOne
-    @JoinColumn(name = "account_id")
-    private Account account;
+    private String username;
+    private String displayName;
 
-    private String targetId;
+    private String email;
 
-    @Enumerated(EnumType.STRING)
-    private ReactionTargetType targetType;
+    private String avatarUrl;
+    private String coverUrl;
 
-    @Enumerated(EnumType.STRING)
-    private ReactionType reactionType;
+    private String bio;
+
+    @OneToMany(mappedBy = "account")
+    private Set<Comment> comments;
 
     @CreationTimestamp
     @Column(updatable = false)
@@ -41,4 +44,7 @@ public class Reaction {
 
     @UpdateTimestamp
     private LocalDateTime updatedAt;
+
+
+
 }

@@ -36,10 +36,9 @@ public abstract class Content {
     @OneToMany(mappedBy = "content")
     private Set<ContentAccessControl> accessControls;
 
-    private String targetId;
-
-    @Enumerated(EnumType.STRING)
-    private ContentTargetType targetType;
+    @ManyToOne
+    @JoinColumn(name = "account_id")
+    private Account account;
 
     @ManyToMany
     @JoinTable(

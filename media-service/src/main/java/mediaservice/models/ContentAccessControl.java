@@ -20,8 +20,8 @@ public class ContentAccessControl {
     private String id;
 
     @ManyToOne
-    @JoinColumn(name = "user_id")
-    private UserAccount user;
+    @JoinColumn(name = "account_id")
+    private Account account;
 
     @ManyToOne
     @JoinColumn(name = "content_id")
