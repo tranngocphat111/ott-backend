@@ -96,6 +96,12 @@ public enum ErrorCode {
 
     VALIDATION_FAILED(1111, "Validation failed", HttpStatus.BAD_REQUEST),
 
+
+    PHONE_AND_EMAIL_REQUIRED(1070, "Both phone number and email are required", HttpStatus.BAD_REQUEST),
+    PHONE_MISMATCH(1071, "Phone number does not match the account", HttpStatus.BAD_REQUEST),
+
+    PASSWORD_REQUIRED_FOR_2FA(2322, "dsfs", HttpStatus.BAD_REQUEST)
+
     ;
 
 

@@ -16,6 +16,7 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -26,11 +27,14 @@ import org.springframework.web.client.RestTemplate;
 
 import java.text.ParseException;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+@Slf4j
 public class AuthService {
 
     UserRepository userRepository;
@@ -123,6 +127,9 @@ public class AuthService {
             params.add("redirect_uri", redirectUri);
             params.add("grant_type", GRANT_TYPE);
 
+            log.info("Google Auth Request - redirectUri: {}", redirectUri);
+            log.info("Google Auth Request - code: {}...", request.getCode().substring(0, 20));
+
             HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(params, headers);
 
             ResponseEntity<GoogleTokenResponse> response = restTemplate.postForEntity(
@@ -134,23 +141,31 @@ public class AuthService {
             GoogleTokenResponse tokenResponse = response.getBody();
 
             if (tokenResponse == null || tokenResponse.getAccessToken() == null) {
+                log.error("Google token response is null or missing access token");
                 throw new AppException(ErrorCode.GOOGLE_AUTH_FAILED);
             }
 
+            log.info("Google token received successfully");
+
             var userInfo = googleUserClient.getUserInfo("json", tokenResponse.getAccessToken());
+
+            log.info("Google User Info - googleId: {}, email: {}, name: {}",
+                    userInfo.getGoogleId(), userInfo.getEmail(), userInfo.getName());
 
             if (userInfo.getEmail() == null || !validationUtils.isValidEmail(userInfo.getEmail())) {
                 throw new AppException(ErrorCode.INVALID_GOOGLE_EMAIL);
             }
 
-
-            User user = userRepository.findByGoogleId(userInfo.getGoogleId()).orElse(null);
+            User user = findUserByGoogleId(userInfo.getGoogleId());
 
             if (user == null) {
+                log.info("Finding user by email: {}", userInfo.getEmail());
                 user = userRepository.findByEmail(userInfo.getEmail()).orElse(null);
+                log.info("User found by email: {}", user != null ? user.getId() : "null");
             }
 
             if (user == null) {
+                log.info("User not found, generating temp token for phone setup");
                 String tempToken = jwtService.generateGoogleTempToken(userInfo);
 
                 return AuthenticationResponse.builder()
@@ -168,6 +183,7 @@ public class AuthService {
             }
 
             if (user.getGoogleId() == null) {
+                log.info("Linking Google account to existing user: {}", user.getId());
                 user.setGoogleId(userInfo.getGoogleId());
 
                 if (user.getEmail() == null) {
@@ -181,27 +197,55 @@ public class AuthService {
                 }
 
                 user = userRepository.save(user);
+                log.info("Google account linked successfully");
             }
 
             validateUserStatus(user, request.getIpAddress(), request.getDeviceInfo());
 
-            if (is2FAEnabled(user)) {
-                sendTwoFactorOtp(user, request.getIpAddress(), request.getLocation());
-
-                return AuthenticationResponse.builder()
-                        .authenticated(false)
-                        .requires2FA(true)
-                        .requiresPhoneSetup(false)
-                        .tempToken(jwtService.generateTempToken(user))
-                        .build();
-            }
-
+            log.info("Creating auth response for Google login (no 2FA required)");
             return createAuthResponse(user, request, LoginMethod.GOOGLE);
 
+        } catch (AppException e) {
+            log.error("AppException in googleAuth: {}", e.getMessage());
+            throw e;
         } catch (Exception e) {
+            log.error("Unexpected error in googleAuth", e);
             throw new AppException(ErrorCode.GOOGLE_AUTH_FAILED);
         }
     }
+
+    private User findUserByGoogleId(String googleId) {
+        try {
+            log.info("Finding user by googleId: {}", googleId);
+            User user = userRepository.findByGoogleId(googleId).orElse(null);
+            log.info("User found by googleId: {}", user != null ? user.getId() : "null");
+            return user;
+        } catch (org.springframework.dao.IncorrectResultSizeDataAccessException e) {
+            log.warn("Multiple users found with googleId: {}, fetching all and taking the most recent", googleId);
+            List<User> users = userRepository.findAllByGoogleId(googleId);
+
+            if (users.isEmpty()) {
+                return null;
+            }
+
+            User mostRecent = users.stream()
+                    .max(Comparator.comparing(User::getCreatedAt))
+                    .orElse(null);
+
+            log.info("Selected most recent user: {} (created at: {})",
+                    mostRecent.getId(), mostRecent.getCreatedAt());
+
+            users.stream()
+                    .filter(u -> !u.getId().equals(mostRecent.getId()))
+                    .forEach(oldUser -> {
+                        log.info("Deleting duplicate user: {}", oldUser.getId());
+                        userRepository.delete(oldUser);
+                    });
+
+            return mostRecent;
+        }
+    }
+
     @Transactional
     public AuthenticationResponse completeGoogleRegistration(CompleteGoogleRegistrationRequest request) {
         var googleInfo = jwtService.verifyGoogleTempToken(request.getTempToken());
@@ -327,10 +371,10 @@ public class AuthService {
             );
 
             if (request.getDeviceId() != null) {
-                sessionService.revokeSession(userId, request.getDeviceId());
+                sessionService.revokeSessionByDevice(userId, request.getDeviceId());
             }
         } catch (AppException exception) {
-
+            // Log but don't throw
         }
     }
 
@@ -419,6 +463,7 @@ public class AuthService {
                 emailService.sendWelcomeEmail(user);
                 user.setWelcomeEmailSent(true);
             } catch (Exception e) {
+                log.error("Failed to send welcome email", e);
             }
         }
     }
@@ -528,5 +573,61 @@ public class AuthService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    @Transactional
+    public OtpResponse requestEmailOtpLogin(RequestEmailLoginOtpRequest request) {
+        if (!validationUtils.isValidEmail(request.getEmail())) {
+            throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
+        }
+
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        validateUserStatus(user, request.getIpAddress(), request.getDeviceInfo());
+
+        OtpCode otpCode = otpService.generateOtp(
+                user,
+                null,
+                user.getEmail(),
+                OtpType.LOGIN_OTP_EMAIL,
+                request.getIpAddress()
+        );
+
+        emailService.sendOtpEmail(
+                user.getEmail(),
+                user.getFullName(),
+                otpCode.getCode(),
+                OtpType.LOGIN_OTP_EMAIL,
+                request.getIpAddress(),
+                request.getLocation()
+        );
+
+        return OtpResponse.builder()
+                .email(validationUtils.maskEmail(user.getEmail()))
+                .expiresAt(otpCode.getExpiresAt())
+                .message("OTP has been sent to your email")
+                .build();
+    }
+
+    @Transactional
+    public AuthenticationResponse verifyEmailOtpLogin(VerifyEmailLoginOtpRequest request) {
+        if (!validationUtils.isValidEmail(request.getEmail())) {
+            throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
+        }
+
+        OtpCode otpCode = otpService.validateOtp(
+                null,
+                request.getEmail(),
+                request.getOtpCode(),
+                OtpType.LOGIN_OTP_EMAIL
+        );
+
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        otpService.markOtpAsUsed(otpCode);
+
+        return createAuthResponse(user, request, LoginMethod.OTP);
     }
 }

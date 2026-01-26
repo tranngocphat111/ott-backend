@@ -5,6 +5,33 @@ import org.springframework.stereotype.Component;
 @Component
 public class ValidationUtils {
 
+    public String maskPhone(String phone) {
+        if (phone == null || phone.isEmpty()) {
+            return phone;
+        }
+
+        // Remove all spaces and special characters except +
+        String cleanPhone = phone.replaceAll("[^0-9+]", "");
+
+        int length = cleanPhone.length();
+
+        // If phone is too short, don't mask
+        if (length <= 6) {
+            return phone;
+        }
+
+        // Mask middle part of phone number
+        // Keep first 3 and last 3 digits visible
+        String prefix = cleanPhone.substring(0, 3);
+        String suffix = cleanPhone.substring(length - 3);
+
+        // Calculate number of asterisks needed
+        int asteriskCount = length - 6;
+        String asterisks = "*".repeat(asteriskCount);
+
+        return prefix + asterisks + suffix;
+    }
+
     public boolean isValidEmail(String email) {
         if (email == null || email.trim().isEmpty()) {
             return false;

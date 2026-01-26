@@ -78,35 +78,45 @@ public class AccountService {
 
     @Transactional
     public OtpResponse requestPasswordReset(ForgotPasswordRequest request) {
-        if (request.getPhone() == null && request.getEmail() == null) {
-            throw new AppException(ErrorCode.INVALID_REQUEST);
+        // BẮT BUỘC CẢ PHONE VÀ EMAIL
+        if (request.getPhone() == null || request.getEmail() == null) {
+            throw new AppException(ErrorCode.PHONE_AND_EMAIL_REQUIRED);
         }
 
-        if (request.getEmail() != null && !validationUtils.isValidEmail(request.getEmail())) {
+        // Validate email format
+        if (!validationUtils.isValidEmail(request.getEmail())) {
             throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
         }
 
-        if (request.getPhone() != null && !validationUtils.isValidPhone(request.getPhone())) {
+        // Validate phone format
+        if (!validationUtils.isValidPhone(request.getPhone())) {
             throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
         }
 
+        // Tìm user theo phone HOẶC email
         User user = userValidationUtil.findUserByPhoneOrEmail(request.getPhone(), request.getEmail());
 
-        String emailToSend = determineEmailForOtp(request.getEmail(), user.getEmail());
-        if (emailToSend == null) {
-            throw new AppException(ErrorCode.EMAIL_REQUIRED_FOR_PASSWORD_RESET);
+        // Verify rằng cả phone và email đều khớp với user
+        if (!user.getPhone().equals(request.getPhone())) {
+            throw new AppException(ErrorCode.PHONE_MISMATCH);
         }
 
+        if (user.getEmail() == null || !user.getEmail().equalsIgnoreCase(request.getEmail())) {
+            throw new AppException(ErrorCode.EMAIL_MISMATCH);
+        }
+
+        // Generate OTP
         OtpCode otpCode = otpService.generateOtp(
                 user,
                 request.getPhone(),
-                emailToSend,
+                user.getEmail(),
                 OtpType.RESET_PASSWORD,
                 request.getIpAddress()
         );
 
+        // Send OTP qua email
         emailService.sendOtpEmail(
-                emailToSend,
+                user.getEmail(),
                 user.getFullName(),
                 otpCode.getCode(),
                 OtpType.RESET_PASSWORD,
@@ -115,8 +125,8 @@ public class AccountService {
         );
 
         return OtpResponse.builder()
-                .phone(request.getPhone())
-                .email(validationUtils.maskEmail(emailToSend))
+                .phone(validationUtils.maskPhone(request.getPhone()))
+                .email(validationUtils.maskEmail(user.getEmail()))
                 .expiresAt(otpCode.getExpiresAt())
                 .message("OTP has been sent to your email address")
                 .build();
@@ -124,20 +134,33 @@ public class AccountService {
 
     @Transactional
     public void verifyPasswordReset(VerifyPasswordResetRequest request) {
-        if (request.getPhone() == null && request.getEmail() == null) {
-            throw new AppException(ErrorCode.INVALID_REQUEST);
+        // BẮT BUỘC CẢ PHONE VÀ EMAIL
+        if (request.getPhone() == null || request.getEmail() == null) {
+            throw new AppException(ErrorCode.PHONE_AND_EMAIL_REQUIRED);
         }
 
-        if (request.getEmail() != null && !validationUtils.isValidEmail(request.getEmail())) {
+        // Validate formats
+        if (!validationUtils.isValidEmail(request.getEmail())) {
             throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
         }
 
-        if (request.getPhone() != null && !validationUtils.isValidPhone(request.getPhone())) {
+        if (!validationUtils.isValidPhone(request.getPhone())) {
             throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
         }
 
+        // Tìm user
         User user = userValidationUtil.findUserByPhoneOrEmail(request.getPhone(), request.getEmail());
 
+        // Verify both phone and email match
+        if (!user.getPhone().equals(request.getPhone())) {
+            throw new AppException(ErrorCode.PHONE_MISMATCH);
+        }
+
+        if (user.getEmail() == null || !user.getEmail().equalsIgnoreCase(request.getEmail())) {
+            throw new AppException(ErrorCode.EMAIL_MISMATCH);
+        }
+
+        // Validate OTP
         OtpCode otpCode = otpService.validateOtp(
                 request.getPhone(),
                 request.getEmail(),
@@ -145,17 +168,21 @@ public class AccountService {
                 OtpType.RESET_PASSWORD
         );
 
+        // Validate new password
         if (!validationUtils.isValidPassword(request.getNewPassword())) {
             throw new AppException(ErrorCode.INVALID_PASSWORD_FORMAT);
         }
 
+        // Update password
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         user.setPasswordChangedAt(LocalDateTime.now());
         userValidationUtil.userRepository.save(user);
 
+        // Mark OTP as used
         otpService.markOtpAsUsed(otpCode);
-        sessionService.revokeAllUserSessions(user.getId(), "Password reset");
 
+        // Revoke all sessions
+        sessionService.revokeAllUserSessions(user.getId(), "Password reset");
     }
 
     @Transactional
@@ -387,13 +414,4 @@ public class AccountService {
                 .build();
     }
 
-    private String determineEmailForOtp(String requestEmail, String userEmail) {
-        if (requestEmail != null) {
-            if (userEmail != null && !requestEmail.equalsIgnoreCase(userEmail)) {
-                throw new AppException(ErrorCode.EMAIL_MISMATCH);
-            }
-            return requestEmail;
-        }
-        return userEmail;
-    }
 }

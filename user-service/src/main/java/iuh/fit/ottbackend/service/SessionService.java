@@ -10,21 +10,26 @@ import iuh.fit.ottbackend.entity.enums.LoginMethod;
 import iuh.fit.ottbackend.exception.AppException;
 import iuh.fit.ottbackend.exception.ErrorCode;
 import iuh.fit.ottbackend.repository.UserSessionRepository;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.text.ParseException;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SessionService {
 
     private final UserSessionRepository userSessionRepository;
     private final JwtService jwtService;
+    private final EntityManager entityManager;
 
     @Transactional
     public UserSession createUserSession(User user, String deviceId, DeviceType deviceType,
@@ -32,18 +37,23 @@ public class SessionService {
                                          String sessionToken, String refreshToken,
                                          LoginMethod loginMethod) {
 
-        List<UserSession> existingSessions = userSessionRepository
-                .findAllByDeviceIdAndUserAndIsActive(deviceId, user, true);
+        // CRITICAL FIX: DELETE old session instead of UPDATE to avoid duplicate key error
+        if (deviceId != null && user != null) {
+            Optional<UserSession> existingSession = userSessionRepository
+                    .findByDeviceIdAndUserAndIsActive(deviceId, user, true);
 
-        if (!existingSessions.isEmpty()) {
-            existingSessions.forEach(existingSession -> {
-                existingSession.setIsActive(false);
-                existingSession.setRevokedAt(LocalDateTime.now());
-                existingSession.setRevokedReason("New login from same device");
-            });
-            userSessionRepository.saveAll(existingSessions);
+            if (existingSession.isPresent()) {
+                UserSession oldSession = existingSession.get();
+
+                // DELETE instead of marking as inactive to avoid unique constraint violation
+                userSessionRepository.delete(oldSession);
+                entityManager.flush(); // Force delete to DB immediately
+
+                log.info("Deleted old session for deviceId: {}, userId: {}", deviceId, user.getId());
+            }
         }
 
+        // Now create new session - old one is deleted from DB
         UserSession session = UserSession.builder()
                 .user(user)
                 .sessionToken(sessionToken)
@@ -60,8 +70,7 @@ public class SessionService {
                 .refreshExpiresAt(LocalDateTime.now().plusSeconds(jwtService.getRefreshExpiration()))
                 .build();
 
-        session = userSessionRepository.save(session);
-        return session;
+        return userSessionRepository.save(session);
     }
 
     public UserSessionsResponse getUserSessions(String userId, String currentToken) {
@@ -78,6 +87,9 @@ public class SessionService {
                 .build();
     }
 
+    /**
+     * Revoke session by sessionId (UUID)
+     */
     @Transactional
     public void revokeSession(String userId, String sessionId) {
         UserSession session = userSessionRepository.findById(sessionId)
@@ -91,10 +103,36 @@ public class SessionService {
             return;
         }
 
+        // Mark as inactive and save
         session.revoke("Revoked by user");
         userSessionRepository.save(session);
 
         invalidateSessionTokens(session);
+    }
+
+    /**
+     * Revoke session by deviceId - for logout
+     */
+    @Transactional
+    public void revokeSessionByDevice(String userId, String deviceId) {
+        if (deviceId == null) {
+            return;
+        }
+
+        User user = User.builder().id(userId).build();
+        Optional<UserSession> sessionOpt = userSessionRepository
+                .findByDeviceIdAndUserAndIsActive(deviceId, user, true);
+
+        if (sessionOpt.isPresent()) {
+            UserSession session = sessionOpt.get();
+
+            // DELETE instead of marking inactive to avoid duplicate key issues
+            invalidateSessionTokens(session);
+            userSessionRepository.delete(session);
+            entityManager.flush();
+
+            log.info("Deleted session for deviceId: {}, userId: {}", deviceId, userId);
+        }
     }
 
     @Transactional
@@ -172,6 +210,7 @@ public class SessionService {
                             "Session revoked"
                     );
                 } catch (ParseException e) {
+                    // Ignore parse errors
                 }
             }
 
@@ -188,6 +227,7 @@ public class SessionService {
             }
 
         } catch (Exception e) {
+            // Log error but don't throw
         }
     }
 

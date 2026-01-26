@@ -31,6 +31,8 @@ public class SecurityConfig {
             "/auth/login/local",
             "/auth/login/google",
             "/auth/login/google/complete",
+            "/auth/login/email-otp/request",
+            "/auth/login/email-otp/verify",
             "/auth/2fa/otp/request",
             "/auth/2fa/verify",
             "/auth/refresh",

@@ -162,4 +162,32 @@ public class AuthController {
                 .message("Logout successful")
                 .build();
     }
+
+    @PostMapping("/login/email-otp/request")
+    public ApiResponse<OtpResponse> requestEmailOtpLogin(
+            @Valid @RequestBody RequestEmailLoginOtpRequest request,
+            HttpServletRequest httpRequest) {
+
+        controllerUtils.enrichWithClientInfo(request, httpRequest);
+        OtpResponse response = authService.requestEmailOtpLogin(request);
+
+        return ApiResponse.<OtpResponse>builder()
+                .message("OTP has been sent to your email")
+                .result(response)
+                .build();
+    }
+
+    @PostMapping("/login/email-otp/verify")
+    public ApiResponse<AuthenticationResponse> verifyEmailOtpLogin(
+            @Valid @RequestBody VerifyEmailLoginOtpRequest request,
+            HttpServletRequest httpRequest) {
+
+        controllerUtils.enrichWithClientInfo(request, httpRequest);
+        AuthenticationResponse response = authService.verifyEmailOtpLogin(request);
+
+        return ApiResponse.<AuthenticationResponse>builder()
+                .result(response)
+                .message("Login successful")
+                .build();
+    }
 }

@@ -3,6 +3,7 @@ package iuh.fit.ottbackend.entity;
 import iuh.fit.ottbackend.entity.enums.OtpType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Check;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
@@ -14,6 +15,7 @@ import java.time.LocalDateTime;
         @Index(name = "idx_otp_email", columnList = "email, expires_at"),
         @Index(name = "idx_otp_type", columnList = "type, is_used")
 })
+@Check(constraints = "type IN ('REGISTER', 'EMAIL_VERIFICATION', 'LOGIN_OTP_EMAIL', 'TWO_FACTOR_AUTH', 'RESET_PASSWORD', 'CHANGE_PASSWORD', 'CHANGE_EMAIL', 'CHANGE_PHONE', 'LINK_GOOGLE_ACCOUNT', 'LINK_PHONE', 'LINK_EMAIL', 'DELETE_ACCOUNT', 'ENABLE_TWO_FACTOR', 'DISABLE_TWO_FACTOR')")
 @Getter
 @Setter
 @NoArgsConstructor

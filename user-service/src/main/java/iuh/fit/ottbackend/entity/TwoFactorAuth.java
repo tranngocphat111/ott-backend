@@ -3,7 +3,6 @@ package iuh.fit.ottbackend.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -58,8 +57,7 @@ public class TwoFactorAuth {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
     public int getRemainingBackupCodes() {
@@ -70,10 +68,17 @@ public class TwoFactorAuth {
         this.isEnabled = true;
         this.enabledAt = LocalDateTime.now();
         this.disabledAt = null;
+        this.updatedAt = LocalDateTime.now();
     }
 
     public void disable() {
         this.isEnabled = false;
         this.disabledAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = LocalDateTime.now();
     }
 }

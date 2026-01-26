@@ -7,6 +7,7 @@ import iuh.fit.ottbackend.exception.ErrorCode;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -17,6 +18,7 @@ import org.thymeleaf.context.Context;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EmailService {
@@ -92,6 +94,8 @@ public class EmailService {
 
     private void sendHtmlEmail(String to, String subject, String htmlContent) {
         try {
+            log.info("Sending email to: {} with subject: {}", to, subject);
+
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
@@ -101,9 +105,13 @@ public class EmailService {
             helper.setText(htmlContent, true);
 
             mailSender.send(message);
+            log.info("✅ Email sent successfully to: {}", to);
+
         } catch (MessagingException e) {
+            log.error("❌ MessagingException when sending email to {}: {}", to, e.getMessage());
             throw new AppException(ErrorCode.EMAIL_SEND_FAILED);
         } catch (Exception e) {
+            log.error("❌ Unexpected error when sending email to {}: ", to, e);
             throw new AppException(ErrorCode.EMAIL_SEND_FAILED);
         }
     }
@@ -112,18 +120,18 @@ public class EmailService {
         return switch (otpType) {
             case REGISTER -> "Verify Your Registration - " + appName;
             case TWO_FACTOR_AUTH -> "Your Login Verification Code - " + appName;
-            case LOGIN_OTP_EMAIL -> null;
-            case EMAIL_VERIFICATION -> null;
+            case LOGIN_OTP_EMAIL -> "Your Login OTP Code - " + appName; // ✅ FIX
+            case EMAIL_VERIFICATION -> "Verify Your Email - " + appName;
             case RESET_PASSWORD -> "Reset Your Password - " + appName;
-            case CHANGE_PASSWORD -> null;
+            case CHANGE_PASSWORD -> "Change Your Password - " + appName;
             case CHANGE_EMAIL -> "Confirm Your New Email - " + appName;
             case LINK_PHONE -> "Link Phone Number - " + appName;
             case LINK_EMAIL -> "Link Email Address - " + appName;
-            case CHANGE_PHONE -> null;
-            case LINK_GOOGLE_ACCOUNT -> null;
-            case DELETE_ACCOUNT -> null;
-            case ENABLE_TWO_FACTOR -> null;
-            case DISABLE_TWO_FACTOR -> null;
+            case CHANGE_PHONE -> "Change Phone Number - " + appName;
+            case LINK_GOOGLE_ACCOUNT -> "Link Google Account - " + appName;
+            case DELETE_ACCOUNT -> "Delete Your Account - " + appName;
+            case ENABLE_TWO_FACTOR -> "Enable Two-Factor Authentication - " + appName;
+            case DISABLE_TWO_FACTOR -> "Disable Two-Factor Authentication - " + appName;
         };
     }
 
@@ -131,18 +139,18 @@ public class EmailService {
         return switch (otpType) {
             case REGISTER -> "Registration";
             case TWO_FACTOR_AUTH -> "Two-Factor Authentication";
-            case LOGIN_OTP_EMAIL -> null;
-            case EMAIL_VERIFICATION -> null;
+            case LOGIN_OTP_EMAIL -> "Email Login";
+            case EMAIL_VERIFICATION -> "Email Verification";
             case RESET_PASSWORD -> "Password Reset";
-            case CHANGE_PASSWORD -> null;
+            case CHANGE_PASSWORD -> "Password Change";
             case CHANGE_EMAIL -> "Email Change";
             case LINK_PHONE -> "Phone Linking";
             case LINK_EMAIL -> "Email Linking";
-            case CHANGE_PHONE -> null;
-            case LINK_GOOGLE_ACCOUNT -> null;
-            case DELETE_ACCOUNT -> null;
-            case ENABLE_TWO_FACTOR -> null;
-            case DISABLE_TWO_FACTOR -> null;
+            case CHANGE_PHONE -> "Phone Change";
+            case LINK_GOOGLE_ACCOUNT -> "Google Account Linking";
+            case DELETE_ACCOUNT -> "Account Deletion";
+            case ENABLE_TWO_FACTOR -> "Enable 2FA";
+            case DISABLE_TWO_FACTOR -> "Disable 2FA";
         };
     }
 }
