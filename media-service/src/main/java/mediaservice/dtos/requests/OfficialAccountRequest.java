@@ -4,14 +4,15 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-
-import java.util.List;
+import mediaservice.models.enums.OfficialAccountStatusType;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
 @AllArgsConstructor
 @NoArgsConstructor
-public class PostRequest extends BaseContentRequest {
-    private String caption;
-    private List<MediaRequest> medias;
+public class OfficialAccountRequest extends BaseAccountRequest {
+    private String ownerUserId;
+    private OfficialAccountStatusType status;
+    private boolean isVerified;
 }
+

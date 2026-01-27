@@ -1,4 +1,4 @@
-package mediaservice.dtos.requests;
+package mediaservice.dtos.responses;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -11,7 +11,10 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = true)
 @AllArgsConstructor
 @NoArgsConstructor
-public class PostRequest extends BaseContentRequest {
+public class PostResponse extends BaseContentResponse {
     private String caption;
-    private List<MediaRequest> medias;
+    private List<MediaResponse> medias;
+    private int totalReactions;
+    private int totalComments;
 }
+
