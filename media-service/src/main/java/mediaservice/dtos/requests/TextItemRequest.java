@@ -5,13 +5,15 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
-import java.util.List;
-
 @Data
 @EqualsAndHashCode(callSuper = true)
 @AllArgsConstructor
 @NoArgsConstructor
-public class PostRequest extends BaseContentRequest {
-    private String caption;
-    private List<MediaRequest> medias;
+public class TextItemRequest extends BaseStoryItemRequest {
+    private String content;
+    private String font;
+    private String color;
+    private String backgroundColor;
+    private String alignment;
 }
+

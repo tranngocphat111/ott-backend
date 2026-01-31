@@ -11,7 +11,8 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = true)
 @AllArgsConstructor
 @NoArgsConstructor
-public class PostRequest extends BaseContentRequest {
-    private String caption;
-    private List<MediaRequest> medias;
+public class NoteRequest extends BaseContentRequest {
+    private String text;
+    private List<MusicRequest> musics;  // Note musics
 }
+
