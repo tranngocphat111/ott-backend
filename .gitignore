@@ -1,0 +1,3 @@
+media-service/social-app-test-user_accessKeys.csv
+*.csv
+media-service/src/main/resources/application-seed.properties
