@@ -11,6 +11,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Set;
 
 @Table(name = "contents")
@@ -47,6 +48,10 @@ public abstract class Content {
             inverseJoinColumns = @JoinColumn(name = "hashtag_id")
     )
     private Set<HashTag> hashTags;
+
+    @OneToMany(mappedBy = "content", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OrderBy("orderIndex ASC")
+    private List<Media> medias;
 
     @CreationTimestamp
     @Column(updatable = false)

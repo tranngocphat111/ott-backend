@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
+import mediaservice.models.enums.MediaType;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -26,6 +28,15 @@ public abstract class Media {
     private String url;
     private String caption;
     private int orderIndex;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "media_type", insertable = false, updatable = false)
+    private MediaType mediaType;
+
+    @ToString.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "content_id")
+    private Content content;
 
     @CreationTimestamp
     @Column(updatable = false)

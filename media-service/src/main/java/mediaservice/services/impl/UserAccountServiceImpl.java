@@ -40,9 +40,7 @@ public class UserAccountServiceImpl implements UserAccountService {
     @Override
     @Transactional(readOnly = true)
     public UserAccountResponse getUserAccountByUsername(String username) {
-        UserAccount userAccount = userAccountRepository.findAll().stream()
-                .filter(u -> u.getUsername().equals(username))
-                .findFirst()
+        UserAccount userAccount = userAccountRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User account not found with username: " + username));
         return userAccountMapper.toResponse(userAccount);
     }

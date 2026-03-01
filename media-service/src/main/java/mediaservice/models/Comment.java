@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import mediaservice.models.Content;
 
 import java.time.LocalDateTime;
 import java.util.Set;
@@ -35,6 +36,11 @@ public class Comment {
     @JoinColumn(name = "account_id")
     @ManyToOne(fetch = FetchType.LAZY)
     private Account account;
+
+    @ToString.Exclude
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "content_id")
+    private Content content;
 
     private boolean isEdited;
 

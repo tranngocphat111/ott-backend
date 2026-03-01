@@ -16,5 +16,6 @@ public class PostResponse extends BaseContentResponse {
     private List<MediaResponse> medias;
     private int totalReactions;
     private int totalComments;
+    private int totalShares;
 }
 
