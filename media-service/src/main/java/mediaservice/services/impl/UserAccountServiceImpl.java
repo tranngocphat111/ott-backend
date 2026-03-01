@@ -7,6 +7,8 @@ import mediaservice.mappers.UserAccountMapper;
 import mediaservice.models.UserAccount;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.UserAccountService;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,7 @@ public class UserAccountServiceImpl implements UserAccountService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"users", "allUsers"}, allEntries = true)
     public UserAccountResponse createUserAccount(UserAccountRequest request) {
         UserAccount userAccount = userAccountMapper.toEntity(request);
         UserAccount savedUserAccount = userAccountRepository.save(userAccount);
@@ -31,6 +34,7 @@ public class UserAccountServiceImpl implements UserAccountService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "users", key = "#id", unless = "#result == null")
     public UserAccountResponse getUserAccountById(String id) {
         UserAccount userAccount = userAccountRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User account not found with id: " + id));
@@ -39,6 +43,7 @@ public class UserAccountServiceImpl implements UserAccountService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "users", key = "'username:' + #username", unless = "#result == null")
     public UserAccountResponse getUserAccountByUsername(String username) {
         UserAccount userAccount = userAccountRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User account not found with username: " + username));
@@ -47,6 +52,7 @@ public class UserAccountServiceImpl implements UserAccountService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "allUsers", unless = "#result == null || #result.isEmpty()")
     public List<UserAccountResponse> getAllUserAccounts() {
         List<UserAccount> userAccounts = userAccountRepository.findAll();
         return userAccountMapper.toResponseList(userAccounts);
@@ -61,6 +67,7 @@ public class UserAccountServiceImpl implements UserAccountService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"users", "allUsers"}, key = "#id")
     public UserAccountResponse updateUserAccount(String id, UserAccountRequest request) {
         UserAccount userAccount = userAccountRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User account not found with id: " + id));
@@ -71,6 +78,7 @@ public class UserAccountServiceImpl implements UserAccountService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"users", "allUsers"}, key = "#id")
     public void deleteUserAccount(String id) {
         if (!userAccountRepository.existsById(id)) {
             throw new RuntimeException("User account not found with id: " + id);

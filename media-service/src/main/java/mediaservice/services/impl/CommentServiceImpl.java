@@ -4,9 +4,15 @@ import lombok.RequiredArgsConstructor;
 import mediaservice.dtos.requests.CommentRequest;
 import mediaservice.dtos.responses.CommentResponse;
 import mediaservice.mappers.CommentMapper;
+import mediaservice.models.Account;
 import mediaservice.models.Comment;
+import mediaservice.models.Content;
+import mediaservice.repositories.AccountRepository;
 import mediaservice.repositories.CommentRepository;
+import mediaservice.repositories.ContentRepository;
 import mediaservice.services.CommentService;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -20,11 +26,29 @@ public class CommentServiceImpl implements CommentService {
 
     private final CommentRepository commentRepository;
     private final CommentMapper commentMapper;
+    private final AccountRepository accountRepository;
+    private final ContentRepository contentRepository;
 
     @Override
     @Transactional
+    @CacheEvict(value = "comments", key = "#request.contentId")
     public CommentResponse createComment(CommentRequest request) {
-        Comment comment = commentMapper.toEntity(request);
+        Comment comment = new Comment();
+        comment.setText(request.getText());
+        comment.setDepth(request.getParentCommentId() == null ? 0 : 1);
+
+        if (request.getAccountId() != null) {
+            Account account = accountRepository.findById(request.getAccountId()).orElse(null);
+            comment.setAccount(account);
+        }
+        if (request.getContentId() != null) {
+            Content content = contentRepository.findById(request.getContentId()).orElse(null);
+            comment.setContent(content);
+        }
+        if (request.getParentCommentId() != null) {
+            Comment parent = commentRepository.findById(request.getParentCommentId()).orElse(null);
+            comment.setParentComment(parent);
+        }
         Comment savedComment = commentRepository.save(comment);
         return commentMapper.toResponse(savedComment);
     }
@@ -53,34 +77,40 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "comments", allEntries = true)
     public CommentResponse updateComment(String id, CommentRequest request) {
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Comment not found with id: " + id));
-        commentMapper.updateEntity(request, comment);
+        if (request.getText() != null) {
+            comment.setText(request.getText());
+            comment.setEdited(true);
+        }
         Comment updatedComment = commentRepository.save(comment);
         return commentMapper.toResponse(updatedComment);
     }
 
     @Override
     @Transactional
+    @CacheEvict(value = "comments", allEntries = true)
     public void deleteComment(String id) {
-        if (!commentRepository.existsById(id)) {
-            throw new RuntimeException("Comment not found with id: " + id);
-        }
-        commentRepository.deleteById(id);
+        Comment comment = commentRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Comment not found with id: " + id));
+        comment.setDeleted(true);
+        commentRepository.save(comment);
     }
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "comments", key = "#contentId", unless = "#result == null || #result.isEmpty()")
     public List<CommentResponse> getCommentsByContentId(String contentId) {
-        List<Comment> comments = commentRepository.findAll(); // TODO: Add custom query
+        List<Comment> comments = commentRepository.findByContent_IdAndIsDeletedFalse(contentId);
         return commentMapper.toResponseList(comments);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<CommentResponse> getCommentsByParentId(String parentId) {
-        List<Comment> comments = commentRepository.findAll(); // TODO: Add custom query
+        List<Comment> comments = commentRepository.findByParentCommentId(parentId);
         return commentMapper.toResponseList(comments);
     }
 }

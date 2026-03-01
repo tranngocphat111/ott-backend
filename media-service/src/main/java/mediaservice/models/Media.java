@@ -29,10 +29,6 @@ public abstract class Media {
     private String caption;
     private int orderIndex;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "media_type", insertable = false, updatable = false)
-    private MediaType mediaType;
-
     @ToString.Exclude
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "content_id")

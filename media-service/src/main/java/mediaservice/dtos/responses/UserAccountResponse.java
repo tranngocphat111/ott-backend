@@ -10,9 +10,10 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class UserAccountResponse extends BaseAccountResponse {
-    private boolean isCreator;
+    private Boolean isCreator = false;
     private int totalFollowers;
     private int totalFollowing;
     private int totalPosts;
 }
+
 

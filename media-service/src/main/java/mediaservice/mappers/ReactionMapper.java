@@ -10,8 +10,9 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface ReactionMapper {
 
-    Reaction toEntity(ReactionRequest request);
-
+    @Mapping(target = "accountId",      source = "account.id")
+    @Mapping(target = "accountUsername", source = "account.username")
+    @Mapping(target = "accountAvatarUrl", source = "account.avatarUrl")
     ReactionResponse toResponse(Reaction reaction);
 
     List<ReactionResponse> toResponseList(List<Reaction> reactions);

@@ -17,6 +17,8 @@ import mediaservice.repositories.ReactionRepository;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.PostService;
 import mediaservice.services.S3Service;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -50,6 +52,7 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"allPosts", "userPosts"}, allEntries = true)
     public PostResponse createPost(PostRequest request) {
         Post post = postMapper.toEntity(request);
         Post savedPost = postRepository.save(post);
@@ -58,6 +61,7 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"allPosts", "userPosts"}, allEntries = true)
     public PostResponse createPost(String accountId, String caption,
                                    VisibilityType visibility, List<MultipartFile> files) {
         // 1. Resolve author
@@ -95,6 +99,7 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "posts", key = "#id", unless = "#result == null")
     public PostResponse getPostById(String id) {
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Post not found with id: " + id));
@@ -103,6 +108,7 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "allPosts", unless = "#result == null || #result.isEmpty()")
     public List<PostResponse> getAllPosts() {
         return postRepository.findAll().stream()
                 .map(p -> enrichCounts(postMapper.toResponse(p), p.getId()))
@@ -118,6 +124,7 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"posts", "allPosts", "userPosts"}, allEntries = true)
     public PostResponse updatePost(String id, PostRequest request) {
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Post not found with id: " + id));
@@ -128,6 +135,7 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"posts", "allPosts", "userPosts"}, allEntries = true)
     public void deletePost(String id) {
         if (!postRepository.existsById(id)) {
             throw new RuntimeException("Post not found with id: " + id);
@@ -137,6 +145,7 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "userPosts", key = "#userId", unless = "#result == null || #result.isEmpty()")
     public List<PostResponse> getPostsByUserId(String userId) {
         return postRepository.findByAccount_Id(userId).stream()
                 .map(p -> enrichCounts(postMapper.toResponse(p), p.getId()))

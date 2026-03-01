@@ -70,11 +70,10 @@ public class S3ServiceImpl implements S3Service {
 
             amazonS3.putObject(putObjectRequest);
 
-            // Return the file URL
-            String fileUrl = amazonS3.getUrl(bucketName, fileKey).toString();
-            log.info("File uploaded successfully: {}", fileUrl);
+            // Return only the relative path (folder/filename) instead of full URL
+            log.info("File uploaded successfully: {}", fileKey);
 
-            return fileUrl;
+            return fileKey;  // Return "folder/uuid.ext" instead of full URL
 
         } catch (AmazonServiceException e) {
             log.error("Error uploading file to S3: {}", e.getMessage(), e);
@@ -133,6 +132,21 @@ public class S3ServiceImpl implements S3Service {
             log.error("Error checking file existence: {}", e.getMessage(), e);
             return false;
         }
+    }
+
+    @Override
+    public String getFullUrl(String fileKey) {
+        if (fileKey == null || fileKey.isEmpty()) {
+            return null;
+        }
+
+        // If already a full URL, return as-is
+        if (fileKey.startsWith("http://") || fileKey.startsWith("https://")) {
+            return fileKey;
+        }
+
+        // Build full URL from file key
+        return amazonS3.getUrl(bucketName, fileKey).toString();
     }
 
     /**
