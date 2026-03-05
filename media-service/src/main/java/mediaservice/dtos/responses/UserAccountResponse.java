@@ -14,6 +14,9 @@ public class UserAccountResponse extends BaseAccountResponse {
     private int totalFollowers;
     private int totalFollowing;
     private int totalPosts;
+    private String work;
+    private String location;
+    private String relationshipStatus;
 }
 
 

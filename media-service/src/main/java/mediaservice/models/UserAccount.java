@@ -16,6 +16,15 @@ import java.util.Set;
 public class UserAccount extends Account{
     private boolean isCreator;
 
+    /** Nơi làm việc */
+    private String work;
+
+    /** Nơi ở hiện tại */
+    private String location;
+
+    /** Tình trạng quan hệ (e.g. Độc thân, Đã kết hôn, ...) */
+    private String relationshipStatus;
+
     @ToString.Exclude
     @OneToOne(mappedBy = "user")
     private CreatorProfile creatorProfile;

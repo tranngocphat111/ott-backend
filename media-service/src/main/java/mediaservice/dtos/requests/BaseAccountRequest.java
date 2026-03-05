@@ -1,11 +1,13 @@
 package mediaservice.dtos.requests;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Không có @AllArgsConstructor: Jackson sử dụng no-arg constructor + setters.
+ * Tránh lỗi "Cannot map null into type boolean" khi các field vắng trong JSON.
+ */
 @Data
-@AllArgsConstructor
 @NoArgsConstructor
 public abstract class BaseAccountRequest {
     private String username;
