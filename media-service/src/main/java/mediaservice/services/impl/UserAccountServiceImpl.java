@@ -6,13 +6,16 @@ import mediaservice.dtos.responses.UserAccountResponse;
 import mediaservice.mappers.UserAccountMapper;
 import mediaservice.models.UserAccount;
 import mediaservice.repositories.UserAccountRepository;
+import mediaservice.services.S3Service;
 import mediaservice.services.UserAccountService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -22,6 +25,7 @@ public class UserAccountServiceImpl implements UserAccountService {
 
     private final UserAccountRepository userAccountRepository;
     private final UserAccountMapper userAccountMapper;
+    private final S3Service s3Service;
 
     @Override
     @Transactional
@@ -67,13 +71,27 @@ public class UserAccountServiceImpl implements UserAccountService {
 
     @Override
     @Transactional
-    @CacheEvict(value = {"users", "allUsers"}, key = "#id")
+    @Caching(evict = {
+        @CacheEvict(value = "users", key = "#id"),
+        @CacheEvict(value = "allUsers", allEntries = true)
+    })
     public UserAccountResponse updateUserAccount(String id, UserAccountRequest request) {
         UserAccount userAccount = userAccountRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User account not found with id: " + id));
+
+        // MapStruct updateEntity (handles fields it knows about at compile-time)
         userAccountMapper.updateEntity(request, userAccount);
-        UserAccount updatedUserAccount = userAccountRepository.save(userAccount);
-        return userAccountMapper.toResponse(updatedUserAccount);
+
+        // Explicitly apply profile fields – đảm bảo luôn được persist
+        // kể cả khi MapStruct chưa được recompile với các field mới.
+        // Note: send empty string "" to clear a field; null means "don't touch".
+        if (request.getBio()                != null) userAccount.setBio(request.getBio());
+        if (request.getWork()               != null) userAccount.setWork(request.getWork());
+        if (request.getLocation()           != null) userAccount.setLocation(request.getLocation());
+        if (request.getRelationshipStatus() != null) userAccount.setRelationshipStatus(request.getRelationshipStatus());
+
+        UserAccount updated = userAccountRepository.saveAndFlush(userAccount);
+        return userAccountMapper.toResponse(updated);
     }
 
     @Override
@@ -84,6 +102,38 @@ public class UserAccountServiceImpl implements UserAccountService {
             throw new RuntimeException("User account not found with id: " + id);
         }
         userAccountRepository.deleteById(id);
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "users", key = "#id"),
+        @CacheEvict(value = "allUsers", allEntries = true)
+    })
+    public UserAccountResponse uploadAvatar(String id, MultipartFile file) {
+        UserAccount userAccount = userAccountRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User account not found with id: " + id));
+        String s3Key = s3Service.uploadFile(file, "avatars");
+        String avatarUrl = s3Service.getFullUrl(s3Key);
+        userAccount.setAvatarUrl(avatarUrl);
+        UserAccount updated = userAccountRepository.saveAndFlush(userAccount);
+        return userAccountMapper.toResponse(updated);
+    }
+
+    @Override
+    @Transactional
+    @Caching(evict = {
+        @CacheEvict(value = "users", key = "#id"),
+        @CacheEvict(value = "allUsers", allEntries = true)
+    })
+    public UserAccountResponse uploadCover(String id, MultipartFile file) {
+        UserAccount userAccount = userAccountRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("User account not found with id: " + id));
+        String s3Key = s3Service.uploadFile(file, "covers");
+        String coverUrl = s3Service.getFullUrl(s3Key);
+        userAccount.setCoverUrl(coverUrl);
+        UserAccount updated = userAccountRepository.saveAndFlush(userAccount);
+        return userAccountMapper.toResponse(updated);
     }
 }
 

@@ -15,13 +15,24 @@ public abstract class UserAccountMapper {
     @Autowired
     protected MediaUrlBuilder mediaUrlBuilder;
 
+    // Explicit mappings for profile fields to assist MapStruct with inheritance chain
+    @Mapping(target = "work", source = "work")
+    @Mapping(target = "location", source = "location")
+    @Mapping(target = "relationshipStatus", source = "relationshipStatus")
     public abstract UserAccount toEntity(UserAccountRequest request);
 
+    // Explicit mappings for response to include profile fields from UserAccount
+    @Mapping(target = "work", source = "work")
+    @Mapping(target = "location", source = "location")
+    @Mapping(target = "relationshipStatus", source = "relationshipStatus")
     public abstract UserAccountResponse toResponse(UserAccount userAccount);
 
     public abstract List<UserAccountResponse> toResponseList(List<UserAccount> userAccounts);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "work", source = "work")
+    @Mapping(target = "location", source = "location")
+    @Mapping(target = "relationshipStatus", source = "relationshipStatus")
     public abstract void updateEntity(UserAccountRequest request, @MappingTarget UserAccount userAccount);
 
     @AfterMapping
