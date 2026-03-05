@@ -17,5 +17,6 @@ public interface ReactionRepository extends JpaRepository<Reaction, String> {
     Long countByTargetIdAndTargetTypeAndReactionType(String targetId, ReactionTargetType targetType, ReactionType reactionType);
     long countByTargetIdAndTargetType(String targetId, ReactionTargetType targetType);
     boolean existsByAccountAndTargetIdAndTargetType(Account account, String targetId, ReactionTargetType targetType);
+    List<Reaction> findByAccount(Account account);
 }
 

@@ -27,4 +27,7 @@ public class Story extends Content{
     private Set<StoryMusic> storyMusics;
 
     private LocalDateTime expireAt;
+
+    @OneToMany(mappedBy = "story")
+    private Set<StoryItem> storyItems;
 }

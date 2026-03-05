@@ -34,4 +34,8 @@ public abstract class StoryItem {
     private Long startTime;
 
     private Long endTime;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "story_id")
+    private Story story;
 }

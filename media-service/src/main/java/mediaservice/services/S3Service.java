@@ -45,5 +45,12 @@ public interface S3Service {
      * @return true if file exists
      */
     boolean fileExists(String fileKey);
+
+    /**
+     * Get full URL from file key
+     * @param fileKey S3 object key (e.g., "posts/uuid.jpg")
+     * @return Full URL
+     */
+    String getFullUrl(String fileKey);
 }
 

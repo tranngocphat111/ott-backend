@@ -10,8 +10,15 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface CommentMapper {
 
-    Comment toEntity(CommentRequest request);
-
+    @Mapping(target = "accountId",          source = "account.id")
+    @Mapping(target = "accountUsername",     source = "account.username")
+    @Mapping(target = "accountDisplayName",  source = "account.displayName")
+    @Mapping(target = "accountAvatarUrl",    source = "account.avatarUrl")
+    @Mapping(target = "parentCommentId",     source = "parentComment.id")
+    @Mapping(target = "totalReplies",        expression = "java(comment.getChildCommentSet() != null ? comment.getChildCommentSet().size() : 0)")
+    @Mapping(target = "edited",              source = "edited")
+    @Mapping(target = "deleted",             source = "deleted")
+    @Mapping(target = "totalReactions",      ignore = true)
     CommentResponse toResponse(Comment comment);
 
     List<CommentResponse> toResponseList(List<Comment> comments);

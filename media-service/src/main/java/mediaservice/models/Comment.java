@@ -3,9 +3,11 @@ package mediaservice.models;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.SQLRestriction;
 import org.hibernate.annotations.UpdateTimestamp;
 import mediaservice.models.Content;
 
@@ -18,6 +20,7 @@ import java.util.Set;
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
+@EqualsAndHashCode(of = "id")
 public class Comment {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -29,7 +32,9 @@ public class Comment {
     @JoinColumn(name = "parent_id")
     private Comment parentComment;
 
+    @ToString.Exclude
     @OneToMany(mappedBy = "parentComment")
+    @SQLRestriction("is_deleted = false")
     private Set<Comment> childCommentSet;
 
 

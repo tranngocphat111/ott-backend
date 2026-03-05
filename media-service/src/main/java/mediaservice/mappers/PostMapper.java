@@ -7,16 +7,21 @@ import mediaservice.models.Media;
 import mediaservice.models.Post;
 import mediaservice.models.VideoMedia;
 import mediaservice.models.enums.MediaType;
+import mediaservice.utils.MediaUrlBuilder;
 import org.mapstruct.*;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 
 @Mapper(componentModel = "spring")
-public interface PostMapper {
+public abstract class PostMapper {
+
+    @Autowired
+    protected MediaUrlBuilder mediaUrlBuilder;
 
     @Mapping(target = "hashTags", ignore = true)
     @Mapping(target = "medias",   ignore = true)
-    Post toEntity(PostRequest request);
+    public abstract Post toEntity(PostRequest request);
 
     @Mapping(target = "hashTags", ignore = true)
     @Mapping(target = "accountId",          source = "account.id")
@@ -27,27 +32,31 @@ public interface PostMapper {
     @Mapping(target = "totalReactions",      ignore = true)
     @Mapping(target = "totalComments",       ignore = true)
     @Mapping(target = "totalShares",         ignore = true)
-    PostResponse toResponse(Post post);
+    public abstract PostResponse toResponse(Post post);
 
-    List<PostResponse> toResponseList(List<Post> posts);
+    public abstract List<PostResponse> toResponseList(List<Post> posts);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "hashTags", ignore = true)
     @Mapping(target = "medias",   ignore = true)
-    void updateEntity(PostRequest request, @MappingTarget Post post);
+    public abstract void updateEntity(PostRequest request, @MappingTarget Post post);
 
-    default MediaResponse mediaToResponse(Media media) {
+    public MediaResponse mediaToResponse(Media media) {
         if (media == null) return null;
         MediaResponse r = new MediaResponse();
         r.setId(media.getId());
-        r.setUrl(media.getUrl());
+        // Convert relative S3 key (e.g. "social/posts/uuid.jpg") to full HTTPS URL
+        r.setUrl(mediaUrlBuilder != null ? mediaUrlBuilder.buildS3Url("", media.getUrl()) : media.getUrl());
         r.setCaption(media.getCaption());
         r.setOrderIndex(media.getOrderIndex());
         r.setCreatedAt(media.getCreatedAt());
         r.setUpdatedAt(media.getUpdatedAt());
         if (media instanceof VideoMedia vm) {
             r.setType(MediaType.VIDEO_MEDIA);
-            r.setThumbnailUrl(vm.getThumbnailUrl());
+            // Also resolve thumbnail URL if it's a relative key
+            String thumbUrl = vm.getThumbnailUrl();
+            r.setThumbnailUrl(thumbUrl != null && mediaUrlBuilder != null
+                    ? mediaUrlBuilder.buildS3Url("", thumbUrl) : thumbUrl);
             r.setDuration(vm.getDuration());
             r.setHasAudio(vm.isHasAudio());
         } else {

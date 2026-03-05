@@ -17,8 +17,8 @@ public class CommentResponse {
     private String accountDisplayName;
     private String accountAvatarUrl;
     private String parentCommentId;
-    private boolean isEdited;
-    private boolean isDeleted;
+    private boolean edited;
+    private boolean deleted;
     private int depth;
     private int totalReplies;
     private int totalReactions;

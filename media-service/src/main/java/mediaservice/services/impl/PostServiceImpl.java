@@ -1,5 +1,7 @@
 package mediaservice.services.impl;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import mediaservice.dtos.requests.PostRequest;
@@ -8,6 +10,7 @@ import mediaservice.mappers.PostMapper;
 import mediaservice.models.ImageMedia;
 import mediaservice.models.Post;
 import mediaservice.models.UserAccount;
+import mediaservice.models.VideoMedia;
 import mediaservice.models.enums.ReactionTargetType;
 import mediaservice.models.enums.VisibilityType;
 import mediaservice.repositories.CommentRepository;
@@ -17,6 +20,8 @@ import mediaservice.repositories.ReactionRepository;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.PostService;
 import mediaservice.services.S3Service;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -38,6 +43,9 @@ public class PostServiceImpl implements PostService {
     private final MediaRepository mediaRepository;
     private final S3Service s3Service;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     /* ─── helper: fill totalReactions / totalComments from DB ─ */
     private PostResponse enrichCounts(PostResponse response, String postId) {
         response.setTotalReactions(
@@ -50,6 +58,7 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"allPosts", "userPosts"}, allEntries = true)
     public PostResponse createPost(PostRequest request) {
         Post post = postMapper.toEntity(request);
         Post savedPost = postRepository.save(post);
@@ -58,8 +67,11 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"allPosts", "userPosts"}, allEntries = true)
     public PostResponse createPost(String accountId, String caption,
-                                   VisibilityType visibility, List<MultipartFile> files) {
+                                   VisibilityType visibility,
+                                   List<MultipartFile> files,
+                                   List<String> captions) {
         // 1. Resolve author
         UserAccount account = userAccountRepository.findById(accountId)
                 .orElseThrow(() -> new RuntimeException("User not found: " + accountId));
@@ -71,30 +83,55 @@ public class PostServiceImpl implements PostService {
         post.setVisibility(visibility != null ? visibility : VisibilityType.PUBLIC);
         Post savedPost = postRepository.save(post);
 
-        // 3. Upload each media file → S3 → ImageMedia row
+        // 3. Upload each media file → S3 → save Media row (với caption per-file)
         if (files != null) {
             for (int i = 0; i < files.size(); i++) {
                 MultipartFile file = files.get(i);
                 if (file == null || file.isEmpty()) continue;
+                // Lấy caption tương ứng với file này (nếu có)
+                String mediaCaption = (captions != null && i < captions.size())
+                        ? (captions.get(i).isBlank() ? null : captions.get(i)) : null;
                 try {
-                    String s3Url = s3Service.uploadFile(file, "social/posts");
-                    ImageMedia media = new ImageMedia();
-                    media.setUrl(s3Url);
-                    media.setOrderIndex(i);
-                    media.setContent(savedPost);
-                    mediaRepository.save(media);
+                    String contentType = file.getContentType() != null ? file.getContentType() : "";
+                    boolean isVideo = contentType.startsWith("video/");
+                    String folder = isVideo ? "social/videos" : "social/posts";
+                    String s3Key = s3Service.uploadFile(file, folder);
+
+                    if (isVideo) {
+                        VideoMedia media = new VideoMedia();
+                        media.setUrl(s3Key);
+                        media.setOrderIndex(i);
+                        media.setCaption(mediaCaption);
+                        media.setContent(savedPost);
+                        mediaRepository.save(media);
+                    } else {
+                        ImageMedia media = new ImageMedia();
+                        media.setUrl(s3Key);
+                        media.setOrderIndex(i);
+                        media.setCaption(mediaCaption);
+                        media.setContent(savedPost);
+                        mediaRepository.save(media);
+                    }
+                    log.info("[createPost] Saved media #{} caption='{}' -> {}", i, mediaCaption, s3Key);
                 } catch (Exception e) {
-                    log.warn("[createPost] S3 upload failed for file {} – skipping. Cause: {}",
-                            file.getOriginalFilename(), e.getMessage());
+                    log.error("[createPost] S3 upload FAILED for file '{}': {}",
+                            file.getOriginalFilename(), e.getMessage(), e);
+                    throw new RuntimeException("Failed to upload media: " + file.getOriginalFilename(), e);
                 }
             }
         }
+
+        // 4. Flush và refresh để lấy medias list mới nhất từ DB vào entity
+        //    (tránh trả về Hibernate cache cũ không có media)
+        entityManager.flush();
+        entityManager.refresh(savedPost);
 
         return enrichCounts(postMapper.toResponse(savedPost), savedPost.getId());
     }
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "posts", key = "#id", unless = "#result == null")
     public PostResponse getPostById(String id) {
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Post not found with id: " + id));
@@ -103,6 +140,7 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "allPosts", unless = "#result == null || #result.isEmpty()")
     public List<PostResponse> getAllPosts() {
         return postRepository.findAll().stream()
                 .map(p -> enrichCounts(postMapper.toResponse(p), p.getId()))
@@ -118,6 +156,7 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"posts", "allPosts", "userPosts"}, allEntries = true)
     public PostResponse updatePost(String id, PostRequest request) {
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Post not found with id: " + id));
@@ -128,6 +167,7 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"posts", "allPosts", "userPosts"}, allEntries = true)
     public void deletePost(String id) {
         if (!postRepository.existsById(id)) {
             throw new RuntimeException("Post not found with id: " + id);
@@ -137,6 +177,7 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "userPosts", key = "#userId", unless = "#result == null || #result.isEmpty()")
     public List<PostResponse> getPostsByUserId(String userId) {
         return postRepository.findByAccount_Id(userId).stream()
                 .map(p -> enrichCounts(postMapper.toResponse(p), p.getId()))
