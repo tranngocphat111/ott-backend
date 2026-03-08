@@ -47,7 +47,7 @@ public class NotificationConsumer {
 
     @RabbitListener(queues = "${rabbitmq.queue.alert}")
     public void handleAlertEmail(AlertEmailEvent event) {
-        log.info("📨 Alert email event: type={}, to={}", event.getAlertType(), event.getToEmail());
+        log.info(" Alert email event: type={}, to={}", event.getAlertType(), event.getToEmail());
         try {
             emailService.sendAlertEmail(
                     event.getToEmail(), event.getToName(),
