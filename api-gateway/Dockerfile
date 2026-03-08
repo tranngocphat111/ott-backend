@@ -14,12 +14,14 @@ RUN mvn clean package -DskipTests -B
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
+# Bảo mật: chạy bằng user không phải root
 RUN addgroup -S spring && adduser -S spring -G spring
 USER spring
 
 COPY --from=builder /app/target/*.jar app.jar
 
-EXPOSE 8083
+# notification=8083 | user=8082 | auth=8081 | gateway=8080
+EXPOSE 8080
 
 ENTRYPOINT ["java", \
   "-XX:+UseContainerSupport", \
