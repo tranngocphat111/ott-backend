@@ -5,25 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1bb96e93-77b6-4b77-b543-9908f50ffd65" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/copilot.data.migration.agent.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/copilot.data.migration.ask2agent.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/copilot.data.migration.edit.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/encodings.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/jarRepositories.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/ott-backend.iml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/ott-backend.log" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/ott-backend.log.2026-02-01.0.gz" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/ott-backend.log.2026-02-05.0.gz" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/ott-backend.log.2026-02-12.0.gz" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/ott-backend.log.2026-02-13.0.gz" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/ott-backend.log.2026-02-23.0.gz" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/ott-backend.log.2026-02-24.0.gz" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/logs/ott-backend.log.2026-02-25.0.gz" beforeDir="false" />
+      <change afterPath="$PROJECT_DIR$/notification-service/src/main/resources/templates/email/otp-email.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/notification-service/src/main/resources/templates/email/otp-login.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/notification-service/src/main/resources/templates/email/welcome-email.html" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/notification-service/src/main/resources/templates/email/welcome.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -155,7 +141,7 @@
       <workItem from="1772094563891" duration="1041000" />
       <workItem from="1772124586869" duration="320000" />
       <workItem from="1772127934215" duration="95000" />
-      <workItem from="1772991509285" duration="1227000" />
+      <workItem from="1772991509285" duration="2336000" />
     </task>
     <servers />
   </component>
