@@ -17,10 +17,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * Internal API — chỉ auth-service được gọi (validated bằng X-Internal-Key header).
- * Không cần JWT vì đây là service-to-service communication.
- */
+
 @RestController
 @RequestMapping("/internal/users")
 @RequiredArgsConstructor

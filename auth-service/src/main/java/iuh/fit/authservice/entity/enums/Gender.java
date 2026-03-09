@@ -3,11 +3,11 @@ package iuh.fit.authservice.entity.enums;
 import lombok.Getter;
 
 @Getter
-public enum AccountType {
-    USER("user"), OA("oa"), ADMIN("admin");
+public enum Gender {
+    MALE("male"), FEMALE("female"), OTHER("other");
     private final String value;
 
-    AccountType(String value) {
+    Gender(String value) {
         this.value = value;
     }
 }
