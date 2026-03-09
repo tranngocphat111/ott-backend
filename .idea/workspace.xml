@@ -5,30 +5,55 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1bb96e93-77b6-4b77-b543-9908f50ffd65" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/entity/enums/OtpType.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/exception/AppException.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/exception/ErrorCode.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/exception/GlobalExceptionHandler.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/utils/ValidationUtils.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/config/RabbitMQConfig.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/config/RestTemplateConfig.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/config/SecurityConfig.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/controller/AccountController.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/controller/InternalUserController.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/controller/LinkingController.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/controller/ProfileController.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/controller/SessionController.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/controller/TwoFactorAuthController.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/controller/UserController.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/RequestRegisterOtpRequest.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/ApiResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/OtpResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/SessionInfo.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/UserProfileResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/UserResponse.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/OtpCode.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/TwoFactorAuth.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/User.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/UserSession.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/enums/AccountType.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/enums/DeviceType.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/enums/Gender.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/enums/LoginMethod.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/enums/OtpType.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/exception/AppException.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/exception/ErrorCode.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/exception/GlobalExceptionHandler.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/mapper/UserMapper.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/repository/OtpCodeRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/repository/TwoFactorAuthRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/repository/UserRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/repository/UserSessionRepository.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/scheduler/UserCleanupScheduler.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/AccountService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/LinkingService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/NotificationPublisher.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/OtpService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/ProfileService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/SessionService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/TwoFactorAuthService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/UserService.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/utils/ControllerUtils.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/utils/UserValidationUtil.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/utils/ValidationUtils.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/Dockerfile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/NotificationServiceApplication.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/NotificationServiceApplication.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/config/RabbitMQConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/config/RabbitMQConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/config/RedisConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/config/RedisConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/config/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/config/SecurityConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/dto/event/AlertEmailEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/dto/event/AlertEmailEvent.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/dto/event/OtpEmailEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/dto/event/OtpEmailEvent.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/dto/event/WelcomeEmailEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/dto/event/WelcomeEmailEvent.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/dto/request/SendAlertEmailRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/dto/request/ValidateOtpRequest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/dto/request/SendOtpEmailRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/dto/request/SendOtpEmailRequest.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/dto/request/SendWelcomeEmailRequest.java" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/entity/EmailLog.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/entity/EmailLog.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/entity/enums/EmailStatus.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/entity/enums/EmailStatus.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/entity/enums/EmailType.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/entity/enums/EmailType.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/repository/EmailLogRepository.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/repository/EmailLogRepository.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/service/EmailService.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/service/EmailService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/service/OtpCacheService.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/service/OtpCacheService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/resources/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/pom.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/UserServiceApplication.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/UserServiceApplication.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/resources/application.properties" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -38,6 +63,7 @@
   <component name="CopilotPersistence">
     <persistenceIdMap>
       <entry key="_D:/DaiHoc/CongNgheMoi/project/ott-backend" value="391zyhDodd4kBUwonh277JqZen0" />
+      <entry key="_D:/DaiHoc/CongNgheMoi/project/ott-backend/user-service" value="3AipVqDYLl1ic5BQzlH6DfNNW3t" />
     </persistenceIdMap>
   </component>
   <component name="CopilotUserSelectedModel">
@@ -51,6 +77,7 @@
     <option name="RECENT_TEMPLATES">
       <list>
         <option value="Enum" />
+        <option value="Interface" />
         <option value="Class" />
       </list>
     </option>
@@ -58,6 +85,10 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="KubernetesApiPersistence"><![CDATA[{}]]></component>
+  <component name="KubernetesApiProvider"><![CDATA[{
+  "isMigrated": true
+}]]></component>
   <component name="MavenImportPreferences">
     <option name="generalSettings">
       <MavenGeneralSettings>
@@ -81,39 +112,39 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Maven.SpringBoot2 [clean].executor": "Run",
-    "Maven.SpringBoot2 [install].executor": "Run",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RequestMappingsPanelOrder0": "0",
-    "RequestMappingsPanelOrder1": "1",
-    "RequestMappingsPanelWidth0": "75",
-    "RequestMappingsPanelWidth1": "75",
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "Spring Boot.OttBackendApplication.executor": "Run",
-    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "ChucNguyen",
-    "ignore.virus.scanning.warn.message": "true",
-    "junie.onboarding.icon.badge.shown": "true",
-    "kotlin-language-version-configured": "true",
-    "last_opened_file_path": "D:/DaiHoc/CongNgheMoi/project/ott-backend",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "run.configurations.included.in.services": "true",
-    "settings.editor.selected.configurable": "preferences.pluginManager",
-    "to.speed.mode.migration.done": "true",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Maven.SpringBoot2 [clean].executor&quot;: &quot;Run&quot;,
+    &quot;Maven.SpringBoot2 [install].executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RequestMappingsPanelOrder0&quot;: &quot;0&quot;,
+    &quot;RequestMappingsPanelOrder1&quot;: &quot;1&quot;,
+    &quot;RequestMappingsPanelWidth0&quot;: &quot;75&quot;,
+    &quot;RequestMappingsPanelWidth1&quot;: &quot;75&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;Spring Boot.OttBackendApplication.executor&quot;: &quot;Run&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;ChucNguyen&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/DaiHoc/CongNgheMoi/project/ott-backend&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;run.configurations.included.in.services&quot;: &quot;true&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="D:\DaiHoc\CongNgheMoi\project\ott-backend\api-gateway" />
@@ -134,6 +165,13 @@
     </option>
   </component>
   <component name="RunManager" selected="Spring Boot.NotificationServiceApplication">
+    <configuration name="AuthServiceApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
+      <module name="auth-service" />
+      <option name="SPRING_BOOT_MAIN_CLASS" value="iuh.fit.authservice.AuthServiceApplication" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
     <configuration name="NotificationServiceApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
       <option name="FRAME_DEACTIVATION_UPDATE_POLICY" value="UpdateClassesAndResources" />
       <module name="notification-service" />
@@ -198,7 +236,8 @@
       <workItem from="1772124586869" duration="320000" />
       <workItem from="1772127934215" duration="95000" />
       <workItem from="1772991509285" duration="6447000" />
-      <workItem from="1773082202922" duration="954000" />
+      <workItem from="1773082202922" duration="2933000" />
+      <workItem from="1773085274025" duration="24000" />
     </task>
     <servers />
   </component>
