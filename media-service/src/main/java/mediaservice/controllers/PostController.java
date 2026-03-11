@@ -13,6 +13,7 @@ import mediaservice.services.PostService;
 import mediaservice.services.ReactionService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -52,7 +53,7 @@ public class PostController {
     /** GET /posts/page  – có phân trang */
     @GetMapping("/page")
     public ResponseEntity<Page<PostResponse>> getPostsPaged(
-            @PageableDefault(size = 10, sort = "createdAt") Pageable pageable) {
+            @PageableDefault(size = 5, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ResponseEntity.ok(postService.getAllPosts(pageable));
     }
 

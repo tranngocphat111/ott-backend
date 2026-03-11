@@ -150,9 +150,10 @@ public class PostServiceImpl implements PostService {
     @Override
     @Transactional(readOnly = true)
     public Page<PostResponse> getAllPosts(Pageable pageable) {
-        return postRepository.findAll(pageable)
+        return postRepository.findallPosts(pageable)
                 .map(p -> enrichCounts(postMapper.toResponse(p), p.getId()));
     }
+
 
     @Override
     @Transactional
