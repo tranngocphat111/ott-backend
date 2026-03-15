@@ -38,7 +38,7 @@ exports.createConversation = async (req, res) => {
             role: "user",
           });
 
-          req.io.to(conversation._id).emit("them_nguoi_moi", member);
+          req.io.to(conversation._id.toString()).emit("them_nguoi_moi", member);
 
           console.log(
             `${userId} da duoc them vao phong ${conversation._id} o database`,
@@ -65,7 +65,7 @@ exports.createConversation = async (req, res) => {
         conversationId: conversation._id,
         senderId: creatorId,
         content: notificationContent,
-        type: "text",
+        type: "system_add",
       });
 
       console.log("Tin nhắn thông báo đã được tạo:", notificationMessage);

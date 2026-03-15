@@ -55,8 +55,14 @@ exports.sendMessage = async ({
   return savedMessage;
 };
 
-exports.getMessageHistory = async (conversationId) => {
-  return await Message.find({ conversation_id: conversationId }).sort({
+exports.getMessageHistory = async (conversationId, deletedMsgId = "0") => {
+  const messages = await Message.find({ conversation_id: conversationId }).sort({
     msg_id: 1,
   });
+
+  if (!deletedMsgId || deletedMsgId === "0") {
+    return messages;
+  }
+
+  return messages.filter((m) => BigInt(m.msg_id) > BigInt(deletedMsgId));
 };

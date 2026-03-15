@@ -27,8 +27,8 @@ const ParticipantSchema = new mongoose.Schema(
     },
 
     deleted_msg_id: {
-      type: Number,
-      default: 0,
+      type: String,
+      default: "0",
     },
 
     settings: {

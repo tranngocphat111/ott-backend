@@ -25,6 +25,7 @@ const ConversationSchema = new mongoose.Schema(
     last_message: {
       msg_id: { type: String, ref: "Message" },
       sender_id: { type: String, ref: "User" },
+      sender_name: { type: String, default: "" },
       content: { type: String },
       type: {
         type: String,

@@ -1,4 +1,5 @@
 const Conversation = require("../models/Conversation");
+const User = require("../models/User");
 
 exports.createConversation = async ({ creatorId, type, name, avatar, memberCount }) => {
   const newConversation = new Conversation({
@@ -31,14 +32,17 @@ exports.updateLastMessage = async (conversationId, message) => {
     case "file":
       displayContent = "[Tệp tin]";
       break;
-    default:
+    default: {
       const rawContent = message.content[0] || "";
       displayContent =
         rawContent.length > 50
           ? rawContent.substring(0, 50) + "..."
           : rawContent;
       break;
+    }
   }
+
+  const sender = await User.findOne({ user_id: message.sender_id }).select("name").lean();
 
   return await Conversation.findByIdAndUpdate(
     conversationId,
@@ -46,6 +50,7 @@ exports.updateLastMessage = async (conversationId, message) => {
       last_message: {
         msg_id: message.msg_id,
         sender_id: message.sender_id,
+        sender_name: sender?.name || "",
         content: displayContent,
         type: message.type,
         createdAt: message.createdAt,

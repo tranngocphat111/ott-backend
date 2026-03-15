@@ -77,3 +77,16 @@ exports.updatePinStatus = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+exports.deleteConversation = async (req, res) => {
+  try {
+    const { conversationId, userId } = req.body;
+    const participant = await ParticipantService.deleteConversation(conversationId, userId);
+    res.status(200).json(participant);
+  } catch (error) {
+    const isClientError =
+      error.message.includes("không tồn tại") ||
+      error.message.includes("chưa có tin nhắn");
+    res.status(isClientError ? 400 : 500).json({ error: error.message });
+  }
+};
