@@ -74,7 +74,11 @@ exports.createConversation = async (req, res) => {
     // Lấy lại conversation đã được cập nhật với last_message
     const updatedConversation = await ConversationService.getConversationById(conversation._id);
 
-    req.io.emit("tao_phong_moi", updatedConversation);
+    // Emit chỉ tới user room của từng thành viên (không broadcast toàn bộ)
+    const allParticipantIds = [creatorId, ...(memberIds || [])];
+    allParticipantIds.forEach(userId => {
+      req.io.to(`user:${userId}`).emit("tao_phong_moi", updatedConversation);
+    });
     console.log(`Phong ${conversation._id} moi duoc tao ra o database`);
 
     res.status(201).json(updatedConversation);

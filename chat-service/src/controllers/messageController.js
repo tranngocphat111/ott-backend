@@ -22,13 +22,15 @@ exports.sendMessage = async (req, res) => {
       senderId,
       content,
       type,
-      size
+      size,
     });
 
-    req.io.to(conversationId).emit("tin_nhan", savedMessage);
-    console.log(
-      `${senderId} gui tin nhan ${content} vao cuoc tro chuyen ${conversationId}`,
-    );
+    // Emit đến user room riêng của từng participant thay vì conversation room
+    // → nhận được ngay cả khi chưa join conversation room, xử lý được conversation mới
+    const participants = await ParticipantService.getParticipants(conversationId);
+    participants.forEach(p => {
+      req.io.to(`user:${p.user_id}`).emit("tin_nhan", savedMessage);
+    });
 
     res.status(201).json(savedMessage);
   } catch (error) {

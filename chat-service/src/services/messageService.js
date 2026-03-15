@@ -49,10 +49,13 @@ exports.sendMessage = async ({
   });
 
   const savedMessage = await newMessage.save();
+  const updatedConversation = await ConversationService.updateLastMessage(conversationId, savedMessage);
 
-  await ConversationService.updateLastMessage(conversationId, savedMessage);
-
-  return savedMessage;
+  // Gửi kèm sender_name để FE cập nhật conversation list mà không cần query thêm
+  return {
+    ...savedMessage.toObject(),
+    sender_name: updatedConversation?.last_message?.sender_name || "",
+  };
 };
 
 exports.getMessageHistory = async (conversationId, deletedMsgId = "0") => {

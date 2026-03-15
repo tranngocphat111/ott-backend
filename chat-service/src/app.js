@@ -36,6 +36,12 @@ io.on("connection", (socket) => {
     console.log(`User tham gia vao phong: ${conversationId}`);
   });
 
+  // Mỗi user join 1 room riêng theo userId — dùng để nhận tin nhắn và hội thoại mới
+  socket.on("tham_gia_user_room", (userId) => {
+    socket.join(`user:${userId}`);
+    console.log(`User ${userId} da vao phong ca nhan`);
+  });
+
    socket.on("bat_dau_goi", ({ conversationId, callerId, offer }) => {
      socket
        .to(conversationId)
