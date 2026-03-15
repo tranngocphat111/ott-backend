@@ -78,6 +78,16 @@ exports.updatePinStatus = async (req, res) => {
   }
 };
 
+exports.updateLastRead = async (req, res) => {
+  try {
+    const { conversationId, userId, msgId } = req.body;
+    const participant = await ParticipantService.updateLastRead(conversationId, userId, msgId);
+    res.status(200).json(participant);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.deleteConversation = async (req, res) => {
   try {
     const { conversationId, userId } = req.body;
