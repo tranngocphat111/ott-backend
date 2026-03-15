@@ -18,4 +18,6 @@ public class ChangePasswordRequest {
     private String newPassword;
 
     private String ipAddress;
+
+    private String deviceInfo;
 }

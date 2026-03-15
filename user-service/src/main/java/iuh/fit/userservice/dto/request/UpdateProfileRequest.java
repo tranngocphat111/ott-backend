@@ -1,6 +1,6 @@
 package iuh.fit.userservice.dto.request;
 
-import iuh.fit.ottbackend.entity.enums.Gender;
+import iuh.fit.userservice.entity.enums.Gender;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

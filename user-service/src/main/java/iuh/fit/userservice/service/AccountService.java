@@ -136,7 +136,7 @@ public class AccountService {
 
         boolean googleUnlinked = false;
         if (user.getGoogleId() != null) {
-            log.warn("⚠ Email changed, unlinking Google (googleId: {})", user.getGoogleId());
+            log.warn("Email changed, unlinking Google (googleId: {})", user.getGoogleId());
             user.setGoogleId(null);
             googleUnlinked = true;
         }

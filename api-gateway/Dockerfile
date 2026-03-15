@@ -20,7 +20,6 @@ USER spring
 
 COPY --from=builder /app/target/*.jar app.jar
 
-# notification=8083 | user=8082 | auth=8081 | gateway=8080
 EXPOSE 8080
 
 ENTRYPOINT ["java", \

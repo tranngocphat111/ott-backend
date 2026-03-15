@@ -35,7 +35,6 @@ public class SessionService {
     public UserSession createUserSession(User user, String deviceId, DeviceType deviceType,
                                          String deviceName, String ipAddress, String deviceInfo,
                                          String sessionToken, String refreshToken, LoginMethod loginMethod) {
-        // Nếu đã có session cho device này → cập nhật
         if (deviceId != null) {
             userSessionRepository.findByDeviceIdAndUserAndIsActive(deviceId, user, true)
                     .ifPresent(existing -> {

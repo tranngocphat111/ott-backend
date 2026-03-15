@@ -19,7 +19,7 @@ public class NotificationConsumer {
 
     @RabbitListener(queues = "${rabbitmq.queue.otp}")
     public void handleOtpEmail(OtpEmailEvent event) {
-        log.info("📨 [RabbitMQ] OTP email: type={}, to={}", event.getOtpType(), event.getToEmail());
+        log.info("[RabbitMQ] OTP email: type={}, to={}", event.getOtpType(), event.getToEmail());
         try {
             emailService.sendOtpEmail(
                     event.getToEmail(),
