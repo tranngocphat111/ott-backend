@@ -32,8 +32,25 @@ exports.getConversationsByUserId = async (req, res) => {
             });
           }
 
+          const memberDetails = await ParticipantService.getConversationMembers(
+            conversation._id,
+          );
+
+          const conversationData = conversation.toObject();
+          conversationData.participants = memberDetails.map((member) => ({
+            _id: member.user_id,
+            user_id: member.user_id,
+            display_name: member.nickname || member.user?.name || member.user_id,
+            nickname: member.nickname || "",
+            name: member.user?.name || "",
+            avatar: member.user?.avatar || "",
+            status: member.user?.is_online ? "online" : "offline",
+            role: member.roles === "admin" ? "admin" : "member",
+            joined_at: member.joined_at,
+          }));
+
           return {
-            conversation: conversation.toObject(),
+            conversation: conversationData,
             participant: {
               _id: participant._id,
               user_id: participant.user_id,
@@ -209,6 +226,32 @@ exports.removeMember = async (req, res) => {
       error.message.includes("không phải") ||
       error.message.includes("Chỉ có thể") ||
       error.message.includes("Không thể xóa");
+    res.status(isClientError ? 400 : 500).json({ error: error.message });
+  }
+};
+
+exports.updateMemberNickname = async (req, res) => {
+  try {
+    const { conversationId, userId } = req.params;
+    const { requesterId, nickname } = req.body;
+
+    const result = await ParticipantService.updateMemberNickname(
+      conversationId,
+      userId,
+      requesterId,
+      nickname,
+    );
+
+    const participants = await ParticipantService.getParticipants(conversationId);
+    participants.forEach((p) => {
+      req.io.to(`user:${p.user_id}`).emit("cap_nhat_biet_danh", result);
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    const isClientError =
+      error.message.includes("không thuộc") ||
+      error.message.includes("không tồn tại");
     res.status(isClientError ? 400 : 500).json({ error: error.message });
   }
 };
