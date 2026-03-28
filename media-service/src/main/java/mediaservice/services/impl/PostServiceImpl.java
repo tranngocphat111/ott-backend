@@ -60,6 +60,12 @@ public class PostServiceImpl implements PostService {
     @CacheEvict(value = {"allPosts", "userPosts"}, allEntries = true)
     public PostResponse createPost(PostRequest request) {
         Post post = postMapper.toEntity(request);
+        
+        // ⭐ Set default status if null
+        if (post.getStatus() == null) {
+            post.setStatus(ContentStatusType.ACTIVE);
+        }
+        
         Post savedPost = postRepository.save(post);
         return enrichCounts(postMapper.toResponse(savedPost), savedPost.getId());
     }
@@ -80,6 +86,10 @@ public class PostServiceImpl implements PostService {
         post.setAccount(account);
         post.setCaption(caption);
         post.setVisibility(visibility != null ? visibility : VisibilityType.PUBLIC);
+        
+        // ⭐ Set default status to ACTIVE
+        post.setStatus(ContentStatusType.ACTIVE);
+        
         Post savedPost = postRepository.save(post);
 
         // 3. Upload each media file → S3 → save Media row (với caption per-file)
@@ -94,24 +104,30 @@ public class PostServiceImpl implements PostService {
                     String contentType = file.getContentType() != null ? file.getContentType() : "";
                     boolean isVideo = contentType.startsWith("video/");
                     String folder = isVideo ? "social/videos" : "social/posts";
+                    
+                    // Upload và nhận full key (e.g., "social/posts/uuid.jpg")
                     String s3Key = s3Service.uploadFile(file, folder);
+                    
+                    // ⭐ Chỉ lưu filename (uuid.jpg) vào DB, bỏ folder path
+                    String fileName = s3Key.substring(s3Key.lastIndexOf('/') + 1);
 
                     if (isVideo) {
                         VideoMedia media = new VideoMedia();
-                        media.setUrl(s3Key);
+                        media.setUrl(fileName);  // ⭐ Chỉ lưu filename
                         media.setOrderIndex(i);
                         media.setCaption(mediaCaption);
                         media.setContent(savedPost);
                         mediaRepository.save(media);
                     } else {
                         ImageMedia media = new ImageMedia();
-                        media.setUrl(s3Key);
+                        media.setUrl(fileName);  // ⭐ Chỉ lưu filename
                         media.setOrderIndex(i);
                         media.setCaption(mediaCaption);
                         media.setContent(savedPost);
                         mediaRepository.save(media);
                     }
-                    log.info("[createPost] Saved media #{} caption='{}' -> {}", i, mediaCaption, s3Key);
+                    log.info("[createPost] Saved media #{} caption='{}' -> {} (stored as: {})", 
+                        i, mediaCaption, s3Key, fileName);
                 } catch (Exception e) {
                     log.error("[createPost] S3 upload FAILED for file '{}': {}",
                             file.getOriginalFilename(), e.getMessage(), e);
