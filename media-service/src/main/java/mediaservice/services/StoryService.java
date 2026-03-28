@@ -1,6 +1,7 @@
 package mediaservice.services;
 
 import mediaservice.dtos.requests.StoryRequest;
+import mediaservice.dtos.responses.StoryReelResponse;
 import mediaservice.dtos.responses.StoryResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,5 +17,7 @@ public interface StoryService {
     void deleteStory(String id);
     List<StoryResponse> getStoriesByUserId(String userId);
     List<StoryResponse> getActiveStories();
+    List<StoryResponse> getAuthorizedActiveStories(String accountId);
+    StoryReelResponse getStoriesReel(String accountId, int suggestionLimit);
 }
 

@@ -3,6 +3,7 @@ package mediaservice.mappers;
 import mediaservice.dtos.requests.PostRequest;
 import mediaservice.dtos.responses.MediaResponse;
 import mediaservice.dtos.responses.PostResponse;
+import mediaservice.models.ImageMedia;
 import mediaservice.models.Media;
 import mediaservice.models.Post;
 import mediaservice.models.VideoMedia;
@@ -46,7 +47,8 @@ public abstract class PostMapper {
         MediaResponse r = new MediaResponse();
         r.setId(media.getId());
         // Convert relative S3 key (e.g. "social/posts/uuid.jpg") to full HTTPS URL
-        r.setUrl(mediaUrlBuilder != null ? mediaUrlBuilder.buildS3Url("", media.getUrl()) : media.getUrl());
+        String S3Url = media instanceof VideoMedia ? "social/videos" : "social/posts";
+        r.setUrl(mediaUrlBuilder != null ? mediaUrlBuilder.buildS3Url(S3Url, media.getUrl()) : media.getUrl());
         r.setCaption(media.getCaption());
         r.setOrderIndex(media.getOrderIndex());
         r.setCreatedAt(media.getCreatedAt());
@@ -56,7 +58,7 @@ public abstract class PostMapper {
             // Also resolve thumbnail URL if it's a relative key
             String thumbUrl = vm.getThumbnailUrl();
             r.setThumbnailUrl(thumbUrl != null && mediaUrlBuilder != null
-                    ? mediaUrlBuilder.buildS3Url("", thumbUrl) : thumbUrl);
+                    ? mediaUrlBuilder.buildS3Url("social/videos", thumbUrl) : thumbUrl);
             r.setDuration(vm.getDuration());
             r.setHasAudio(vm.isHasAudio());
         } else {

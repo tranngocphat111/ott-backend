@@ -36,3 +36,4 @@ media-service/src/main/resources/application-seed.properties
 .vscode/
 
 .env
+/media-service/scripts
