@@ -100,6 +100,42 @@ exports.updatePinStatus = async (conversationId, userId, isPinned) => {
   );
 };
 
+exports.updateMemberNickname = async (
+  conversationId,
+  targetUserId,
+  requesterUserId,
+  nickname,
+) => {
+  const requester = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: requesterUserId,
+  });
+
+  if (!requester) {
+    throw new Error("Bạn không thuộc cuộc hội thoại này");
+  }
+
+  const target = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: targetUserId,
+  });
+
+  if (!target) {
+    throw new Error("Thành viên không tồn tại trong cuộc hội thoại");
+  }
+
+  const trimmedNickname = String(nickname || "").trim();
+  target.nickname = trimmedNickname || null;
+  await target.save();
+
+  return {
+    success: true,
+    conversationId,
+    userId: targetUserId,
+    nickname: target.nickname || "",
+  };
+};
+
 /**
  * Xóa cuộc hội thoại theo cơ chế soft-delete của Zalo:
  * Đặt deleted_msg_id = msg_id của tin nhắn cuối trong cuộc hội thoại.

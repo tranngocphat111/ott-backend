@@ -41,6 +41,10 @@ router.put(
   "/participants/role/:conversationId/:userId",
   ParticipantController.updateMemberRole,
 );
+router.put(
+  "/participants/nickname/:conversationId/:userId",
+  ParticipantController.updateMemberNickname,
+);
 router.delete(
   "/participants/leave/:conversationId/:userId",
   ParticipantController.leaveGroup,
