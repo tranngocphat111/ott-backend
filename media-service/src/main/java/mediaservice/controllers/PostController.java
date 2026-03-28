@@ -53,7 +53,7 @@ public class PostController {
     /** GET /posts/page  – có phân trang */
     @GetMapping("/page")
     public ResponseEntity<Page<PostResponse>> getPostsPaged(
-            @PageableDefault(size = 0, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+            @PageableDefault(size = 5, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ResponseEntity.ok(postService.getAllPosts(pageable));
     }
 
