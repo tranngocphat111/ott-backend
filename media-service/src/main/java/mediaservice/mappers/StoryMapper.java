@@ -16,7 +16,13 @@ public interface StoryMapper {
     Story toEntity(StoryRequest request);
 
     @Mapping(target = "hashTags", ignore = true)
+    @Mapping(target = "accountId", source = "account.id")
+    @Mapping(target = "accountUsername", source = "account.username")
+    @Mapping(target = "accountDisplayName", source = "account.displayName")
+    @Mapping(target = "accountAvatarUrl", source = "account.avatarUrl")
     @Mapping(target = "storyItems", source = "storyItems", qualifiedByName = "toResponseList")
+    @Mapping(target = "musics", ignore = true)
+    @Mapping(target = "totalViews", ignore = true)
     StoryResponse toResponse(Story story);
 
     List<StoryResponse> toResponseList(List<Story> stories);

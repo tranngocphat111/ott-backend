@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -57,6 +58,7 @@ public abstract class StoryItemMapper {
         if (requests == null) return new HashSet<>();
         return requests.stream()
                 .map(this::toEntity)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
     }
 
