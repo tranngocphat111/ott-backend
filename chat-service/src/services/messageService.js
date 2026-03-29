@@ -1,4 +1,7 @@
 const Message = require("../models/Message");
+const Participant = require("../models/Participant");
+const Conversation = require("../models/Conversation");
+const User = require("../models/User");
 const ConversationService = require("./conversationService");
 const { PutObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
@@ -306,4 +309,261 @@ exports.getLinkMessages = async (conversationId, limit = 20, skip = 0) => {
   });
 
   return linksData;
+};
+
+const escapeRegex = (value = "") =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const getMessagePreview = (message) => {
+  const raw = Array.isArray(message.content)
+    ? String(message.content[0] || "")
+    : String(message.content || "");
+
+  if (message.type === "image") return "[Hình ảnh]";
+  if (message.type === "video") return "[Video]";
+  if (message.type === "file") return "[Tệp tin]";
+  if (message.type === "audio") return "[Âm thanh]";
+
+  return raw.length > 160 ? `${raw.substring(0, 160)}...` : raw;
+};
+
+exports.searchEverything = async ({
+  userId,
+  keyword,
+  limit = 20,
+  senderId,
+}) => {
+  const safeLimit = Number.isFinite(Number(limit))
+    ? Math.max(1, Math.min(Number(limit), 50))
+    : 20;
+  const query = String(keyword || "").trim();
+
+  if (!userId || !query) {
+    return {
+      contacts: [],
+      conversations: [],
+      messages: [],
+      files: [],
+      media: [],
+      total: 0,
+    };
+  }
+
+  const queryRegex = new RegExp(escapeRegex(query), "i");
+
+  const myParticipants = await Participant.find({ user_id: userId })
+    .select("conversation_id")
+    .lean();
+  const conversationIds = myParticipants
+    .map((item) => item.conversation_id)
+    .filter(Boolean);
+
+  if (!conversationIds.length) {
+    return {
+      contacts: [],
+      conversations: [],
+      messages: [],
+      files: [],
+      media: [],
+      total: 0,
+    };
+  }
+
+  const [conversations, participantsInScope] = await Promise.all([
+    Conversation.find({ _id: { $in: conversationIds }, is_deleted: false })
+      .sort({ updatedAt: -1 })
+      .lean(),
+    Participant.find({
+      conversation_id: { $in: conversationIds },
+      user_id: { $ne: userId },
+    })
+      .select("conversation_id user_id")
+      .lean(),
+  ]);
+
+  const userIds = [...new Set(participantsInScope.map((p) => p.user_id).filter(Boolean))];
+  const users = await User.find({ user_id: { $in: userIds } })
+    .select("user_id name avatar")
+    .lean();
+  const userMap = new Map(users.map((u) => [u.user_id, u]));
+
+  const userConversationMap = new Map();
+  participantsInScope.forEach((p) => {
+    const key = String(p.user_id || "");
+    if (!key) return;
+    if (!userConversationMap.has(key)) userConversationMap.set(key, []);
+    userConversationMap.get(key).push(String(p.conversation_id));
+  });
+
+  const contacts = users
+    .filter(
+      (u) => queryRegex.test(String(u.name || "")) || queryRegex.test(String(u.user_id || "")),
+    )
+    .slice(0, safeLimit)
+    .map((u) => ({
+      user_id: u.user_id,
+      name: u.name || u.user_id,
+      avatar: u.avatar || "",
+      phone: u.user_id,
+      conversation_ids: userConversationMap.get(u.user_id) || [],
+    }));
+
+  const convById = new Map(conversations.map((c) => [String(c._id), c]));
+  const privateConvIdsByMatchedContact = new Set();
+  contacts.forEach((contact) => {
+    (contact.conversation_ids || []).forEach((id) => {
+      const conv = convById.get(String(id));
+      if (conv?.type === "private") {
+        privateConvIdsByMatchedContact.add(String(id));
+      }
+    });
+  });
+
+  const conversationResults = conversations
+    .filter((conv) => {
+      if (conv.type === "group" && queryRegex.test(String(conv.name || ""))) {
+        return true;
+      }
+      if (privateConvIdsByMatchedContact.has(String(conv._id))) {
+        return true;
+      }
+      return false;
+    })
+    .slice(0, safeLimit)
+    .map((conv) => ({
+      conversation_id: String(conv._id),
+      type: conv.type,
+      name: conv.name || "",
+      avatar: conv.avatar || "",
+      member_count: conv.member_count || 0,
+      updatedAt: conv.updatedAt,
+      last_message: conv.last_message || null,
+    }));
+
+  const messageFilter = {
+    conversation_id: { $in: conversationIds },
+    is_deleted: false,
+    is_revoked: false,
+  };
+
+  if (senderId) {
+    messageFilter.sender_id = senderId;
+  }
+
+  const [matchedMessages, matchedFiles, matchedMedia] = await Promise.all([
+    Message.find({
+      ...messageFilter,
+      type: { $in: ["text", "link"] },
+      content: { $elemMatch: { $regex: queryRegex } },
+    })
+      .sort({ createdAt: -1 })
+      .limit(safeLimit)
+      .lean(),
+    Message.find({
+      ...messageFilter,
+      type: "file",
+      content: { $elemMatch: { $regex: queryRegex } },
+    })
+      .sort({ createdAt: -1 })
+      .limit(safeLimit)
+      .lean(),
+    Message.find({
+      ...messageFilter,
+      type: { $in: ["image", "video"] },
+      content: { $elemMatch: { $regex: queryRegex } },
+    })
+      .sort({ createdAt: -1 })
+      .limit(safeLimit)
+      .lean(),
+  ]);
+
+  const senderIdsInResults = [
+    ...new Set(
+      [...matchedMessages, ...matchedFiles, ...matchedMedia]
+        .map((msg) => String(msg.sender_id || ""))
+        .filter(Boolean),
+    ),
+  ];
+
+  if (senderIdsInResults.length > 0) {
+    const senderUsers = await User.find({ user_id: { $in: senderIdsInResults } })
+      .select("user_id name avatar")
+      .lean();
+
+    senderUsers.forEach((user) => {
+      userMap.set(user.user_id, user);
+    });
+  }
+
+  const messages = matchedMessages.map((msg) => {
+    const sender = userMap.get(String(msg.sender_id));
+    return {
+      _id: String(msg._id),
+      msg_id: msg.msg_id,
+      conversation_id: String(msg.conversation_id),
+      sender_id: msg.sender_id,
+      sender_name: sender?.name || msg.sender_id,
+      sender_avatar: sender?.avatar || "",
+      type: msg.type,
+      preview: getMessagePreview(msg),
+      createdAt: msg.createdAt,
+    };
+  });
+
+  const files = matchedFiles.flatMap((msg) => {
+    const sender = userMap.get(String(msg.sender_id));
+    const keys = Array.isArray(msg.content) ? msg.content : [msg.content];
+
+    return keys
+      .filter((key) => !!key && queryRegex.test(String(key)))
+      .map((key, index) => {
+        const rawName = String(key).split("/").pop() || "File";
+        const match = rawName.match(/^[a-f0-9]+_(.+)$/i);
+        const fileName = match ? match[1] : rawName;
+        return {
+          _id: `${msg._id}:file:${index}`,
+          msg_id: msg.msg_id,
+          message_id: String(msg._id),
+          conversation_id: String(msg.conversation_id),
+          sender_id: msg.sender_id,
+          sender_name: sender?.name || msg.sender_id,
+          key: String(key),
+          file_name: fileName,
+          createdAt: msg.createdAt,
+        };
+      });
+  });
+
+  const media = matchedMedia.flatMap((msg) => {
+    const sender = userMap.get(String(msg.sender_id));
+    const keys = Array.isArray(msg.content) ? msg.content : [msg.content];
+
+    return keys
+      .filter((key) => !!key && queryRegex.test(String(key)))
+      .map((key, index) => ({
+        _id: `${msg._id}:media:${index}`,
+        msg_id: msg.msg_id,
+        message_id: String(msg._id),
+        conversation_id: String(msg.conversation_id),
+        sender_id: msg.sender_id,
+        sender_name: sender?.name || msg.sender_id,
+        key: String(key),
+        media_type: msg.type,
+        createdAt: msg.createdAt,
+      }));
+  });
+
+  return {
+    contacts,
+    conversations: conversationResults,
+    messages,
+    files: files.slice(0, safeLimit),
+    media: media.slice(0, safeLimit),
+    total:
+      contacts.length +
+      conversationResults.length +
+      messages.length +
+      files.length +
+      media.length,
+  };
 };

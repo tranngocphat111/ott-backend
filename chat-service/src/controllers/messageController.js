@@ -197,3 +197,22 @@ exports.getLinkMessages = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+// Global search for contacts/conversations/messages/files/media
+exports.searchEverything = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { q = "", limit = 20, senderId } = req.query;
+
+    const results = await MessageService.searchEverything({
+      userId,
+      keyword: q,
+      limit: parseInt(limit, 10),
+      senderId,
+    });
+
+    res.status(200).json(results);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};

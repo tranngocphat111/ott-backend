@@ -63,6 +63,7 @@ router.get("/messages/:conversationId/pinned", MessageController.getPinnedMessag
 router.get("/messages/:conversationId/media", MessageController.getMediaMessages);
 router.get("/messages/:conversationId/files", MessageController.getFileMessages);
 router.get("/messages/:conversationId/links", MessageController.getLinkMessages);
+router.get("/search/:userId", MessageController.searchEverything);
 
 // User Category routes
 router.get("/categories/:userId", UserCategoryController.getUserCategories);
