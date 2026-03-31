@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public abstract class BaseStoryItemRequest {
+    private String id;
     private boolean isPrimary;
     private int zIndex;
     private double positionX;

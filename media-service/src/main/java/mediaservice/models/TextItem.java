@@ -1,6 +1,7 @@
 package mediaservice.models;
 
 
+import jakarta.persistence.Column;
 import jakarta.persistence.DiscriminatorValue;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
@@ -18,6 +19,7 @@ import lombok.NoArgsConstructor;
 @EqualsAndHashCode(callSuper = false)
 @DiscriminatorValue("TEXT_ITEM")
 public class TextItem extends StoryItem{
+    @Column(columnDefinition = "TEXT")
     private String content;
     private String font;
     private String color;

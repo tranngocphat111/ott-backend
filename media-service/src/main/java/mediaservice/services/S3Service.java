@@ -15,6 +15,15 @@ public interface S3Service {
     String uploadFile(MultipartFile file, String folder);
 
     /**
+     * Upload file to S3 with a fixed file name (no UUID override).
+     * @param file MultipartFile to upload
+     * @param folder Folder path in S3 bucket (e.g., "stories")
+     * @param fileName Desired file name including extension
+     * @return S3 key of uploaded file
+     */
+    String uploadFile(MultipartFile file, String folder, String fileName);
+
+    /**
      * Upload file from InputStream to S3
      * @param inputStream InputStream of file
      * @param fileName Original filename

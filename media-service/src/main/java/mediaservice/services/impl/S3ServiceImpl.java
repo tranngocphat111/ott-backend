@@ -41,7 +41,25 @@ public class S3ServiceImpl implements S3Service {
             InputStream inputStream = file.getInputStream();
             long fileSize = file.getSize();
 
-            return uploadFile(inputStream, originalFilename, contentType, folder, fileSize);
+            return uploadFile(inputStream, originalFilename, contentType, folder, fileSize, false);
+        } catch (IOException e) {
+            log.error("Error reading file: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to read file", e);
+        }
+    }
+
+    @Override
+    public String uploadFile(MultipartFile file, String folder, String fileName) {
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("File is empty");
+        }
+
+        try {
+            String contentType = file.getContentType();
+            InputStream inputStream = file.getInputStream();
+            long fileSize = file.getSize();
+
+            return uploadFile(inputStream, fileName, contentType, folder, fileSize, true);
         } catch (IOException e) {
             log.error("Error reading file: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to read file", e);
@@ -50,7 +68,7 @@ public class S3ServiceImpl implements S3Service {
 
     @Override
     public String uploadFile(InputStream inputStream, String fileName, String contentType, String folder) {
-        return uploadFile(inputStream, fileName, contentType, folder, -1);
+        return uploadFile(inputStream, fileName, contentType, folder, -1, false);
     }
 
     /**
@@ -58,11 +76,13 @@ public class S3ServiceImpl implements S3Service {
      * Pass fileSize = -1 when size is unknown.
      */
     private String uploadFile(InputStream inputStream, String fileName, String contentType,
-                              String folder, long fileSize) {
+                              String folder, long fileSize, boolean keepFileName) {
         try {
             // Generate unique filename
             String fileExtension = getFileExtension(fileName);
-            String uniqueFileName = UUID.randomUUID() + fileExtension;
+            String uniqueFileName = keepFileName && fileName != null && !fileName.isBlank()
+                    ? fileName
+                    : UUID.randomUUID() + fileExtension;
             String fileKey = folder + "/" + uniqueFileName;
 
             // Set metadata

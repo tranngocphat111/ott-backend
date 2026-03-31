@@ -10,6 +10,7 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface TextItemMapper {
 
+    @Mapping(target = "id", ignore = true)
     TextItem toEntity(TextItemRequest request);
 
     TextItemResponse toResponse(TextItem textItem);

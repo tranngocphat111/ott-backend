@@ -96,13 +96,15 @@ public class StoryServiceImpl implements StoryService {
         }
 
         boolean hasRequiredItem = request.getStoryItems().stream()
-                .anyMatch(item -> item != null
-                        && (item.getType() == StoryItemType.TEXT_ITEM || item.getType() == StoryItemType.IMAGE_ITEM));
+            .anyMatch(item -> item != null
+                && (item.getType() == StoryItemType.TEXT_ITEM
+                || item.getType() == StoryItemType.IMAGE_ITEM
+                || item.getType() == StoryItemType.VIDEO_ITEM));
 
         if (!hasRequiredItem) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Each story must contain at least 1 TEXT_ITEM or IMAGE_ITEM"
+                    "Each story must contain at least 1 TEXT_ITEM, IMAGE_ITEM, or VIDEO_ITEM"
             );
         }
     }
