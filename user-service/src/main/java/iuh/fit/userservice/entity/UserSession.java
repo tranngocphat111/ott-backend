@@ -10,13 +10,17 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "user_sessions", indexes = {
-        @Index(name = "idx_sessions_user",    columnList = "user_id"),
-        @Index(name = "idx_sessions_token",   columnList = "session_token"),
-        @Index(name = "idx_sessions_device",  columnList = "device_id"),
+        @Index(name = "idx_sessions_user", columnList = "user_id"),
+        @Index(name = "idx_sessions_token", columnList = "session_token"),
+        @Index(name = "idx_sessions_device", columnList = "device_id"),
         @Index(name = "idx_sessions_expires", columnList = "expires_at"),
-        @Index(name = "idx_sessions_active",  columnList = "is_active, user_id")
+        @Index(name = "idx_sessions_active", columnList = "is_active, user_id")
 })
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class UserSession {
 
     @Id
