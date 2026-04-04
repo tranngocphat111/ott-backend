@@ -16,11 +16,7 @@ import java.util.Optional;
 @Repository
 public interface QrCodeRepository extends JpaRepository<QrCode, String> {
 
-    List<QrCode> findByUser(User user);
-
-    List<QrCode> findByUserAndQrType(User user, String qrType);
-
-    List<QrCode> findByStatus(String status);
+    List<QrCode> findByUserId(String userId);
 
     @Query("SELECT q FROM QrCode q WHERE q.expiresAt < :now AND q.status IN ('PENDING', 'SCANNED')")
     List<QrCode> findExpiredQrCodes(@Param("now") LocalDateTime now);
@@ -32,7 +28,7 @@ public interface QrCodeRepository extends JpaRepository<QrCode, String> {
     @Query("SELECT SUM(q.failedAttempts) FROM QrCode q WHERE q.deviceId = :deviceId AND q.createdAt > :since")
     Integer countFailedAttemptsByDevice(@Param("deviceId") String deviceId, @Param("since") LocalDateTime since);
 
-    long countByUserAndStatus(User user, QrCodeStatus status);
+    long countByUserIdAndStatus(String userId, QrCodeStatus status);
 
     @Modifying
     @Query(value = """

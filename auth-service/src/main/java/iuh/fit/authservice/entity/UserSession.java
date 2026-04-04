@@ -27,9 +27,8 @@ public class UserSession {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    @Column(name = "user_id", nullable = false)
+    private String userId;
 
     @Column(name = "session_token", nullable = false, unique = true, length = 500)
     private String sessionToken;

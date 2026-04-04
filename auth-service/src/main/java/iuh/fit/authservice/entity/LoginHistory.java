@@ -25,9 +25,8 @@ public class LoginHistory {
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
-    private User user;
+    @Column(name = "user_id")
+    private String userId;
 
     @Column(name = "ip_address", length = 45)
     private String ipAddress;

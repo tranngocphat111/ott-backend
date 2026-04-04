@@ -4,15 +4,15 @@ import com.nimbusds.jose.JOSEException;
 import iuh.fit.authservice.dto.request.*;
 import iuh.fit.authservice.dto.response.*;
 import iuh.fit.authservice.entity.LoginHistory;
-import iuh.fit.authservice.entity.User;
-import iuh.fit.authservice.entity.UserSession;
 import iuh.fit.authservice.entity.enums.*;
 import iuh.fit.authservice.exception.AppException;
 import iuh.fit.authservice.exception.ErrorCode;
 import iuh.fit.authservice.repository.LoginHistoryRepository;
+import iuh.fit.authservice.repository.UserRepository;
 import iuh.fit.authservice.repository.httpclient.GoogleUserClient;
 import iuh.fit.authservice.utils.ValidationUtils;
-import jakarta.transaction.Transactional;
+import jakarta.persistence.EntityManager;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
@@ -45,6 +46,9 @@ public class AuthService {
     ValidationUtils validationUtils;
     RestTemplate restTemplate;
     UserServiceClient userServiceClient;
+    UserRepository userRepository;
+    EntityManager entityManager;
+    UserSyncService userSyncService;
 
     @NonFinal
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
@@ -262,9 +266,10 @@ public class AuthService {
         String token = jwtService.generateToken(user);
         String refreshToken = jwtService.generateRefreshToken();
 
-        User userEntity = User.builder().id(user.getId()).build();
+        userSyncService.ensureUserExists(user);
+
         sessionService.createUserSession(
-                userEntity, deviceId, deviceType, null,
+                user.getId(), deviceId, deviceType, null,
                 ipAddress, deviceInfo, token, refreshToken, loginMethod
         );
 
@@ -356,8 +361,8 @@ public class AuthService {
             String refreshToken = jwtService.generateRefreshToken();
 
             if (request.getDeviceId() != null) {
-                User userEntity = User.builder().id(userId).build();
-                sessionService.updateSessionTokens(request.getDeviceId(), userEntity, token, refreshToken);
+
+                sessionService.updateSessionTokens(request.getDeviceId(), userId, token, refreshToken);
             }
 
             return AuthenticationResponse.builder()
@@ -436,9 +441,16 @@ public class AuthService {
     private void sendWelcomeEmailIfNeeded(UserServiceClient.UserDto user) {
         if (Boolean.TRUE.equals(user.getIsFirstLogin()) && !Boolean.TRUE.equals(user.getWelcomeEmailSent())) {
             try {
+
+                String email = user.getEmail();
+                if (email == null) {
+                    UserServiceClient.UserDto freshUser = userServiceClient.getUserById(user.getId());
+                    email = freshUser.getEmail();
+                }
+
                 notificationPublisher.sendWelcomeEmailAsync(
                         user.getId(),
-                        user.getEmail(),
+                        email,
                         user.getFullName(),
                         user.getPhone(),
                         true,
@@ -482,9 +494,11 @@ public class AuthService {
         String ipAddress = extractField(request, "getIpAddress");
         String deviceInfo = extractField(request, "getDeviceInfo");
 
-        User userEntity = User.builder().id(user.getId()).build();
+        userSyncService.ensureUserExists(user);
+
+
         sessionService.createUserSession(
-                userEntity, deviceId, deviceType, deviceName,
+                user.getId(), deviceId, deviceType, deviceName,
                 ipAddress, deviceInfo, token, refreshToken, loginMethod
         );
 
@@ -506,9 +520,9 @@ public class AuthService {
     private void logLoginHistory(UserServiceClient.UserDto user, String ipAddress, String userAgent,
                                  LoginStatus status, LoginMethod loginMethod, String additionalInfo) {
         try {
-            User userEntity = User.builder().id(user.getId()).build();
+
             LoginHistory loginHistory = LoginHistory.builder()
-                    .user(userEntity)
+                    .userId(user.getId())
                     .ipAddress(ipAddress)
                     .deviceType(extractDeviceTypeFromUserAgent(userAgent))
                     .userAgent(userAgent)
@@ -591,4 +605,5 @@ public class AuthService {
     private String generateAndCacheOtpCode() {
         return null;
     }
+
 }

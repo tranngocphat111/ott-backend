@@ -133,6 +133,6 @@ public class User {
     @Column(name = "welcome_email_sent_at")
     private LocalDateTime welcomeEmailSentAt;
 
-    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private TwoFactorAuth twoFactorAuth;
+//    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+//    private TwoFactorAuth twoFactorAuth;
 }

@@ -21,10 +21,6 @@ public class TwoFactorAuth {
     @Column(name = "user_id")
     private String userId;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @MapsId
-    @JoinColumn(name = "user_id")
-    private User user;
 
     @Column(name = "is_enabled")
     @Builder.Default

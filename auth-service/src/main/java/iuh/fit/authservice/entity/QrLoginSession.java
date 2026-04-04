@@ -30,9 +30,8 @@ public class QrLoginSession {
     @JoinColumn(name = "qr_code_id", nullable = false)
     private QrCode qrCode;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
-    private User user;
+    @Column(name = "user_id")
+    private String userId;
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "session_id", nullable = true)

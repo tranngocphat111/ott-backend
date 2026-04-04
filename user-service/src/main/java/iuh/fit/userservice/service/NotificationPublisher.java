@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -29,6 +30,7 @@ public class NotificationPublisher {
     @Value("${internal.api.key}")
     private String internalApiKey;
 
+    @Async
     public void sendOtpEmail(String toEmail, String toName, String otpCode,
                              OtpType otpType, String ipAddress, String location,
                              String userId) {
@@ -38,13 +40,13 @@ public class NotificationPublisher {
             headers.set("X-Internal-Key", internalApiKey);
 
             Map<String, Object> body = Map.of(
-                    "toEmail",   toEmail,
-                    "toName",    toName != null ? toName : "User",
-                    "otpCode",   otpCode,
-                    "otpType",   otpType.name(),
+                    "toEmail", toEmail,
+                    "toName", toName != null ? toName : "User",
+                    "otpCode", otpCode,
+                    "otpType", otpType.name(),
                     "ipAddress", ipAddress != null ? ipAddress : "",
-                    "location",  location  != null ? location  : "",
-                    "userId",    userId    != null ? userId    : ""
+                    "location", location != null ? location : "",
+                    "userId", userId != null ? userId : ""
             );
 
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
@@ -59,12 +61,12 @@ public class NotificationPublisher {
     public void sendWelcomeEmailAsync(User user) {
         try {
             Map<String, Object> event = Map.of(
-                    "toEmail",        user.getEmail() != null ? user.getEmail() : "",
-                    "toName",         user.getFullName(),
-                    "phone",          user.getPhone(),
-                    "hasPassword",    user.getPasswordHash() != null,
-                    "hasGoogleLinked",user.getGoogleId() != null,
-                    "userId",         user.getId()
+                    "userId", user.getId(),
+                    "email", user.getEmail() != null ? user.getEmail() : "",
+                    "fullName", user.getFullName(),
+                    "phone", user.getPhone(),
+                    "hasPassword", user.getPasswordHash() != null,
+                    "hasGoogleLinked", user.getGoogleId() != null
             );
             rabbitTemplate.convertAndSend(rabbitMQConfig.exchange, rabbitMQConfig.welcomeRoutingKey, event);
             log.info("Welcome email event published for userId: {}", user.getId());
@@ -77,13 +79,13 @@ public class NotificationPublisher {
                                     String location, String deviceInfo) {
         try {
             Map<String, Object> event = Map.of(
-                    "toEmail",    user.getEmail() != null ? user.getEmail() : "",
-                    "toName",     user.getFullName(),
-                    "alertType",  alertType,
-                    "ipAddress",  ipAddress  != null ? ipAddress  : "",
-                    "location",   location   != null ? location   : "",
+                    "toEmail", user.getEmail() != null ? user.getEmail() : "",
+                    "toName", user.getFullName(),
+                    "alertType", alertType,
+                    "ipAddress", ipAddress != null ? ipAddress : "",
+                    "location", location != null ? location : "",
                     "deviceInfo", deviceInfo != null ? deviceInfo : "",
-                    "userId",     user.getId()
+                    "userId", user.getId()
             );
             rabbitTemplate.convertAndSend(rabbitMQConfig.exchange, rabbitMQConfig.alertRoutingKey, event);
             log.info("Alert email event published for userId: {}", user.getId());

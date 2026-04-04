@@ -74,13 +74,13 @@ public class QrLoginService {
 
         validateUserStatus(userDto);
 
-        User user = User.builder().id(userId).build();
-        long pendingCount = qrCodeRepository.countByUserAndStatus(user, QrCodeStatus.SCANNED);
+
+        long pendingCount = qrCodeRepository.countByUserIdAndStatus(userId, QrCodeStatus.SCANNED);
         if (pendingCount >= MAX_PENDING_QR_LOGINS) {
             throw new AppException(ErrorCode.TOO_MANY_PENDING_QR_LOGINS);
         }
 
-        qrCode.setUser(user);
+        qrCode.setUserId(userId);
         qrCode.setStatus(QrCodeStatus.SCANNED);
         qrCode.setScannedAt(LocalDateTime.now());
         qrCode.setScannedDeviceId(request.getDeviceId());
@@ -92,7 +92,7 @@ public class QrLoginService {
 
         QrLoginSession loginSession = QrLoginSession.builder()
                 .qrCode(qrCode)
-                .user(user)
+                .userId(userId)
                 .status(QrLoginSessionStatus.WAITING)
                 .build();
         qrLoginSessionRepository.save(loginSession);
@@ -111,7 +111,7 @@ public class QrLoginService {
             throw new AppException(ErrorCode.INVALID_QR_STATUS);
         }
 
-        if (!userId.equals(qrCode.getUser().getId())) {
+        if (!userId.equals(qrCode.getUserId())) {
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
@@ -142,9 +142,9 @@ public class QrLoginService {
         String token = jwtService.generateToken(userDto);
         String refreshToken = jwtService.generateRefreshToken();
 
-        User userEntity = User.builder().id(userId).build();
+
         UserSession session = sessionService.createUserSession(
-                userEntity,
+                userId,
                 qrCode.getDeviceId(),
                 qrCode.getDeviceType(),
                 null,

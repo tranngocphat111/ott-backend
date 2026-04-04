@@ -15,20 +15,18 @@ import java.util.List;
 @Repository
 public interface LoginHistoryRepository extends JpaRepository<LoginHistory, String> {
 
-    Page<LoginHistory> findByUserOrderByCreatedAtDesc(User user, Pageable pageable);
+    Page<LoginHistory> findByUserIdOrderByCreatedAtDesc(String userId, Pageable pageable);
 
-    List<LoginHistory> findByUserAndStatus(User user, String status);
-
-    @Query("SELECT lh FROM LoginHistory lh WHERE lh.user = :user AND lh.createdAt BETWEEN :startDate AND :endDate ORDER BY lh.createdAt DESC")
-    List<LoginHistory> findByUserAndDateRange(
-            @Param("user") User user,
+    @Query("SELECT lh FROM LoginHistory lh WHERE lh.userId = :userId AND lh.createdAt BETWEEN :startDate AND :endDate ORDER BY lh.createdAt DESC")
+    List<LoginHistory> findByUserIdAndDateRange(
+            @Param("userId") String userId,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate
     );
 
-    @Query("SELECT lh FROM LoginHistory lh WHERE lh.user = :user AND lh.status = 'FAILED' AND lh.createdAt > :since ORDER BY lh.createdAt DESC")
+    @Query("SELECT lh FROM LoginHistory lh WHERE lh.userId = :userId AND lh.status = 'FAILED' AND lh.createdAt > :since ORDER BY lh.createdAt DESC")
     List<LoginHistory> findRecentFailedAttempts(
-            @Param("user") User user,
+            @Param("userId") String userId,
             @Param("since") LocalDateTime since
     );
 
@@ -40,6 +38,6 @@ public interface LoginHistoryRepository extends JpaRepository<LoginHistory, Stri
 
     void deleteByCreatedAtBefore(LocalDateTime dateTime);
 
-    @Query("SELECT lh.deviceType, COUNT(lh) FROM LoginHistory lh WHERE lh.user = :user GROUP BY lh.deviceType")
-    List<Object[]> getLoginStatsByDeviceType(@Param("user") User user);
+    @Query("SELECT lh.deviceType, COUNT(lh) FROM LoginHistory lh WHERE lh.userId = :userId GROUP BY lh.deviceType")
+    List<Object[]> getLoginStatsByDeviceType(@Param("userId") String userId);
 }
