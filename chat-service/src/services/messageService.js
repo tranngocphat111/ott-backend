@@ -10,26 +10,64 @@ const { s3Client, bucketName } = require("../config/s3");
 
 const crypto = require("crypto");
 
-const buildReplyPreview = (message) => {
+const REVOKED_PLACEHOLDER = "Tin nhắn đã được thu hồi";
+
+const getFileNameFromKey = (key) => {
+  const rawName =
+    String(key || "")
+      .split("/")
+      .pop() || "File";
+  const match = rawName.match(/^[a-f0-9]+_(.+)$/i);
+  return match ? match[1] : rawName;
+};
+
+const isVisibleToUser = (message, userId) => {
+  if (message.is_deleted) return false;
+  if (!userId) return true;
+
+  const deletedFor = Array.isArray(message.deleted_for)
+    ? message.deleted_for
+    : [];
+  return !deletedFor.includes(userId);
+};
+
+const buildReplyPreview = (message, senderName = "") => {
   if (!message) return null;
 
   const rawContent = Array.isArray(message.content)
     ? message.content[0] || ""
     : message.content || "";
+  const mediaUrls = Array.isArray(message.content)
+    ? message.content.filter(Boolean).map((item) => String(item))
+    : rawContent
+      ? [String(rawContent)]
+      : [];
+
+  const isUrlLike = /^(https?:\/\/|www\.)/i.test(rawContent);
+  const mediaUrl = rawContent && !isUrlLike ? rawContent : "";
+  const fileName =
+    message.type === "file" ||
+    message.type === "video" ||
+    message.type === "audio"
+      ? getFileNameFromKey(rawContent)
+      : "";
 
   let preview = "";
   switch (message.type) {
     case "image":
-      preview = "[Hình ảnh]";
+      preview = rawContent;
       break;
     case "video":
-      preview = "[Video]";
+      preview = rawContent;
       break;
     case "file":
-      preview = "[Tệp tin]";
+      preview = fileName || "[Tệp tin]";
       break;
     case "audio":
-      preview = "[Âm thanh]";
+      preview = fileName || "[Âm thanh]";
+      break;
+    case "link":
+      preview = rawContent;
       break;
     default:
       preview = rawContent;
@@ -39,11 +77,50 @@ const buildReplyPreview = (message) => {
   return {
     msg_id: message.msg_id,
     sender_id: message.sender_id,
+    sender_name: senderName || message.sender_name || "",
     type: message.type,
     content: preview.length > 120 ? preview.substring(0, 120) + "..." : preview,
+    raw_content: rawContent,
+    file_name: fileName,
+    url: mediaUrl || rawContent,
+    media_urls: message.type === "image" ? mediaUrls : undefined,
+    media_count: message.type === "image" ? mediaUrls.length : undefined,
     is_deleted: !!message.is_deleted,
     is_revoked: !!message.is_revoked,
   };
+};
+
+const syncConversationLastMessageOnRevoke = async (conversationId, message) => {
+  const conversation = await Conversation.findById(conversationId)
+    .select("last_message")
+    .lean();
+
+  if (!conversation?.last_message?.msg_id) {
+    return null;
+  }
+
+  if (String(conversation.last_message.msg_id) !== String(message.msg_id)) {
+    return null;
+  }
+
+  const sender = await User.findOne({ user_id: message.sender_id })
+    .select("name")
+    .lean();
+
+  const lastMessagePayload = {
+    msg_id: message.msg_id,
+    sender_id: message.sender_id,
+    sender_name: sender?.name || conversation.last_message.sender_name || "",
+    content: REVOKED_PLACEHOLDER,
+    type: "text",
+    createdAt: message.createdAt,
+  };
+
+  await Conversation.findByIdAndUpdate(conversationId, {
+    last_message: lastMessagePayload,
+  });
+
+  return lastMessagePayload;
 };
 
 exports.generatePresignedUrl = async (fileName, fileType) => {
@@ -87,6 +164,7 @@ exports.sendMessage = async ({
   const contentArray = Array.isArray(content) ? content : [content];
 
   let replyMessage = null;
+  let replySender = null;
   if (replyToMsgId) {
     replyMessage = await Message.findOne({
       msg_id: replyToMsgId,
@@ -96,6 +174,10 @@ exports.sendMessage = async ({
     if (!replyMessage) {
       throw new Error("Tin nhắn trả lời không hợp lệ");
     }
+
+    replySender = await User.findOne({ user_id: replyMessage.sender_id })
+      .select("name")
+      .lean();
   }
 
   const newMessage = new Message({
@@ -117,27 +199,34 @@ exports.sendMessage = async ({
   await messageCacheService.addMessage(conversationId, {
     ...savedMessage.toObject(),
     sender_name: updatedConversation?.last_message?.sender_name || "",
+    reply_to: buildReplyPreview(replyMessage, replySender?.name || ""),
   });
 
   // Gửi kèm sender_name để FE cập nhật conversation list mà không cần query thêm
   return {
     ...savedMessage.toObject(),
     sender_name: updatedConversation?.last_message?.sender_name || "",
-    reply_to: buildReplyPreview(replyMessage),
+    reply_to: buildReplyPreview(replyMessage, replySender?.name || ""),
   };
 };
 
-exports.getMessageHistory = async (conversationId, deletedMsgId = "0") => {
+exports.getMessageHistory = async (
+  conversationId,
+  deletedMsgId = "0",
+  userId,
+) => {
   const messages = await Message.find({ conversation_id: conversationId }).sort(
     {
       msg_id: 1,
     },
   );
 
+  const visibleMessages = messages.filter((m) => isVisibleToUser(m, userId));
+
   const filteredMessages =
     !deletedMsgId || deletedMsgId === "0"
-      ? messages
-      : messages.filter((m) => BigInt(m.msg_id) > BigInt(deletedMsgId));
+      ? visibleMessages
+      : visibleMessages.filter((m) => BigInt(m.msg_id) > BigInt(deletedMsgId));
 
   const replyIds = [
     ...new Set(
@@ -156,14 +245,147 @@ exports.getMessageHistory = async (conversationId, deletedMsgId = "0") => {
     msg_id: { $in: replyIds },
   }).lean();
 
+  const referencedSenderIds = [
+    ...new Set(referencedMessages.map((m) => m.sender_id)),
+  ];
+  const referencedSenders = await User.find({
+    user_id: { $in: referencedSenderIds },
+  })
+    .select("user_id name")
+    .lean();
+
+  const senderNameMap = new Map(
+    referencedSenders.map((user) => [user.user_id, user.name || ""]),
+  );
+
   const referencedMap = new Map(
-    referencedMessages.map((m) => [m.msg_id, buildReplyPreview(m)]),
+    referencedMessages.map((m) => [
+      m.msg_id,
+      buildReplyPreview(m, senderNameMap.get(m.sender_id) || ""),
+    ]),
   );
 
   return filteredMessages.map((m) => ({
     ...m.toObject(),
     reply_to: referencedMap.get(m.reply_to_msg_id) || null,
   }));
+};
+
+exports.revokeMessage = async ({ conversationId, msgId, userId }) => {
+  const message = await Message.findOne({
+    msg_id: msgId,
+    conversation_id: conversationId,
+  });
+
+  if (!message || message.is_deleted) {
+    throw new Error("Tin nhắn không tồn tại");
+  }
+
+  if (message.sender_id !== userId) {
+    throw new Error("Bạn không có quyền thu hồi tin nhắn này");
+  }
+
+  if (message.is_revoked) {
+    const sender = await User.findOne({ user_id: message.sender_id })
+      .select("name")
+      .lean();
+
+    return {
+      _id: message._id,
+      msg_id: message.msg_id,
+      conversation_id: message.conversation_id,
+      sender_id: message.sender_id,
+      sender_name: sender?.name || "",
+      type: message.type,
+      content: message.content,
+      is_revoked: true,
+      is_deleted: !!message.is_deleted,
+      reactions: message.reactions || [],
+      reply_to_msg_id: message.reply_to_msg_id,
+      createdAt: message.createdAt,
+      updatedAt: message.updatedAt,
+    };
+  }
+
+  message.is_revoked = true;
+  message.content = [REVOKED_PLACEHOLDER];
+  message.reactions = [];
+  message.is_pinned = false;
+  message.pinned_at = null;
+  message.pinned_by = null;
+
+  const revokedMessage = await message.save();
+  const sender = await User.findOne({ user_id: revokedMessage.sender_id })
+    .select("name")
+    .lean();
+  const updatedLastMessage = await syncConversationLastMessageOnRevoke(
+    conversationId,
+    revokedMessage,
+  );
+
+  await messageCacheService.updateMessage(conversationId, msgId, {
+    ...revokedMessage.toObject(),
+    sender_name: sender?.name || "",
+  });
+
+  return {
+    _id: revokedMessage._id,
+    msg_id: revokedMessage.msg_id,
+    conversation_id: revokedMessage.conversation_id,
+    sender_id: revokedMessage.sender_id,
+    sender_name: sender?.name || "",
+    type: revokedMessage.type,
+    content: revokedMessage.content,
+    is_revoked: true,
+    is_deleted: !!revokedMessage.is_deleted,
+    reactions: revokedMessage.reactions || [],
+    reply_to_msg_id: revokedMessage.reply_to_msg_id,
+    createdAt: revokedMessage.createdAt,
+    updatedAt: revokedMessage.updatedAt,
+    last_message: updatedLastMessage,
+  };
+};
+
+exports.deleteMessage = async ({ conversationId, msgId, userId }) => {
+  const participant = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: userId,
+  });
+
+  if (!participant) {
+    throw new Error("Bạn không thuộc cuộc hội thoại này");
+  }
+
+  const message = await Message.findOne({
+    msg_id: msgId,
+    conversation_id: conversationId,
+  });
+
+  if (!message || message.is_deleted) {
+    throw new Error("Tin nhắn không tồn tại");
+  }
+
+  if (!Array.isArray(message.deleted_for)) {
+    message.deleted_for = [];
+  }
+
+  if (!message.deleted_for.includes(userId)) {
+    message.deleted_for.push(userId);
+  }
+
+  await message.save();
+  await messageCacheService.updateMessage(conversationId, msgId, {
+    ...message.toObject(),
+  });
+
+  return {
+    _id: message._id,
+    msg_id: message.msg_id,
+    conversation_id: message.conversation_id,
+    user_id: userId,
+    delete_scope: "me",
+    is_deleted_for_me: true,
+  };
 };
 
 exports.reactToMessage = async ({
@@ -223,6 +445,21 @@ exports.pinMessage = async ({ conversationId, msgId, userId, isPinned }) => {
     throw new Error("Tin nhắn không tồn tại");
   }
 
+  if (isPinned && (message.is_deleted || message.is_revoked)) {
+    throw new Error("Không thể ghim tin nhắn đã bị xóa hoặc thu hồi");
+  }
+
+  if (isPinned && !message.is_pinned) {
+    const pinnedCount = await Message.countDocuments({
+      conversation_id: conversationId,
+      is_pinned: true,
+    });
+
+    if (pinnedCount >= 3) {
+      throw new Error("Mỗi đoạn chat chỉ được ghim tối đa 3 tin nhắn");
+    }
+  }
+
   message.is_pinned = isPinned;
   message.pinned_at = isPinned ? new Date() : null;
   message.pinned_by = isPinned ? userId : null;
@@ -248,9 +485,29 @@ exports.getPinnedMessages = async (conversationId) => {
   const messages = await Message.find({
     conversation_id: conversationId,
     is_pinned: true,
-  }).sort({ pinned_at: -1 });
+  })
+    .sort({ pinned_at: -1 })
+    .limit(3)
+    .lean();
 
-  return messages;
+  const senderIds = [
+    ...new Set(messages.map((message) => String(message.sender_id || ""))),
+  ].filter(Boolean);
+
+  const senders = senderIds.length
+    ? await User.find({ user_id: { $in: senderIds } })
+        .select("user_id name")
+        .lean()
+    : [];
+
+  const senderNameMap = new Map(
+    senders.map((sender) => [String(sender.user_id || ""), sender.name || ""]),
+  );
+
+  return messages.map((message) => ({
+    ...message,
+    sender_name: senderNameMap.get(String(message.sender_id || "")) || "",
+  }));
 };
 
 // Get media messages (images/videos) for a conversation
@@ -266,6 +523,168 @@ exports.getMediaMessages = async (conversationId, limit = 20, skip = 0) => {
     .limit(limit);
 
   return messages;
+};
+
+// Get media gallery items (image/video only) with pagination by media item count.
+// This endpoint is independent from chat message rendering and excludes deleted/revoked messages.
+exports.getMediaGallery = async (conversationId, limit = 20, skip = 0) => {
+  const safeLimit = Number.isFinite(Number(limit))
+    ? Math.max(1, Math.min(Number(limit), 50))
+    : 20;
+  const safeSkip = Number.isFinite(Number(skip))
+    ? Math.max(0, Number(skip))
+    : 0;
+
+  const targetCount = safeSkip + safeLimit + 1;
+  const batchSize = 50;
+  let messageSkip = 0;
+  let reachedEnd = false;
+  const mediaPool = [];
+  const senderIds = new Set();
+
+  while (mediaPool.length < targetCount && !reachedEnd) {
+    const messages = await Message.find({
+      conversation_id: conversationId,
+      type: { $in: ["image", "video"] },
+      is_deleted: false,
+      is_revoked: false,
+    })
+      .sort({ createdAt: -1 })
+      .skip(messageSkip)
+      .limit(batchSize)
+      .lean();
+
+    if (!messages.length) {
+      reachedEnd = true;
+      break;
+    }
+
+    messageSkip += messages.length;
+    if (messages.length < batchSize) {
+      reachedEnd = true;
+    }
+
+    for (const message of messages) {
+      senderIds.add(String(message.sender_id || ""));
+      const content = Array.isArray(message.content)
+        ? message.content.filter(Boolean)
+        : message.content
+          ? [message.content]
+          : [];
+
+      if (message.type === "image") {
+        content.forEach((rawUrl, index) => {
+          mediaPool.push({
+            _id: message._id,
+            msg_id: message.msg_id,
+            conversation_id: message.conversation_id,
+            sender_id: message.sender_id,
+            type: "image",
+            url: String(rawUrl),
+            image_index: index,
+            createdAt: message.createdAt,
+          });
+        });
+      } else if (message.type === "video" && content[0]) {
+        mediaPool.push({
+          _id: message._id,
+          msg_id: message.msg_id,
+          conversation_id: message.conversation_id,
+          sender_id: message.sender_id,
+          type: "video",
+          url: String(content[0]),
+          image_index: 0,
+          createdAt: message.createdAt,
+        });
+      }
+
+      if (mediaPool.length >= targetCount) {
+        break;
+      }
+    }
+  }
+
+  const senderList = senderIds.size
+    ? await User.find({ user_id: { $in: Array.from(senderIds) } })
+        .select("user_id name")
+        .lean()
+    : [];
+  const senderNameMap = new Map(
+    senderList.map((sender) => [
+      String(sender.user_id || ""),
+      sender.name || "",
+    ]),
+  );
+
+  const pagedItems = mediaPool
+    .slice(safeSkip, safeSkip + safeLimit)
+    .map((item) => ({
+      ...item,
+      sender_name: senderNameMap.get(String(item.sender_id || "")) || "",
+    }));
+
+  const hasMore = mediaPool.length > safeSkip + safeLimit;
+
+  return {
+    items: pagedItems,
+    pagination: {
+      limit: safeLimit,
+      skip: safeSkip,
+      returned: pagedItems.length,
+      hasMore,
+      nextSkip: hasMore ? safeSkip + pagedItems.length : null,
+    },
+  };
+};
+
+// Get media messages around a target media message (_id or msg_id).
+exports.getMediaAroundTarget = async (
+  conversationId,
+  messageId,
+  before = 10,
+  after = 10,
+) => {
+  const safeBefore = Number.isFinite(Number(before))
+    ? Math.max(0, Math.min(Number(before), 50))
+    : 10;
+  const safeAfter = Number.isFinite(Number(after))
+    ? Math.max(0, Math.min(Number(after), 50))
+    : 10;
+
+  const baseQuery = {
+    conversation_id: conversationId,
+    type: { $in: ["image", "video"] },
+    is_deleted: false,
+    is_revoked: false,
+  };
+
+  const target = await Message.findOne({
+    ...baseQuery,
+    $or: [{ _id: messageId }, { msg_id: String(messageId || "") }],
+  }).lean();
+
+  if (!target) {
+    throw new Error("Không tìm thấy media mục tiêu");
+  }
+
+  const newer = await Message.find({
+    ...baseQuery,
+    createdAt: { $gt: target.createdAt },
+  })
+    .sort({ createdAt: 1 })
+    .limit(safeAfter)
+    .lean();
+
+  const older = await Message.find({
+    ...baseQuery,
+    createdAt: { $lt: target.createdAt },
+  })
+    .sort({ createdAt: -1 })
+    .limit(safeBefore)
+    .lean();
+
+  // Normalize to the same order used in gallery: newest -> oldest.
+  return [...newer.reverse(), target, ...older];
 };
 
 // Get file messages for a conversation
@@ -297,15 +716,19 @@ exports.getLinkMessages = async (conversationId, limit = 20, skip = 0) => {
 
   // Filter messages that contain links
   const messagesWithLinks = messages.filter((msg) => {
-    const content = Array.isArray(msg.content) ? msg.content.join(" ") : msg.content;
+    const content = Array.isArray(msg.content)
+      ? msg.content.join(" ")
+      : msg.content;
     return urlPattern.test(content);
   });
 
   // Extract links from messages
   const linksData = messagesWithLinks.slice(skip, skip + limit).map((msg) => {
-    const content = Array.isArray(msg.content) ? msg.content.join(" ") : msg.content;
+    const content = Array.isArray(msg.content)
+      ? msg.content.join(" ")
+      : msg.content;
     const links = content.match(urlPattern) || [];
-    
+
     return {
       _id: msg._id,
       msg_id: msg.msg_id,
@@ -388,7 +811,9 @@ exports.searchEverything = async ({
       .lean(),
   ]);
 
-  const userIds = [...new Set(participantsInScope.map((p) => p.user_id).filter(Boolean))];
+  const userIds = [
+    ...new Set(participantsInScope.map((p) => p.user_id).filter(Boolean)),
+  ];
   const users = await User.find({ user_id: { $in: userIds } })
     .select("user_id name avatar")
     .lean();
@@ -404,7 +829,9 @@ exports.searchEverything = async ({
 
   const contacts = users
     .filter(
-      (u) => queryRegex.test(String(u.name || "")) || queryRegex.test(String(u.user_id || "")),
+      (u) =>
+        queryRegex.test(String(u.name || "")) ||
+        queryRegex.test(String(u.user_id || "")),
     )
     .slice(0, safeLimit)
     .map((u) => ({
@@ -451,6 +878,7 @@ exports.searchEverything = async ({
     conversation_id: { $in: conversationIds },
     is_deleted: false,
     is_revoked: false,
+    deleted_for: { $ne: userId },
   };
 
   if (senderId) {
@@ -493,7 +921,9 @@ exports.searchEverything = async ({
   ];
 
   if (senderIdsInResults.length > 0) {
-    const senderUsers = await User.find({ user_id: { $in: senderIdsInResults } })
+    const senderUsers = await User.find({
+      user_id: { $in: senderIdsInResults },
+    })
       .select("user_id name avatar")
       .lean();
 

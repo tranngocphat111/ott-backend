@@ -63,6 +63,7 @@ exports.getMessages = async (req, res) => {
     const messages = await MessageService.getMessageHistory(
       conversationId,
       deletedMsgId,
+      userId,
     );
 
     res.status(200).json(messages);
@@ -102,6 +103,63 @@ exports.reactToMessage = async (req, res) => {
   }
 };
 
+exports.revokeMessage = async (req, res) => {
+  try {
+    const { msgId } = req.params;
+    const { conversationId, userId } = req.body;
+
+    const revokedMessage = await MessageService.revokeMessage({
+      conversationId,
+      msgId,
+      userId,
+    });
+
+    const participants =
+      await ParticipantService.getParticipants(conversationId);
+    participants.forEach((p) => {
+      req.io.to(`user:${p.user_id}`).emit("tin_nhan_thu_hoi", revokedMessage);
+    });
+
+    res.status(200).json(revokedMessage);
+  } catch (error) {
+    if (
+      error.message === "Tin nhắn không tồn tại" ||
+      error.message === "Bạn không có quyền thu hồi tin nhắn này"
+    ) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.deleteMessage = async (req, res) => {
+  try {
+    const { msgId } = req.params;
+    const { conversationId, userId } = req.body;
+
+    const deletedMessage = await MessageService.deleteMessage({
+      conversationId,
+      msgId,
+      userId,
+    });
+
+    req.io.to(`user:${userId}`).emit("tin_nhan_da_xoa", deletedMessage);
+
+    res.status(200).json(deletedMessage);
+  } catch (error) {
+    if (
+      error.message === "Tin nhắn không tồn tại" ||
+      error.message === "Bạn không có quyền xóa tin nhắn này" ||
+      error.message === "Bạn không thuộc cuộc hội thoại này"
+    ) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.status(500).json({ error: error.message });
+  }
+};
+
 // Pin/Unpin message
 exports.pinMessage = async (req, res) => {
   try {
@@ -124,7 +182,11 @@ exports.pinMessage = async (req, res) => {
 
     res.status(200).json(updatedMessage);
   } catch (error) {
-    if (error.message === "Tin nhắn không tồn tại") {
+    if (
+      error.message === "Tin nhắn không tồn tại" ||
+      error.message === "Mỗi đoạn chat chỉ được ghim tối đa 3 tin nhắn" ||
+      error.message === "Không thể ghim tin nhắn đã bị xóa hoặc thu hồi"
+    ) {
       return res.status(400).json({ error: error.message });
     }
     res.status(500).json({ error: error.message });
@@ -153,11 +215,55 @@ exports.getMediaMessages = async (req, res) => {
     const messages = await MessageService.getMediaMessages(
       conversationId,
       parseInt(limit),
-      parseInt(skip)
+      parseInt(skip),
     );
 
     res.status(200).json(messages);
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get media gallery items (flattened images/videos with pagination by media items)
+exports.getMediaGallery = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { limit = 20, skip = 0 } = req.query;
+
+    const payload = await MessageService.getMediaGallery(
+      conversationId,
+      parseInt(limit, 10),
+      parseInt(skip, 10),
+    );
+
+    res.status(200).json(payload);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// Get media messages around a specific media message
+exports.getMediaAroundTarget = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { messageId, before = 10, after = 10 } = req.query;
+
+    if (!messageId) {
+      return res.status(400).json({ error: "Thiếu messageId" });
+    }
+
+    const messages = await MessageService.getMediaAroundTarget(
+      conversationId,
+      String(messageId),
+      parseInt(before, 10),
+      parseInt(after, 10),
+    );
+
+    res.status(200).json(messages);
+  } catch (error) {
+    if (error.message === "Không tìm thấy media mục tiêu") {
+      return res.status(404).json({ error: error.message });
+    }
     res.status(500).json({ error: error.message });
   }
 };
@@ -171,7 +277,7 @@ exports.getFileMessages = async (req, res) => {
     const messages = await MessageService.getFileMessages(
       conversationId,
       parseInt(limit),
-      parseInt(skip)
+      parseInt(skip),
     );
 
     res.status(200).json(messages);
@@ -189,7 +295,7 @@ exports.getLinkMessages = async (req, res) => {
     const messages = await MessageService.getLinkMessages(
       conversationId,
       parseInt(limit),
-      parseInt(skip)
+      parseInt(skip),
     );
 
     res.status(200).json(messages);

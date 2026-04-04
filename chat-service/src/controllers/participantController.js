@@ -1,11 +1,35 @@
 const ParticipantService = require("../services/participantService");
 const Message = require("../models/Message");
 
+const buildConversationPreviewContent = (message) => {
+  if (!message) return "";
+
+  const rawContent = Array.isArray(message.content)
+    ? String(message.content[0] || "")
+    : String(message.content || "");
+
+  switch (message.type) {
+    case "image":
+      return "[Hình ảnh]";
+    case "video":
+      return "[Video]";
+    case "audio":
+      return "[Âm thanh]";
+    case "file":
+      return "[Tệp tin]";
+    default:
+      return rawContent.length > 50
+        ? `${rawContent.substring(0, 50)}...`
+        : rawContent;
+  }
+};
+
 exports.getConversationsByUserId = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const participants = await ParticipantService.getConversationsByUserId(userId);
+    const participants =
+      await ParticipantService.getConversationsByUserId(userId);
     // Trả về đầy đủ participant data + conversation data + unread_count
     const result = (
       await Promise.all(
@@ -22,15 +46,29 @@ exports.getConversationsByUserId = async (req, res) => {
               ? lastReadMsgId
               : deletedMsgId;
 
+          // Last message hiển thị ở sidebar phải theo phạm vi nhìn thấy của chính user.
+          const visibleLastMessage = await Message.findOne({
+            conversation_id: conversation._id,
+            is_deleted: { $ne: true },
+            deleted_for: { $ne: userId },
+          })
+            .sort({ msg_id: -1 })
+            .select("msg_id sender_id type content createdAt")
+            .lean();
+
           let unread_count = 0;
           try {
-            if (conversation.last_message?.msg_id && BigInt(conversation.last_message.msg_id) > BigInt(anchorMsgId)) {
+            if (
+              visibleLastMessage?.msg_id &&
+              BigInt(visibleLastMessage.msg_id) > BigInt(anchorMsgId)
+            ) {
               // For numeric comparison with large numbers in MongoDB, we need to use $where or numeric operators
               // Since msg_id is a string, we need to compare them as BigInt in JavaScript
               const messages = await Message.find({
                 conversation_id: conversation._id,
                 is_deleted: { $ne: true },
                 is_revoked: { $ne: true },
+                deleted_for: { $ne: userId },
               })
                 .select("msg_id")
                 .lean();
@@ -52,11 +90,38 @@ exports.getConversationsByUserId = async (req, res) => {
             conversation._id,
           );
 
+          const senderNameById = new Map(
+            memberDetails.map((member) => [
+              String(member.user_id),
+              member.nickname || member.user?.name || "",
+            ]),
+          );
+
+          const resolvedLastMessage = visibleLastMessage
+            ? {
+                msg_id: String(visibleLastMessage.msg_id || ""),
+                sender_id: String(visibleLastMessage.sender_id || ""),
+                sender_name:
+                  senderNameById.get(
+                    String(visibleLastMessage.sender_id || ""),
+                  ) || "",
+                content: buildConversationPreviewContent(visibleLastMessage),
+                type:
+                  visibleLastMessage.type === "system_add"
+                    ? "text"
+                    : visibleLastMessage.type,
+                createdAt:
+                  visibleLastMessage.createdAt || new Date().toISOString(),
+              }
+            : undefined;
+
           const conversationData = conversation.toObject();
+          conversationData.last_message = resolvedLastMessage;
           conversationData.participants = memberDetails.map((member) => ({
             _id: member.user_id,
             user_id: member.user_id,
-            display_name: member.nickname || member.user?.name || member.user_id,
+            display_name:
+              member.nickname || member.user?.name || member.user_id,
             nickname: member.nickname || "",
             name: member.user?.name || "",
             avatar: member.user?.avatar || "",
@@ -79,9 +144,9 @@ exports.getConversationsByUserId = async (req, res) => {
               nickname: participant.nickname,
               joined_at: participant.joined_at,
               roles: participant.roles,
-            }
+            },
           };
-        })
+        }),
       )
     ).filter((item) => item !== null);
 
@@ -97,7 +162,7 @@ exports.updateConversationCategory = async (req, res) => {
     const participant = await ParticipantService.updateConversationCategory(
       conversationId,
       userId,
-      categoryId
+      categoryId,
     );
     res.status(200).json(participant);
   } catch (error) {
@@ -112,7 +177,7 @@ exports.updateNotificationStatus = async (req, res) => {
       conversationId,
       userId,
       status,
-      muteUntil
+      muteUntil,
     );
     res.status(200).json(participant);
   } catch (error) {
@@ -126,7 +191,7 @@ exports.updatePinStatus = async (req, res) => {
     const participant = await ParticipantService.updatePinStatus(
       conversationId,
       userId,
-      isPinned
+      isPinned,
     );
     res.status(200).json(participant);
   } catch (error) {
@@ -137,7 +202,11 @@ exports.updatePinStatus = async (req, res) => {
 exports.updateLastRead = async (req, res) => {
   try {
     const { conversationId, userId, msgId } = req.body;
-    const participant = await ParticipantService.updateLastRead(conversationId, userId, msgId);
+    const participant = await ParticipantService.updateLastRead(
+      conversationId,
+      userId,
+      msgId,
+    );
     res.status(200).json(participant);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -147,7 +216,10 @@ exports.updateLastRead = async (req, res) => {
 exports.deleteConversation = async (req, res) => {
   try {
     const { conversationId, userId } = req.body;
-    const participant = await ParticipantService.deleteConversation(conversationId, userId);
+    const participant = await ParticipantService.deleteConversation(
+      conversationId,
+      userId,
+    );
     res.status(200).json(participant);
   } catch (error) {
     const isClientError =
@@ -161,7 +233,8 @@ exports.deleteConversation = async (req, res) => {
 exports.getConversationMembers = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const members = await ParticipantService.getConversationMembers(conversationId);
+    const members =
+      await ParticipantService.getConversationMembers(conversationId);
     res.status(200).json(members);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -175,7 +248,8 @@ exports.leaveGroup = async (req, res) => {
     const result = await ParticipantService.leaveGroup(conversationId, userId);
 
     // Emit to remaining members
-    const participants = await ParticipantService.getParticipants(conversationId);
+    const participants =
+      await ParticipantService.getParticipants(conversationId);
     participants.forEach((p) => {
       req.io.to(`user:${p.user_id}`).emit("roi_nhom", result);
     });
@@ -195,11 +269,17 @@ exports.updateMemberRole = async (req, res) => {
   try {
     const { conversationId, userId } = req.params;
     const { adminId, newRole } = req.body;
-    
-    const result = await ParticipantService.updateMemberRole(conversationId, userId, newRole, adminId);
+
+    const result = await ParticipantService.updateMemberRole(
+      conversationId,
+      userId,
+      newRole,
+      adminId,
+    );
 
     // Emit to all participants
-    const participants = await ParticipantService.getParticipants(conversationId);
+    const participants =
+      await ParticipantService.getParticipants(conversationId);
     participants.forEach((p) => {
       req.io.to(`user:${p.user_id}`).emit("cap_nhat_role", result);
     });
@@ -222,11 +302,16 @@ exports.removeMember = async (req, res) => {
   try {
     const { conversationId, userId } = req.params;
     const { adminId } = req.body;
-    
-    const result = await ParticipantService.removeMember(conversationId, userId, adminId);
+
+    const result = await ParticipantService.removeMember(
+      conversationId,
+      userId,
+      adminId,
+    );
 
     // Emit to all participants including removed user
-    const participants = await ParticipantService.getParticipants(conversationId);
+    const participants =
+      await ParticipantService.getParticipants(conversationId);
     participants.forEach((p) => {
       req.io.to(`user:${p.user_id}`).emit("xoa_thanh_vien", result);
     });
@@ -258,7 +343,8 @@ exports.updateMemberNickname = async (req, res) => {
       nickname,
     );
 
-    const participants = await ParticipantService.getParticipants(conversationId);
+    const participants =
+      await ParticipantService.getParticipants(conversationId);
     participants.forEach((p) => {
       req.io.to(`user:${p.user_id}`).emit("cap_nhat_biet_danh", result);
     });

@@ -13,7 +13,10 @@ router.get("/users", UserController.getAllUsers);
 
 router.post("/conversations", ConversationController.createConversation);
 router.post("/conversations/add-member", ConversationController.addMember);
-router.put("/conversations/:conversationId", ConversationController.updateConversation);
+router.put(
+  "/conversations/:conversationId",
+  ConversationController.updateConversation,
+);
 
 router.get(
   "/participants/:userId",
@@ -57,12 +60,34 @@ router.delete(
 router.post("/messages/presigned-url", MessageController.generatePresignedUrl);
 router.post("/messages", MessageController.sendMessage);
 router.put("/messages/:msgId/reaction", MessageController.reactToMessage);
+router.put("/messages/:msgId/revoke", MessageController.revokeMessage);
+router.put("/messages/:msgId/delete", MessageController.deleteMessage);
 router.put("/messages/:msgId/pin", MessageController.pinMessage);
 router.get("/messages/:conversationId", MessageController.getMessages);
-router.get("/messages/:conversationId/pinned", MessageController.getPinnedMessages);
-router.get("/messages/:conversationId/media", MessageController.getMediaMessages);
-router.get("/messages/:conversationId/files", MessageController.getFileMessages);
-router.get("/messages/:conversationId/links", MessageController.getLinkMessages);
+router.get(
+  "/messages/:conversationId/pinned",
+  MessageController.getPinnedMessages,
+);
+router.get(
+  "/messages/:conversationId/media",
+  MessageController.getMediaMessages,
+);
+router.get(
+  "/messages/:conversationId/media-gallery",
+  MessageController.getMediaGallery,
+);
+router.get(
+  "/messages/:conversationId/media-around",
+  MessageController.getMediaAroundTarget,
+);
+router.get(
+  "/messages/:conversationId/files",
+  MessageController.getFileMessages,
+);
+router.get(
+  "/messages/:conversationId/links",
+  MessageController.getLinkMessages,
+);
 router.get("/search/:userId", MessageController.searchEverything);
 
 // User Category routes
