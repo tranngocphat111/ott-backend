@@ -39,6 +39,7 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
     private static final List<String> PUBLIC_ENDPOINTS = Arrays.asList(
             "/riff/api/auth/login/local",
             "/riff/api/auth/login/google",
+            "/riff/api/auth/login/google/token",
             "/riff/api/auth/login/google/complete",
             "/riff/api/auth/login/email-otp/request",
             "/riff/api/auth/login/email-otp/verify",

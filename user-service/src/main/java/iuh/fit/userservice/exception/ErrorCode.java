@@ -48,7 +48,7 @@ public enum ErrorCode {
     OTP_ALREADY_USED(1502, "OTP has already been used", HttpStatus.BAD_REQUEST),
     INVALID_OTP_CODE(1503, "Invalid OTP code", HttpStatus.BAD_REQUEST),
     OTP_MAX_ATTEMPTS_EXCEEDED(1504, "Max OTP attempts exceeded", HttpStatus.TOO_MANY_REQUESTS),
-    OTP_RATE_LIMIT_EXCEEDED(1505, "Too many OTP requests", HttpStatus.TOO_MANY_REQUESTS),
+    // OTP_RATE_LIMIT_EXCEEDED(1505, "Too many OTP requests", HttpStatus.TOO_MANY_REQUESTS),
     OTP_BLOCKED(1506, "OTP verification is blocked", HttpStatus.TOO_MANY_REQUESTS),
 
     TWO_FACTOR_AUTH_ALREADY_ENABLED(1601, "2FA already enabled", HttpStatus.BAD_REQUEST),
@@ -59,7 +59,12 @@ public enum ErrorCode {
     SAME_EMAIL(2100, "New email must differ from current", HttpStatus.BAD_REQUEST),
     SAME_PHONE(2101, "New phone must differ from current", HttpStatus.BAD_REQUEST),
 
-    VALIDATION_FAILED(1111, "Validation failed", HttpStatus.BAD_REQUEST);
+    VALIDATION_FAILED(1111, "Validation failed", HttpStatus.BAD_REQUEST),
+
+    OTP_RATE_LIMIT_EXCEEDED(1234, "otp rate limit exceeded", HttpStatus.BAD_REQUEST)
+    ;
+
+
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
         this.code = code;
