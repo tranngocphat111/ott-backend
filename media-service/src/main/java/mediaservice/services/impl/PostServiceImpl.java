@@ -11,14 +11,17 @@ import mediaservice.models.ImageMedia;
 import mediaservice.models.Post;
 import mediaservice.models.UserAccount;
 import mediaservice.models.VideoMedia;
+import mediaservice.models.ContentAccessControl;
 import mediaservice.models.enums.*;
 import mediaservice.repositories.CommentRepository;
+import mediaservice.repositories.ContentAccessControlRepository;
 import mediaservice.repositories.MediaRepository;
 import mediaservice.repositories.PostRepository;
 import mediaservice.repositories.ReactionRepository;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.PostService;
 import mediaservice.services.S3Service;
+import mediaservice.dtos.requests.AccessControlRequest;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -41,6 +44,7 @@ public class PostServiceImpl implements PostService {
     private final UserAccountRepository userAccountRepository;
     private final MediaRepository mediaRepository;
     private final S3Service s3Service;
+    private final ContentAccessControlRepository contentAccessControlRepository;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -76,7 +80,8 @@ public class PostServiceImpl implements PostService {
     public PostResponse createPost(String accountId, String caption,
                                    VisibilityType visibility,
                                    List<MultipartFile> files,
-                                   List<String> captions) {
+                                   List<String> captions,
+                                   List<AccessControlRequest> accessControls) {
         // 1. Resolve author
         UserAccount account = userAccountRepository.findById(accountId)
                 .orElseThrow(() -> new RuntimeException("User not found: " + accountId));
@@ -91,6 +96,25 @@ public class PostServiceImpl implements PostService {
         post.setStatus(ContentStatusType.ACTIVE);
         
         Post savedPost = postRepository.save(post);
+
+        if (visibility == VisibilityType.CUSTOM && accessControls != null && !accessControls.isEmpty()) {
+            List<ContentAccessControl> controls = new java.util.ArrayList<>();
+            for (AccessControlRequest req : accessControls) {
+                if (req == null || req.getAccountId() == null || req.getRuleType() == null) continue;
+                if (req.getAccountId().equals(accountId)) continue;
+                UserAccount target = userAccountRepository.findById(req.getAccountId()).orElse(null);
+                if (target == null) continue;
+                ContentAccessControl control = new ContentAccessControl();
+                control.setAccount(target);
+                control.setContent(savedPost);
+                control.setRuleType(req.getRuleType());
+                controls.add(control);
+            }
+            if (!controls.isEmpty()) {
+                contentAccessControlRepository.saveAll(controls);
+                savedPost.setAccessControls(new java.util.HashSet<>(controls));
+            }
+        }
 
         // 3. Upload each media file → S3 → save Media row (với caption per-file)
         if (files != null) {

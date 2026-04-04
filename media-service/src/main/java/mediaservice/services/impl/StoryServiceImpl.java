@@ -20,6 +20,7 @@ import mediaservice.repositories.StoryItemRepository;
 import mediaservice.repositories.StoryRepository;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.StoryService;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -50,6 +51,7 @@ public class StoryServiceImpl implements StoryService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"stories", "allStories", "storyReel"}, allEntries = true)
     public StoryResponse createStory(StoryRequest request) {
         if (request.getUserId() == null || request.getUserId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "userId is required");
@@ -133,6 +135,7 @@ public class StoryServiceImpl implements StoryService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"stories", "allStories", "storyReel"}, allEntries = true)
     public StoryResponse updateStory(String id, StoryRequest request) {
         Story story = storyRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Story not found with id: " + id));
@@ -150,6 +153,7 @@ public class StoryServiceImpl implements StoryService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"stories", "allStories", "storyReel"}, allEntries = true)
     public void deleteStory(String id) {
         if (!storyRepository.existsById(id)) {
             throw new RuntimeException("Story not found with id: " + id);
@@ -193,19 +197,25 @@ public class StoryServiceImpl implements StoryService {
     @Transactional(readOnly = true)
     public StoryReelResponse getStoriesReel(String accountId, int suggestionLimit) {
         List<StoryResponse> stories = getAuthorizedActiveStories(accountId);
+        List<StoryGroupResponse> storyGroups = groupStoriesByAccount(stories);
 
-        if (!stories.isEmpty()) {
-            return new StoryReelResponse(groupStoriesByAccount(stories), List.of());
+        if (storyGroups.size() >= 5) {
+            return new StoryReelResponse(storyGroups, List.of());
         }
 
         int safeLimit = suggestionLimit <= 0 ? 8 : suggestionLimit;
+        int fillCount = Math.max(0, 5 - storyGroups.size());
+        int limit = Math.min(safeLimit, fillCount);
+        if (limit == 0) {
+            return new StoryReelResponse(storyGroups, List.of());
+        }
         List<UserAccount> suggestedUsers = userAccountRepository.findSuggestedUsersForStoryReel(
                 accountId,
-                PageRequest.of(0, safeLimit)
+                PageRequest.of(0, limit)
         );
 
         return new StoryReelResponse(
-                List.of(),
+                storyGroups,
                 userAccountMapper.toResponseList(suggestedUsers)
         );
     }
