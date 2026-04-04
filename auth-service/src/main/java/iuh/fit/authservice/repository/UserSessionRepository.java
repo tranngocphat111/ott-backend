@@ -14,22 +14,20 @@ import java.util.Optional;
 @Repository
 public interface UserSessionRepository extends JpaRepository<UserSession, String> {
 
-    Optional<UserSession> findByDeviceIdAndUser(String deviceId, User user);
+    Optional<UserSession> findByDeviceIdAndUserId(String deviceId, String userId);
 
-    @Query("SELECT s FROM UserSession s WHERE s.user = :user AND s.expiresAt > :now")
-    List<UserSession> findActiveSessionsByUser(@Param("user") User user, @Param("now") LocalDateTime now);
+    Optional<UserSession> findByDeviceIdAndUserIdAndIsActive(String deviceId, String userId, Boolean isActive);
+
+    @Query("SELECT s FROM UserSession s WHERE s.userId = :userId AND s.expiresAt > :now")
+    List<UserSession> findActiveSessionsByUserId(@Param("userId") String userId, @Param("now") LocalDateTime now);
 
     @Query("SELECT s FROM UserSession s WHERE s.expiresAt < :now")
     List<UserSession> findExpiredSessions(@Param("now") LocalDateTime now);
 
     void deleteByExpiresAtBefore(LocalDateTime dateTime);
 
-    @Query("SELECT COUNT(s) FROM UserSession s WHERE s.user = :user AND s.expiresAt > :now")
-    long countActiveSessionsByUser(@Param("user") User user, @Param("now") LocalDateTime now);
-
-    List<UserSession> findByUserAndDeviceType(User user, String deviceType);
-
-    Optional<UserSession> findByDeviceIdAndUserAndIsActive(String deviceId, User user, Boolean isActive);
+    @Query("SELECT COUNT(s) FROM UserSession s WHERE s.userId = :userId AND s.expiresAt > :now")
+    long countActiveSessionsByUserId(@Param("userId") String userId, @Param("now") LocalDateTime now);
 
     List<UserSession> findByUserIdAndIsActiveTrue(String userId);
 

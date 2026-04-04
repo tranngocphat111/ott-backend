@@ -30,6 +30,15 @@ public class UserMapper {
                         && user.getTwoFactorAuth().getIsEnabled() != null
                         && user.getTwoFactorAuth().getIsEnabled())
                 .createdAt(user.getCreatedAt())
+
+                .isActive(user.getIsActive())
+                .isBlocked(user.getIsBlocked())
+                .blockedUntil(user.getBlockedUntil())
+                .blockedReason(user.getBlockedReason())
+                .deletedAt(user.getDeletedAt())
+                .isFirstLogin(user.getIsFirstLogin())
+                .welcomeEmailSent(user.getWelcomeEmailSent())
+                .lastLoginAt(user.getLastLoginAt())
                 .build();
     }
 

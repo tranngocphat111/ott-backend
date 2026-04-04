@@ -100,6 +100,10 @@ public class EmailService {
     public void sendWelcomeEmail(String toEmail, String toName, String phone,
                                  boolean hasPassword, boolean hasGoogleLinked,
                                  String userId) {
+        if (toEmail == null || toEmail.isBlank()) {
+            log.warn("sendWelcomeEmail called with null email, skipping. userId={}", userId);
+            return;
+        }
 
         String subject = "Welcome to " + appName + "!";
 

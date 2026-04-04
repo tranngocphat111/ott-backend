@@ -33,23 +33,26 @@ public interface PostRepository extends JpaRepository<Post, String> {
         "p.visibility = :publicVis OR " +
         "( p.visibility = :privateVis AND a.id = :accountId ) OR " +
         "( p.visibility = :friendVis AND EXISTS " +
-                "(" +
-                "SELECT 1 FROM Relationship r " +
-                "WHERE (r.status = :relationshipStatus AND r.receiver.id = :accountId) OR (r.requester.id = :accountId)" +
-                ")" +
+            "(" +
+            "SELECT 1 FROM Relationship r " +
+            "WHERE r.acceptedAt IS NOT NULL " +
+            "AND r.status = :relationshipStatus " +
+            "AND ((r.requester.id = :accountId AND r.receiver.id = a.id) " +
+            "OR (r.receiver.id = :accountId AND r.requester.id = a.id))" +
+            ")" +
         ") OR " +
-        "( p.visibility = :customVis AND " +
-                "EXISTS " +
-                    "(SELECT 1 FROM ContentAccessControl ac " +
-                    "WHERE ac.ruleType = :whiteListRuleType " +
-                    "AND ac.content = p " +
-                    "AND ac.account.id = :accountId) " +
-                " OR NOT EXISTS " +
-                    "(SELECT ac FROM ContentAccessControl ac " +
-                    "WHERE ac.ruleType = :blackListRuleType " +
-                    "AND ac.content = p " +
-                    "AND ac.account.id <> :accountId) " +
-        ") " +
+        "( p.visibility = :customVis AND (" +
+            "EXISTS " +
+                "(SELECT 1 FROM ContentAccessControl ac " +
+                "WHERE ac.ruleType = :whiteListRuleType " +
+                "AND ac.content = p " +
+                "AND ac.account.id = :accountId) " +
+            " OR NOT EXISTS " +
+                "(SELECT 1 FROM ContentAccessControl ac " +
+                "WHERE ac.ruleType = :blackListRuleType " +
+                "AND ac.content = p " +
+                "AND ac.account.id = :accountId) " +
+        ")) " +
     ") " +
     "ORDER BY p.createdAt DESC",
     countQuery =
@@ -63,21 +66,24 @@ public interface PostRepository extends JpaRepository<Post, String> {
                     "( p.visibility = :friendVis AND EXISTS " +
                     "(" +
                         "SELECT 1 FROM Relationship r " +
-                        "WHERE (r.status = :relationshipStatus AND r.receiver.id = :accountId) OR (r.requester.id = :accountId)" +
+                        "WHERE r.acceptedAt IS NOT NULL " +
+                        "AND r.status = :relationshipStatus " +
+                        "AND ((r.requester.id = :accountId AND r.receiver.id = a.id) " +
+                        "OR (r.receiver.id = :accountId AND r.requester.id = a.id))" +
                     ")" +
                     ") OR " +
-                    "( p.visibility = :customVis AND " +
+                    "( p.visibility = :customVis AND (" +
                         "EXISTS " +
                             "(SELECT 1 FROM ContentAccessControl ac " +
                             "WHERE ac.ruleType = :whiteListRuleType " +
                             "AND ac.content = p " +
                             "AND ac.account.id = :accountId) " +
                         " OR NOT EXISTS " +
-                            "(SELECT ac FROM ContentAccessControl ac " +
+                            "(SELECT 1 FROM ContentAccessControl ac " +
                             "WHERE ac.ruleType = :blackListRuleType " +
                             "AND ac.content = p " +
-                            "AND ac.account.id <> :accountId) " +
-                ") " +
+                            "AND ac.account.id = :accountId) " +
+                ")) " +
             ") "
 )
     Page<Post> findAllPostsWithAuthorized(

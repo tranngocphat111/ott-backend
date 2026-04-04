@@ -25,9 +25,8 @@ public class QrCode {
     @Id
     private String id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
-    private User user;
+    @Column(name = "user_id")
+    private String userId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "qr_type", nullable = false, length = 20)

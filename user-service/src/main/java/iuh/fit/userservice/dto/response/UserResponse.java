@@ -24,4 +24,13 @@ public class UserResponse {
     private boolean hasGoogleLinked;
     private boolean is2FAEnabled;
     private LocalDateTime createdAt;
+
+    private Boolean isActive;
+    private Boolean isBlocked;
+    private LocalDateTime blockedUntil;
+    private String blockedReason;
+    private LocalDateTime deletedAt;
+    private Boolean isFirstLogin;
+    private Boolean welcomeEmailSent;
+    private LocalDateTime lastLoginAt;
 }

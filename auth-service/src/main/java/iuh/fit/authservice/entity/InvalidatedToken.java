@@ -25,9 +25,8 @@ public class InvalidatedToken {
     @Column(name = "expiry_time", nullable = false)
     LocalDateTime expiryTime;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
-    User user;
+    @Column(name = "user_id")
+    private String userId;
 
     @Column(name = "token_type", length = 20)
     String tokenType;
