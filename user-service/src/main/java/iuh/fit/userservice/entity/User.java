@@ -14,19 +14,23 @@ import java.time.LocalDateTime;
 @Table(
         name = "users",
         uniqueConstraints = {
-                @UniqueConstraint(name = "uk_user_phone",     columnNames = "phone"),
-                @UniqueConstraint(name = "uk_user_email",     columnNames = "email"),
+                @UniqueConstraint(name = "uk_user_phone", columnNames = "phone"),
+                @UniqueConstraint(name = "uk_user_email", columnNames = "email"),
                 @UniqueConstraint(name = "uk_user_google_id", columnNames = "google_id")
         },
         indexes = {
-                @Index(name = "idx_users_phone",        columnList = "phone"),
-                @Index(name = "idx_users_email",        columnList = "email"),
-                @Index(name = "idx_users_google_id",    columnList = "google_id"),
+                @Index(name = "idx_users_phone", columnList = "phone"),
+                @Index(name = "idx_users_email", columnList = "email"),
+                @Index(name = "idx_users_google_id", columnList = "google_id"),
                 @Index(name = "idx_users_account_type", columnList = "account_type"),
-                @Index(name = "idx_users_is_active",    columnList = "is_active")
+                @Index(name = "idx_users_is_active", columnList = "is_active")
         }
 )
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class User {
 
     @Id

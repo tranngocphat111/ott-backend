@@ -6,6 +6,11 @@
   <component name="ChangeListManager">
     <list default="true" id="1bb96e93-77b6-4b77-b543-9908f50ffd65" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/AuthService.java" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/AuthService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/config/SecurityConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/config/SecurityConfig.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/User.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/User.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/UserSession.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/UserSession.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/enums/LoginMethod.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/enums/LoginMethod.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -80,8 +85,11 @@
     "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "Spring Boot.ApiGatewayApplication.executor": "Run",
+    "Spring Boot.AuthServiceApplication.executor": "Run",
     "Spring Boot.NotificationServiceApplication.executor": "Run",
     "Spring Boot.OttBackendApplication.executor": "Run",
+    "Spring Boot.UserServiceApplication.executor": "Run",
     "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
     "git-widget-placeholder": "develop",
     "ignore.virus.scanning.warn.message": "true",
@@ -123,22 +131,47 @@
         <option value="SpringBootApplicationConfigurationType" />
       </set>
     </option>
+    <option name="hiddenConfigurations">
+      <map>
+        <entry key="SpringBootApplicationConfigurationType">
+          <value>
+            <set>
+              <option value="OttBackendApplication" />
+            </set>
+          </value>
+        </entry>
+      </map>
+    </option>
     <option name="configurationStatuses">
       <map>
         <entry key="SpringBootApplicationConfigurationType">
           <value>
             <map>
+              <entry key="ApiGatewayApplication" value="STOPPED" />
+              <entry key="AuthServiceApplication" value="STOPPED" />
               <entry key="NotificationServiceApplication" value="STOPPED" />
+              <entry key="UserServiceApplication" value="STOPPED" />
             </map>
           </value>
         </entry>
       </map>
     </option>
   </component>
-  <component name="RunManager" selected="Spring Boot.NotificationServiceApplication">
+  <component name="RunManager" selected="Spring Boot.ApiGatewayApplication">
     <configuration name="ApiGatewayApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
       <module name="api-gateway" />
       <option name="SPRING_BOOT_MAIN_CLASS" value="iuh.fit.apigateway.ApiGatewayApplication" />
+      <extension name="net.ashald.envfile">
+        <option name="IS_ENABLED" value="true" />
+        <option name="IS_SUBST" value="false" />
+        <option name="IS_PATH_MACRO_SUPPORTED" value="false" />
+        <option name="IS_IGNORE_MISSING_FILES" value="false" />
+        <option name="IS_ENABLE_EXPERIMENTAL_INTEGRATIONS" value="false" />
+        <ENTRIES>
+          <ENTRY IS_ENABLED="true" PARSER="runconfig" IS_EXECUTABLE="false" />
+          <ENTRY IS_ENABLED="true" PARSER="env" IS_EXECUTABLE="false" PATH=".env" />
+        </ENTRIES>
+      </extension>
       <method v="2">
         <option name="Make" enabled="true" />
       </method>
@@ -146,6 +179,17 @@
     <configuration name="AuthServiceApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
       <module name="auth-service" />
       <option name="SPRING_BOOT_MAIN_CLASS" value="iuh.fit.authservice.AuthServiceApplication" />
+      <extension name="net.ashald.envfile">
+        <option name="IS_ENABLED" value="true" />
+        <option name="IS_SUBST" value="false" />
+        <option name="IS_PATH_MACRO_SUPPORTED" value="false" />
+        <option name="IS_IGNORE_MISSING_FILES" value="false" />
+        <option name="IS_ENABLE_EXPERIMENTAL_INTEGRATIONS" value="false" />
+        <ENTRIES>
+          <ENTRY IS_ENABLED="true" PARSER="runconfig" IS_EXECUTABLE="false" />
+          <ENTRY IS_ENABLED="true" PARSER="env" IS_EXECUTABLE="false" PATH=".env" />
+        </ENTRIES>
+      </extension>
       <method v="2">
         <option name="Make" enabled="true" />
       </method>
@@ -191,6 +235,17 @@
     <configuration name="UserServiceApplication" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" nameIsGenerated="true">
       <module name="SpringBoot2" />
       <option name="SPRING_BOOT_MAIN_CLASS" value="iuh.fit.userservice.UserServiceApplication" />
+      <extension name="net.ashald.envfile">
+        <option name="IS_ENABLED" value="true" />
+        <option name="IS_SUBST" value="false" />
+        <option name="IS_PATH_MACRO_SUPPORTED" value="false" />
+        <option name="IS_IGNORE_MISSING_FILES" value="false" />
+        <option name="IS_ENABLE_EXPERIMENTAL_INTEGRATIONS" value="false" />
+        <ENTRIES>
+          <ENTRY IS_ENABLED="true" PARSER="runconfig" IS_EXECUTABLE="false" />
+          <ENTRY IS_ENABLED="true" PARSER="env" IS_EXECUTABLE="false" PATH=".env" />
+        </ENTRIES>
+      </extension>
       <method v="2">
         <option name="Make" enabled="true" />
       </method>
@@ -238,7 +293,8 @@
       <workItem from="1773228961597" duration="21000" />
       <workItem from="1773427410388" duration="841000" />
       <workItem from="1773478474751" duration="2305000" />
-      <workItem from="1773557990153" duration="1129000" />
+      <workItem from="1773557990153" duration="2832000" />
+      <workItem from="1774685277956" duration="4424000" />
     </task>
     <servers />
   </component>

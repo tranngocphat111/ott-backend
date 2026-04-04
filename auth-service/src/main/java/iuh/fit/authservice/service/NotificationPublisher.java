@@ -55,8 +55,8 @@ public class NotificationPublisher {
             headers.set("Content-Type", "application/json");
 
             Map<String, Object> body = new java.util.HashMap<>();
-            body.put("email", email);
-            body.put("fullName", fullName != null ? fullName : "User");
+            body.put("toEmail", email);
+            body.put("toName", fullName != null ? fullName : "User");
             body.put("otpType", otpType.name());
             body.put("ipAddress", ipAddress != null ? ipAddress : "");
             body.put("location", location != null ? location : "");

@@ -114,11 +114,14 @@ public class OtpService {
     }
 
     private void checkRateLimit(String phone, String email, OtpType type) {
-        LocalDateTime oneHourAgo = LocalDateTime.now().minusHours(1);
-        long count = phone != null
-                ? otpCodeRepository.countRecentOtpByPhone(phone, type, oneHourAgo)
-                : otpCodeRepository.countRecentOtpByEmail(email, type, oneHourAgo);
-        if (count >= RATE_LIMIT_PER_HOUR) throw new AppException(ErrorCode.OTP_RATE_LIMIT_EXCEEDED);
+        //        LocalDateTime oneHourAgo = LocalDateTime.now().minusHours(1);
+        // long count = phone != null
+        //         ? otpCodeRepository.countRecentOtpByPhone(phone, type, oneHourAgo)
+        //         : otpCodeRepository.countRecentOtpByEmail(email, type, oneHourAgo);
+        // if (count >= RATE_LIMIT_PER_HOUR) throw new AppException(ErrorCode.OTP_RATE_LIMIT_EXCEEDED);
+        // Temporarily disable OTP rate limiting for local testing.
+        // Re-enable this check before production deployment.
+        return;
     }
 
     private void invalidateOldOtps(String phone, String email, OtpType type) {

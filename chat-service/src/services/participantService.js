@@ -1,7 +1,7 @@
 const Participant = require("../models/Participant");
 const Conversation = require("../models/Conversation");
 
-exports.addParticipant = async ({ conversationId, userId, role }) => {
+exports.addParticipant = async ({ conversationId, userId, role, addedBy }) => {
   const existing = await Participant.findOne({
     conversation_id: conversationId,
     user_id: userId,
@@ -15,6 +15,7 @@ exports.addParticipant = async ({ conversationId, userId, role }) => {
     conversation_id: conversationId,
     user_id: userId,
     roles: role,
+    added_by: addedBy,
   });
 
   return await newMember.save();
@@ -99,6 +100,42 @@ exports.updatePinStatus = async (conversationId, userId, isPinned) => {
   );
 };
 
+exports.updateMemberNickname = async (
+  conversationId,
+  targetUserId,
+  requesterUserId,
+  nickname,
+) => {
+  const requester = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: requesterUserId,
+  });
+
+  if (!requester) {
+    throw new Error("Bạn không thuộc cuộc hội thoại này");
+  }
+
+  const target = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: targetUserId,
+  });
+
+  if (!target) {
+    throw new Error("Thành viên không tồn tại trong cuộc hội thoại");
+  }
+
+  const trimmedNickname = String(nickname || "").trim();
+  target.nickname = trimmedNickname || null;
+  await target.save();
+
+  return {
+    success: true,
+    conversationId,
+    userId: targetUserId,
+    nickname: target.nickname || "",
+  };
+};
+
 /**
  * Xóa cuộc hội thoại theo cơ chế soft-delete của Zalo:
  * Đặt deleted_msg_id = msg_id của tin nhắn cuối trong cuộc hội thoại.
@@ -127,4 +164,150 @@ exports.getParticipant = async (conversationId, userId) => {
     conversation_id: conversationId,
     user_id: userId,
   });
+};
+
+// Get all members of a conversation with user details
+exports.getConversationMembers = async (conversationId) => {
+  const User = require("../models/User");
+  
+  const participants = await Participant.find({ conversation_id: conversationId });
+  
+  // Get user details for each participant
+  const membersWithDetails = await Promise.all(
+    participants.map(async (p) => {
+      const user = await User.findOne({ user_id: p.user_id }).lean();
+      return {
+        _id: p._id,
+        user_id: p.user_id,
+        roles: p.roles,
+        joined_at: p.joined_at,
+        added_by: p.added_by,
+        nickname: p.nickname,
+        user: user ? {
+          name: user.name,
+          avatar: user.avatar,
+          is_online: user.is_online,
+          last_active_at: user.last_active_at,
+        } : null,
+      };
+    })
+  );
+
+  return membersWithDetails;
+};
+
+// Leave group (remove participant from conversation)
+exports.leaveGroup = async (conversationId, userId) => {
+  const conversation = await Conversation.findById(conversationId);
+  
+  if (!conversation) {
+    throw new Error("Cuộc hội thoại không tồn tại");
+  }
+
+  if (conversation.type !== "group") {
+    throw new Error("Chỉ có thể rời khỏi nhóm chat");
+  }
+
+  const participant = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: userId,
+  });
+
+  if (!participant) {
+    throw new Error("Bạn không phải là thành viên của nhóm này");
+  }
+
+  // Remove participant
+  await Participant.deleteOne({
+    conversation_id: conversationId,
+    user_id: userId,
+  });
+
+  // Update member count
+  await Conversation.findByIdAndUpdate(conversationId, {
+    $inc: { member_count: -1 },
+  });
+
+  return { success: true, conversationId, userId };
+};
+
+// Update member role (owner only)
+exports.updateMemberRole = async (conversationId, userId, newRole, adminId) => {
+  const conversation = await Conversation.findById(conversationId);
+  
+  if (!conversation) {
+    throw new Error("Cuộc hội thoại không tồn tại");
+  }
+
+  if (conversation.type !== "group") {
+    throw new Error("Chỉ có thể cập nhật vai trò trong nhóm chat");
+  }
+
+  if (String(conversation.created_by) !== String(adminId)) {
+    throw new Error("Chỉ trưởng nhóm mới có quyền thay đổi vai trò thành viên");
+  }
+
+  const participant = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: userId,
+  });
+
+  if (!participant) {
+    throw new Error("Người dùng không phải là thành viên của nhóm này");
+  }
+
+  // Cannot change own role
+  if (userId === adminId) {
+    throw new Error("Bạn không thể thay đổi vai trò của chính mình");
+  }
+
+  // Update role
+  participant.roles = newRole;
+  await participant.save();
+
+  return { success: true, conversationId, userId, newRole };
+};
+
+// Remove member from group (owner only)
+exports.removeMember = async (conversationId, userId, adminId) => {
+  const conversation = await Conversation.findById(conversationId);
+  
+  if (!conversation) {
+    throw new Error("Cuộc hội thoại không tồn tại");
+  }
+
+  if (conversation.type !== "group") {
+    throw new Error("Chỉ có thể xóa thành viên khỏi nhóm chat");
+  }
+
+  if (String(conversation.created_by) !== String(adminId)) {
+    throw new Error("Chỉ trưởng nhóm mới có quyền xóa thành viên");
+  }
+
+  const participant = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: userId,
+  });
+
+  if (!participant) {
+    throw new Error("Người dùng không phải là thành viên của nhóm này");
+  }
+
+  // Cannot remove owner
+  if (String(userId) === String(conversation.created_by)) {
+    throw new Error("Không thể xóa trưởng nhóm");
+  }
+
+  // Remove participant
+  await Participant.deleteOne({
+    conversation_id: conversationId,
+    user_id: userId,
+  });
+
+  // Update member count
+  await Conversation.findByIdAndUpdate(conversationId, {
+    $inc: { member_count: -1 },
+  });
+
+  return { success: true, conversationId, userId };
 };

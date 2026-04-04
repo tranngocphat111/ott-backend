@@ -13,7 +13,7 @@ const ConversationSchema = new mongoose.Schema(
 
     created_by: {
       type: String,
-      ref: "User",
+      ref: "User",  
       required: true,
     },
 
@@ -29,7 +29,7 @@ const ConversationSchema = new mongoose.Schema(
       content: { type: String },
       type: {
         type: String,
-        enum: ["text", "image", "video", "file"],
+        enum: ["text", "image", "video", "file", "audio"],
         default: "text",
       },
       createdAt: { type: Date },
@@ -44,7 +44,7 @@ const ConversationSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 ConversationSchema.index({ type: 1 });

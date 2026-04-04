@@ -37,7 +37,8 @@ public class SecurityConfig {
             "/users/account/password/forgot/verify",
             "/otp/link/phone",
             "/otp/link/email",
-            "/users/profile/{userId}"
+            "/users/profile/{userId}",
+            "/internal/**"
     };
 
     @Bean

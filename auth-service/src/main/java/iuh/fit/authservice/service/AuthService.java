@@ -149,7 +149,13 @@ public class AuthService {
                 throw new AppException(ErrorCode.GOOGLE_AUTH_FAILED);
             }
 
-            UserServiceClient.UserDto user = userServiceClient.getUserByGoogleId(userInfo.getGoogleId());
+            UserServiceClient.UserDto user = null;
+
+            try {
+                user = userServiceClient.getUserByGoogleId(userInfo.getGoogleId());
+            } catch (AppException e) {
+                user = null;
+            }
 
             if (user == null) {
                 log.info("User not found by googleId, trying email: {}", userInfo.getEmail());

@@ -3,6 +3,7 @@ package iuh.fit.userservice.dto.response;
 import iuh.fit.userservice.entity.enums.AccountType;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
