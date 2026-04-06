@@ -11,8 +11,14 @@ import java.util.Optional;
 
 @Repository
 public interface TwoFactorAuthRepository extends JpaRepository<TwoFactorAuth, String> {
-    Optional<TwoFactorAuth> findByUserId(String userId);
-    boolean existsByUserIdAndIsEnabledTrue(String userId);
+
+    default Optional<TwoFactorAuth> findByUserId(String userId) {
+        return findById(userId);
+    }
+
+
+    @Query("SELECT COUNT(t) > 0 FROM TwoFactorAuth t WHERE t.userId = :userId AND t.isEnabled = true")
+    boolean existsByUserIdAndIsEnabledTrue(@Param("userId") String userId);
 
     @Modifying
     @Query(value = "DELETE FROM two_factor_auth WHERE user_id = :userId", nativeQuery = true)

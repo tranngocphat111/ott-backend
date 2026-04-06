@@ -14,10 +14,12 @@ import iuh.fit.userservice.utils.ValidationUtils;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.UUID;
 
 @Service
@@ -30,6 +32,8 @@ public class TwoFactorAuthService {
     private final NotificationPublisher notificationPublisher;
     private final UserValidationUtil userValidationUtil;
     private final ValidationUtils validationUtils;
+
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional
     public OtpResponse request2FAEnable(String userId, Request2FAEnableOtpRequest request) {
@@ -67,12 +71,19 @@ public class TwoFactorAuthService {
 
         OtpCode otpCode = otpService.validateOtp(null, user.getEmail(), request.getOtp(), OtpType.ENABLE_TWO_FACTOR);
 
-        String[] backupCodes = generateBackupCodes(10);
+
+        String[] rawCodes = generateBackupCodes(10);
+
+        String[] hashedCodes = Arrays.stream(rawCodes)
+                .map(passwordEncoder::encode)
+                .toArray(String[]::new);
 
         TwoFactorAuth twoFA = twoFactorAuthRepository.findByUserId(userId)
-                .orElse(TwoFactorAuth.builder().userId(userId).user(user).build());
+                .orElse(TwoFactorAuth.builder()
+                        .user(user)
+                        .build());
 
-        twoFA.setBackupCodes(backupCodes);
+        twoFA.setBackupCodes(hashedCodes);
         twoFA.setTotalBackupCodes(10);
         twoFA.setBackupCodesUsed(0);
         twoFA.enable();
@@ -84,7 +95,7 @@ public class TwoFactorAuthService {
 
         return Enable2FAResponse.builder()
                 .enabled(true)
-                .backupCodes(backupCodes)
+                .backupCodes(rawCodes)
                 .message("2FA enabled successfully. Save your backup codes!")
                 .build();
     }

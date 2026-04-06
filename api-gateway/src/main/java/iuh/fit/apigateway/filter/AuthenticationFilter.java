@@ -52,6 +52,11 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             "/riff/api/auth/qr/status/**",
             "/riff/api/users/register/otp",
             "/riff/api/users/register",
+
+            "/riff/api/users/account/password/forgot/request",
+            "/riff/api/users/account/password/forgot/verify",
+
+
             "/actuator/**",
             "/riff/api/actuator/**"
     );

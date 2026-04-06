@@ -14,28 +14,21 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     Optional<User> findByPhone(String phone);
     Optional<User> findByEmail(String email);
-    Optional<User> findByEmailAndDeletedAtIsNull(String email);
     Optional<User> findByPhoneAndDeletedAtIsNull(String phone);
-    Optional<User> findByGoogleIdAndDeletedAtIsNull(String googleId);
 
     boolean existsByPhoneAndDeletedAtIsNull(String phone);
     boolean existsByEmailAndDeletedAtIsNull(String email);
-    boolean existsByEmailAndDeletedAtIsNullAndIdNot(String email, String id);
     boolean existsByGoogleIdAndDeletedAtIsNull(String googleId);
+    
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.twoFactorAuth WHERE u.id = :id")
+    Optional<User> findByIdWithTwoFactorAuth(@Param("id") String id);
 
-    @Query("""
-        SELECT COUNT(u) FROM User u
-        WHERE u.deletedAt IS NOT NULL
-        AND (u.phone LIKE CONCAT(:phone, '_deleted_%')
-             OR u.email LIKE CONCAT(:email, '_deleted_%'))
-        """)
-    long countDeletedAccountsByPhoneOrEmail(@Param("phone") String phone, @Param("email") String email);
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.twoFactorAuth WHERE u.phone = :phone AND u.deletedAt IS NULL")
+    Optional<User> findByPhoneWithTwoFactorAuth(@Param("phone") String phone);
 
-    @Query("""
-        SELECT u FROM User u
-        WHERE u.deletedAt IS NOT NULL
-        AND u.deletedAt < :cutoffDate
-        AND u.phone LIKE CONCAT(:phone, '_deleted_%')
-        """)
-    Optional<User> findExpiredDeletedUserByPhone(@Param("phone") String phone, @Param("cutoffDate") LocalDateTime cutoffDate);
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.twoFactorAuth WHERE u.email = :email AND u.deletedAt IS NULL")
+    Optional<User> findByEmailWithTwoFactorAuth(@Param("email") String email);
+
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.twoFactorAuth WHERE u.googleId = :googleId AND u.deletedAt IS NULL")
+    Optional<User> findByGoogleIdWithTwoFactorAuth(@Param("googleId") String googleId);
 }

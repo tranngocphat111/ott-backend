@@ -27,7 +27,7 @@ public class ProfileService {
     public UserProfileResponse getUserProfile(String userId) {
         log.debug("Fetching profile for userId: {}", userId);
 
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdWithTwoFactorAuth(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
         if (user.getDeletedAt() != null) {
@@ -42,7 +42,7 @@ public class ProfileService {
     public UserProfileResponse getPublicProfile(String userId) {
         log.debug("Fetching public profile for userId: {}", userId);
 
-        User user = userRepository.findById(userId)
+        User user = userRepository.findByIdWithTwoFactorAuth(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
         if (user.getDeletedAt() != null || !user.getIsActive()) {

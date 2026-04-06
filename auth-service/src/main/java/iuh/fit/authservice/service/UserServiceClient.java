@@ -55,6 +55,7 @@ public class UserServiceClient {
         private LocalDateTime deletedAt;
         private Boolean isFirstLogin;
         private Boolean welcomeEmailSent;
+        @JsonAlias({"is2FAEnabled", "2FAEnabled"})
         private Boolean twoFactorEnabled;
         private LocalDate dateOfBirth;
     }

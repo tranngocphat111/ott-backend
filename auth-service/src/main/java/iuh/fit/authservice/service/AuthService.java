@@ -107,7 +107,7 @@ public class AuthService {
             }
 
             log.info("Validating 2FA OTP for userId: {}", user.getId());
-            validateTwoFactorOtp(user.getPhone(), request.getOtpCode());
+            validateTwoFactorOtp(user, request.getOtpCode());
         }
 
         log.info("Local login successful for userId: {}", user.getId());
@@ -270,7 +270,7 @@ public class AuthService {
 
         UserServiceClient.UserDto user = userServiceClient.getUserById(userId);
 
-        validateOtpViaNotificationService(user.getPhone(), null, otpCode, OtpType.TWO_FACTOR_AUTH);
+        validateOtpViaNotificationService(null, user.getEmail(), otpCode, OtpType.TWO_FACTOR_AUTH);
 
         LoginMethod loginMethod = LoginMethod.valueOf(
                 userInfo.getOrDefault("loginMethod", "LOCAL")
@@ -636,8 +636,8 @@ public class AuthService {
         }
     }
 
-    private void validateTwoFactorOtp(String phone, String otpCode) {
-        validateOtpViaNotificationService(phone, null, otpCode, OtpType.TWO_FACTOR_AUTH);
+    private void validateTwoFactorOtp(UserServiceClient.UserDto user, String otpCode) {
+        validateOtpViaNotificationService(null, user.getEmail(), otpCode, OtpType.TWO_FACTOR_AUTH);
     }
 
     private String generateAndCacheOtpCode() {
