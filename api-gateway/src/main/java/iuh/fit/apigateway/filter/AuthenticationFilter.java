@@ -26,16 +26,6 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 
-/**
- * Global filter thực hiện JWT authentication cho tất cả requests.
- *
- * Logic:
- * 1. Nếu request match PUBLIC_ENDPOINTS → bypass, forward thẳng
- * 2. Nếu không có Authorization header → 401
- * 3. Verify JWT locally bằng shared secret (HS512) → không gọi auth-service
- * 4. Nếu hợp lệ → forward + inject X-User-Id header để downstream services dùng
- * 5. Nếu không hợp lệ → 401
- */
 @Component
 @Slf4j
 public class AuthenticationFilter implements GlobalFilter, Ordered {
@@ -46,12 +36,7 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
-    /**
-     * Các endpoint không cần JWT.
-     * Pattern dùng AntPathMatcher (/** = any path).
-     */
     private static final List<String> PUBLIC_ENDPOINTS = Arrays.asList(
-            // Auth endpoints
             "/riff/api/auth/login/local",
             "/riff/api/auth/login/google",
             "/riff/api/auth/login/google/token",
@@ -63,24 +48,14 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             "/riff/api/auth/introspect",
             "/riff/api/auth/refresh",
             "/riff/api/auth/logout",
-
-            // QR public endpoints (generate + status polling không cần login)
             "/riff/api/auth/qr/generate",
             "/riff/api/auth/qr/status/**",
-
-            // User registration
             "/riff/api/users/register/otp",
             "/riff/api/users/register",
-
-            // Actuator (health check)
             "/actuator/**",
             "/riff/api/actuator/**"
     );
 
-    /**
-     * Internal endpoints — chỉ được gọi giữa các services, không từ bên ngoài.
-     * Gateway sẽ BLOCK tất cả /internal/** từ client.
-     */
     private static final List<String> BLOCKED_EXTERNAL = Arrays.asList(
             "/riff/api/internal/**"
     );
@@ -89,66 +64,79 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getURI().getPath();
+        String method = request.getMethod().name();
 
-        log.debug("Gateway received request: {} {}", request.getMethod(), path);
+        log.info("Gateway request: {} {} | IP: {}", method, path, request.getRemoteAddress());
 
-        // Block internal endpoints từ external clients
+        // Block internal endpoints
         if (isBlocked(path)) {
-            log.warn("Blocked external access to internal endpoint: {}", path);
+            log.warn("Blocked external access to internal endpoint: {} {}", method, path);
             return writeErrorResponse(exchange, HttpStatus.FORBIDDEN, 1007, "Access denied");
         }
 
-        // Bypass JWT check cho public endpoints
+        // Public endpoints - bypass auth
         if (isPublic(path)) {
+            log.debug("Public endpoint - bypassing authentication: {} {}", method, path);
             return chain.filter(exchange);
         }
 
-        // Lấy Authorization header
+        log.debug("Protected endpoint requires authentication: {} {}", method, path);
+
+        // Check Authorization header
         String authHeader = request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            log.warn("Missing or invalid Authorization header: {} {}", method, path);
             return writeErrorResponse(exchange, HttpStatus.UNAUTHORIZED, 1006, "Unauthenticated");
         }
 
         String token = authHeader.substring(7);
+        log.debug("Token received, length: {}", token.length());
 
-        // Verify JWT locally
+        // JWT Verification
         try {
             SignedJWT signedJWT = SignedJWT.parse(token);
             JWSVerifier verifier = new MACVerifier(jwtSecret.getBytes());
 
             if (!signedJWT.verify(verifier)) {
+                log.warn("JWT signature verification failed: {} {}", method, path);
                 return writeErrorResponse(exchange, HttpStatus.UNAUTHORIZED, 1006, "Token invalid");
             }
 
             Date expirationTime = signedJWT.getJWTClaimsSet().getExpirationTime();
             if (expirationTime == null || !expirationTime.after(new Date())) {
+                log.warn("Token has expired: {} | Expired at: {}", path, expirationTime);
                 return writeErrorResponse(exchange, HttpStatus.UNAUTHORIZED, 1006, "Token expired");
             }
 
-            // Inject user context headers cho downstream services
+            // Extract claims
             String userId = signedJWT.getJWTClaimsSet().getStringClaim("userId");
             String scope = signedJWT.getJWTClaimsSet().getStringClaim("scope");
             String phone = signedJWT.getJWTClaimsSet().getStringClaim("phone");
             String email = signedJWT.getJWTClaimsSet().getStringClaim("email");
 
-            ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
+            log.info("JWT verified successfully | UserId: {} | Path: {}", userId, path);
+
+            // Inject headers for downstream services
+            ServerHttpRequest mutatedRequest = request.mutate()
                     .header("X-User-Id", userId != null ? userId : "")
                     .header("X-User-Scope", scope != null ? scope : "")
                     .header("X-User-Phone", phone != null ? phone : "")
                     .header("X-User-Email", email != null ? email : "")
                     .build();
 
+            log.debug("Injected user context headers for downstream | UserId: {}", userId);
+
             return chain.filter(exchange.mutate().request(mutatedRequest).build());
 
         } catch (Exception e) {
-            log.warn("JWT verification failed for path {}: {}", path, e.getMessage());
+            log.error("JWT processing failed | Path: {} | Error: {}", path, e.getMessage(), e);
             return writeErrorResponse(exchange, HttpStatus.UNAUTHORIZED, 1006, "Token invalid");
         }
     }
 
     @Override
     public int getOrder() {
-        return -1; // Run before all other filters
+        return -1;
     }
 
     private boolean isPublic(String path) {
@@ -175,8 +163,10 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
         try {
             byte[] bytes = objectMapper.writeValueAsBytes(body);
             DataBuffer buffer = response.bufferFactory().wrap(bytes);
+            log.debug("Error response written: {} - {}", status, message);
             return response.writeWith(Mono.just(buffer));
         } catch (JsonProcessingException e) {
+            log.error("Failed to write error response body", e);
             return response.setComplete();
         }
     }

@@ -16,7 +16,6 @@ public class SendOtpEmailRequest {
 
     private String toName;
 
-    @NotBlank(message = "OTP code is required")
     private String otpCode;
 
     @NotBlank(message = "OTP type is required")

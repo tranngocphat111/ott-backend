@@ -4,10 +4,14 @@ import iuh.fit.userservice.dto.response.ApiResponse;
 import iuh.fit.userservice.dto.response.UserResponse;
 import iuh.fit.userservice.entity.User;
 import iuh.fit.userservice.entity.enums.AccountType;
+import iuh.fit.userservice.entity.enums.DeviceType;
+import iuh.fit.userservice.entity.enums.LoginMethod;
 import iuh.fit.userservice.exception.AppException;
 import iuh.fit.userservice.exception.ErrorCode;
 import iuh.fit.userservice.mapper.UserMapper;
 import iuh.fit.userservice.repository.UserRepository;
+import iuh.fit.userservice.service.NotificationPublisher;
+import iuh.fit.userservice.service.SessionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,6 +30,8 @@ public class InternalUserController {
 
     private final UserRepository userRepository;
     private final UserMapper userMapper;
+    private final NotificationPublisher notificationPublisher;
+    private final SessionService sessionService;
 
     @Value("${internal.api.key}")
     private String internalApiKey;
@@ -137,6 +143,7 @@ public class InternalUserController {
         if (email   != null) user.setEmailVerifiedAt(LocalDateTime.now());
 
         user = userRepository.save(user);
+        notificationPublisher.sendWelcomeEmailAsync(user);
         log.info("User created via internal API: {}", user.getId());
         return ApiResponse.<UserResponse>builder().result(userMapper.toUserResponse(user)).build();
     }
@@ -166,5 +173,39 @@ public class InternalUserController {
         validateKey(key);
         return ApiResponse.<Boolean>builder()
                 .result(userRepository.existsByGoogleIdAndDeletedAtIsNull(googleId)).build();
+    }
+
+    @PostMapping("/sessions")
+    public ApiResponse<Void> createSession(
+            @RequestBody Map<String, Object> body,
+            @RequestHeader("X-Internal-Key") String key) {
+        validateKey(key);
+
+        String userId     = (String) body.get("userId");
+        String deviceId   = (String) body.get("deviceId");
+        String deviceName = (String) body.get("deviceName");
+        String ipAddress  = (String) body.get("ipAddress");
+        String userAgent  = (String) body.get("userAgent");
+        String sessionToken   = (String) body.get("sessionToken");
+        String refreshToken   = (String) body.get("refreshToken");
+        String loginMethodStr = (String) body.getOrDefault("loginMethod", "LOCAL");
+        String deviceTypeStr  = (String) body.getOrDefault("deviceType", "UNKNOWN");
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        sessionService.createUserSession(
+                user,
+                deviceId,
+                DeviceType.valueOf(deviceTypeStr),
+                deviceName,
+                ipAddress,
+                userAgent,
+                sessionToken,
+                refreshToken,
+                LoginMethod.valueOf(loginMethodStr)
+        );
+
+        return ApiResponse.<Void>builder().message("Session created").build();
     }
 }

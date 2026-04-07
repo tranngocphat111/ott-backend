@@ -35,11 +35,17 @@ public class SessionService {
     public UserSession createUserSession(User user, String deviceId, DeviceType deviceType,
                                          String deviceName, String ipAddress, String deviceInfo,
                                          String sessionToken, String refreshToken, LoginMethod loginMethod) {
+
+        log.info("Creating new session for userId: {} | DeviceId: {} | LoginMethod: {}",
+                user.getId(), deviceId, loginMethod);
+
         if (deviceId != null) {
             userSessionRepository.findByDeviceIdAndUserAndIsActive(deviceId, user, true)
                     .ifPresent(existing -> {
                         existing.revoke("New login from same device");
                         userSessionRepository.save(existing);
+                        log.info("Replaced old session for same device - userId: {}, deviceId: {}",
+                                user.getId(), deviceId);
                     });
         }
 
@@ -58,60 +64,106 @@ public class SessionService {
                 .refreshExpiresAt(LocalDateTime.now().plusSeconds(refreshExpiration))
                 .build();
 
-        return userSessionRepository.save(session);
+        UserSession savedSession = userSessionRepository.save(session);
+        log.info("Session created successfully - sessionId: {}, userId: {}, deviceId: {}",
+                savedSession.getId(), user.getId(), deviceId);
+
+        return savedSession;
     }
 
     public UserSessionsResponse getUserSessions(String userId, String currentToken) {
+        log.debug("Fetching active sessions for userId: {}", userId);
+
         List<UserSession> sessions = userSessionRepository.findByUserIdAndIsActiveTrueOrderByLastActiveAtDesc(userId);
+
         List<SessionInfo> sessionInfos = sessions.stream()
                 .map(s -> toSessionInfo(s, currentToken))
                 .toList();
-        return UserSessionsResponse.builder().sessions(sessionInfos).total(sessionInfos.size()).build();
+
+        log.info("Retrieved {} active sessions for userId: {}", sessionInfos.size(), userId);
+
+        return UserSessionsResponse.builder()
+                .sessions(sessionInfos)
+                .total(sessionInfos.size())
+                .build();
     }
 
     @Transactional
     public void revokeSession(String userId, String sessionId) {
+        log.info("Revoking session - sessionId: {}, userId: {}", sessionId, userId);
+
         UserSession session = userSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new AppException(ErrorCode.SESSION_NOT_FOUND));
 
         if (!session.getUser().getId().equals(userId)) {
+            log.warn("Unauthorized revoke attempt - sessionId: {}, requested by userId: {}", sessionId, userId);
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         session.revoke("Revoked by user");
         userSessionRepository.save(session);
+
+        log.info("Session revoked successfully - sessionId: {}", sessionId);
     }
 
     @Transactional
     public int revokeAllUserSessions(String userId, String reason) {
+        log.info("Revoking all sessions for userId: {} | Reason: {}", userId, reason);
+
         List<UserSession> sessions = userSessionRepository.findByUserIdAndIsActiveTrue(userId);
+
+        if (sessions.isEmpty()) {
+            log.debug("No active sessions found for userId: {}", userId);
+            return 0;
+        }
+
         sessions.forEach(s -> s.revoke(reason));
         userSessionRepository.saveAll(sessions);
-        log.info("Revoked {} sessions for userId: {}", sessions.size(), userId);
+
+        log.info("Successfully revoked {} sessions for userId: {}", sessions.size(), userId);
         return sessions.size();
     }
 
     @Transactional
     public void revokeAllOtherSessions(String userId, String currentToken) {
+        log.info("Revoking all other sessions for userId: {}", userId);
+
         List<UserSession> sessions = userSessionRepository.findByUserIdAndIsActiveTrueOrderByLastActiveAtDesc(userId);
-        sessions.stream()
-                .filter(s -> !s.getSessionToken().equals(currentToken))
-                .forEach(s -> s.revoke("Revoked by user - logout other devices"));
-        userSessionRepository.saveAll(sessions);
+
+        int revokedCount = 0;
+        for (UserSession session : sessions) {
+            if (!session.getSessionToken().equals(currentToken)) {
+                session.revoke("Revoked by user - logout other devices");
+                revokedCount++;
+            }
+        }
+
+        if (revokedCount > 0) {
+            userSessionRepository.saveAll(sessions);
+            log.info("Revoked {} other sessions for userId: {}", revokedCount, userId);
+        } else {
+            log.debug("No other sessions to revoke for userId: {}", userId);
+        }
     }
 
     @Transactional
     public void revokeSessionByDevice(String userId, String deviceId) {
+        log.info("Revoking session by deviceId: {} for userId: {}", deviceId, userId);
+
         userSessionRepository.findByUserIdAndIsActiveTrue(userId).stream()
                 .filter(s -> deviceId.equals(s.getDeviceId()))
                 .forEach(s -> {
                     s.revoke("Device logout");
                     userSessionRepository.save(s);
                 });
+
+        log.debug("Session revoke by device completed for deviceId: {}", deviceId);
     }
 
     @Transactional
     public void updateSessionTokens(String deviceId, User user, String newToken, String newRefreshToken) {
+        log.debug("Updating session tokens for deviceId: {}, userId: {}", deviceId, user.getId());
+
         userSessionRepository.findByDeviceIdAndUserAndIsActive(deviceId, user, true)
                 .ifPresent(session -> {
                     session.setSessionToken(newToken);
@@ -119,12 +171,15 @@ public class SessionService {
                     session.setExpiresAt(LocalDateTime.now().plusSeconds(jwtExpiration));
                     session.setRefreshExpiresAt(LocalDateTime.now().plusSeconds(refreshExpiration));
                     userSessionRepository.save(session);
+
+                    log.info("Session tokens updated successfully for deviceId: {}", deviceId);
                 });
     }
 
     private SessionInfo toSessionInfo(UserSession session, String currentToken) {
         boolean isCurrent = session.getSessionToken() != null
                 && session.getSessionToken().equals(currentToken);
+
         return SessionInfo.builder()
                 .id(session.getId())
                 .deviceId(session.getDeviceId())

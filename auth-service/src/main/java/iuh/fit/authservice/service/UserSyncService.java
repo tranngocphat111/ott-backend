@@ -18,12 +18,16 @@ public class UserSyncService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void ensureUserExists(UserServiceClient.UserDto userDto) {
+        log.debug("Starting user sync check for userId: {}", userDto.getId());
+
         try {
             // Check cả id lẫn phone để tránh duplicate
             boolean exists = userRepository.existsById(userDto.getId())
                     || userRepository.existsByPhone(userDto.getPhone());
 
             if (!exists) {
+                log.info("User not found in auth DB, syncing new user - userId: {}", userDto.getId());
+
                 User user = User.builder()
                         .id(userDto.getId())
                         .phone(userDto.getPhone())
@@ -36,13 +40,17 @@ public class UserSyncService {
                         .isFirstLogin(Boolean.TRUE.equals(userDto.getIsFirstLogin()))
                         .welcomeEmailSent(Boolean.TRUE.equals(userDto.getWelcomeEmailSent()))
                         .build();
+
                 userRepository.saveAndFlush(user);
-                log.info("Synced user to auth-service DB: {}", userDto.getId());
+                log.info("Successfully synced new user to auth-service DB - userId: {}", userDto.getId());
             } else {
-                log.debug("User already exists, skipping sync. userId={}", userDto.getId());
+                log.debug("User already exists in auth DB, skipping sync - userId: {}", userDto.getId());
             }
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            log.debug("Concurrent insert detected, skipping. userId={}", userDto.getId());
+            log.debug("Concurrent insert detected for userId: {} (expected in high concurrency), skipping",
+                    userDto.getId());
+        } catch (Exception e) {
+            log.error("Failed to sync user to auth DB - userId: {}", userDto.getId(), e);
         }
     }
 }

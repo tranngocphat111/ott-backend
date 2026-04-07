@@ -59,7 +59,12 @@ public enum ErrorCode {
     SAME_EMAIL(2100, "New email must differ from current", HttpStatus.BAD_REQUEST),
     SAME_PHONE(2101, "New phone must differ from current", HttpStatus.BAD_REQUEST),
 
-    VALIDATION_FAILED(1111, "Validation failed", HttpStatus.BAD_REQUEST);
+    VALIDATION_FAILED(1111, "Validation failed", HttpStatus.BAD_REQUEST),
+
+    OTP_RATE_LIMIT_EXCEEDED(1234, "otp rate limit exceeded", HttpStatus.BAD_REQUEST)
+    ;
+
+
 
     ErrorCode(int code, String message, HttpStatusCode statusCode) {
         this.code = code;

@@ -40,12 +40,16 @@ public class NotificationController {
             throw new AppException(ErrorCode.OTP_RATE_LIMIT_EXCEEDED);
         }
 
-        otpCacheService.saveOtp(request.getToEmail(), request.getOtpType(), request.getOtpCode());
+        String otp = (request.getOtpCode() != null && !request.getOtpCode().isBlank())
+                ? request.getOtpCode()
+                : String.format("%06d", new java.util.Random().nextInt(999999));
+
+        otpCacheService.saveOtp(request.getToEmail(), request.getOtpType(), otp);
 
         emailService.sendOtpEmail(
                 request.getToEmail(),
                 request.getToName(),
-                request.getOtpCode(),
+                otp,  // ← dùng otp đã generate
                 OtpType.valueOf(request.getOtpType()),
                 request.getIpAddress(),
                 request.getLocation(),

@@ -1,9 +1,7 @@
 version: '3.8'
 
 services:
-
   # ==================== INFRASTRUCTURE ====================
-
   redis:
     image: redis:7-alpine
     container_name: ott-redis
@@ -30,7 +28,7 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     ports:
       - "5672:5672"
-      - "15672:15672"   # Management UI → http://localhost:15672
+      - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
@@ -42,30 +40,11 @@ services:
       retries: 5
 
   # ==================== SERVICES ====================
-
   notification-service:
-    build:
-      context: ./notification-service
-      dockerfile: Dockerfile
+    build: ./notification-service
     container_name: ott-notification
     restart: unless-stopped
     env_file: .env
-    environment:
-      SPRING_DATASOURCE_URL: ${NOTIF_DB_URL}
-      SPRING_DATASOURCE_USERNAME: ${NOTIF_DB_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${NOTIF_DB_PASSWORD}
-      REDIS_HOST: ${REDIS_HOST}
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
-      RABBITMQ_HOST: ${RABBITMQ_HOST}
-      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-      MAIL_USERNAME: ${MAIL_USERNAME}
-      MAIL_PASSWORD: ${MAIL_PASSWORD}
-      MAIL_FROM: ${MAIL_FROM}
-      MAIL_FROM_NAME: ${MAIL_FROM_NAME}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
-    ports:
-      - "8083:8083"
     networks:
       - ott-network
     depends_on:
@@ -75,26 +54,10 @@ services:
         condition: service_healthy
 
   user-service:
-    build:
-      context: ./user-service
-      dockerfile: Dockerfile
+    build: ./user-service
     container_name: ott-user
     restart: unless-stopped
     env_file: .env
-    environment:
-      SPRING_DATASOURCE_URL: ${USER_DB_URL}
-      SPRING_DATASOURCE_USERNAME: ${USER_DB_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${USER_DB_PASSWORD}
-      REDIS_HOST: ${REDIS_HOST}
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
-      RABBITMQ_HOST: ${RABBITMQ_HOST}
-      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-      NOTIF_SERVICE_URL: ${NOTIF_SERVICE_URL}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
-      JWT_SECRET: ${JWT_SECRET}
-    ports:
-      - "8082:8082"
     networks:
       - ott-network
     depends_on:
@@ -106,31 +69,10 @@ services:
         condition: service_started
 
   auth-service:
-    build:
-      context: ./auth-service
-      dockerfile: Dockerfile
+    build: ./auth-service
     container_name: ott-auth
     restart: unless-stopped
     env_file: .env
-    environment:
-      SPRING_DATASOURCE_URL: ${AUTH_DB_URL}
-      SPRING_DATASOURCE_USERNAME: ${AUTH_DB_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${AUTH_DB_PASSWORD}
-      REDIS_HOST: ${REDIS_HOST}
-      REDIS_PASSWORD: ${REDIS_PASSWORD}
-      RABBITMQ_HOST: ${RABBITMQ_HOST}
-      RABBITMQ_USERNAME: ${RABBITMQ_USERNAME}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-      USER_SERVICE_URL: ${USER_SERVICE_URL}
-      NOTIF_SERVICE_URL: ${NOTIF_SERVICE_URL}
-      INTERNAL_API_KEY: ${INTERNAL_API_KEY}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRATION: ${JWT_EXPIRATION}
-      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-    ports:
-      - "8081:8081"
     networks:
       - ott-network
     depends_on:
@@ -140,22 +82,12 @@ services:
         condition: service_healthy
       user-service:
         condition: service_started
-      notification-service:
-        condition: service_started
 
   api-gateway:
-    build:
-      context: ./api-gateway
-      dockerfile: Dockerfile
+    build: ./api-gateway
     container_name: ott-gateway
     restart: unless-stopped
     env_file: .env
-    environment:
-      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
-      USER_SERVICE_URL: ${USER_SERVICE_URL}
-      NOTIF_SERVICE_URL: ${NOTIF_SERVICE_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      FRONTEND_URL: ${FRONTEND_URL}
     ports:
       - "8080:8080"
     networks:
@@ -165,12 +97,10 @@ services:
       - user-service
       - notification-service
 
-# ==================== VOLUMES ====================
 volumes:
   redis_data:
   rabbitmq_data:
 
-# ==================== NETWORKS ====================
 networks:
   ott-network:
     driver: bridge

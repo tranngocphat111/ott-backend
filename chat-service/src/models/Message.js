@@ -41,6 +41,7 @@ const MessageSchema = new mongoose.Schema(
 
     is_deleted: { type: Boolean, default: false },
     is_revoked: { type: Boolean, default: false },
+    deleted_for: [{ type: String, ref: "User" }],
 
     // Pinned message fields
     is_pinned: { type: Boolean, default: false },

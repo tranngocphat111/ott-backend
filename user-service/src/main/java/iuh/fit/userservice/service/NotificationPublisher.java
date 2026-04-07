@@ -14,7 +14,6 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
 
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -34,6 +33,9 @@ public class NotificationPublisher {
     public void sendOtpEmail(String toEmail, String toName, String otpCode,
                              OtpType otpType, String ipAddress, String location,
                              String userId) {
+
+        log.info("Sending OTP email request asynchronously to: {} | Type: {}", toEmail, otpType);
+
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -50,15 +52,28 @@ public class NotificationPublisher {
             );
 
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-            restTemplate.postForEntity(notificationServiceUrl + "/internal/notification/otp/send", request, Void.class);
-            log.info("OTP email request sent for: {}", toEmail);
+
+            restTemplate.postForEntity(
+                    notificationServiceUrl + "/internal/notification/otp/send",
+                    request,
+                    Void.class
+            );
+
+            log.info("OTP email request sent successfully to: {} | Type: {}", toEmail, otpType);
 
         } catch (Exception e) {
-            log.error("Failed to send OTP email for {}: {}", toEmail, e.getMessage());
+            log.error("Failed to send OTP email to: {} | Type: {}", toEmail, otpType, e);
         }
     }
 
     public void sendWelcomeEmailAsync(User user) {
+        if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
+            log.warn("Cannot send welcome email: user or email is null/empty");
+            return;
+        }
+
+        log.info("Publishing welcome email event for userId: {}", user.getId());
+
         try {
             Map<String, Object> event = Map.of(
                     "userId", user.getId(),
@@ -68,15 +83,30 @@ public class NotificationPublisher {
                     "hasPassword", user.getPasswordHash() != null,
                     "hasGoogleLinked", user.getGoogleId() != null
             );
-            rabbitTemplate.convertAndSend(rabbitMQConfig.exchange, rabbitMQConfig.welcomeRoutingKey, event);
-            log.info("Welcome email event published for userId: {}", user.getId());
+
+            rabbitTemplate.convertAndSend(
+                    rabbitMQConfig.exchange,
+                    rabbitMQConfig.welcomeRoutingKey,
+                    event
+            );
+
+            log.debug("Welcome email event published successfully for userId: {}", user.getId());
+
         } catch (Exception e) {
-            log.error("Failed to publish welcome email event: {}", e.getMessage());
+            log.error("Failed to publish welcome email event for userId: {}", user.getId(), e);
         }
     }
 
     public void sendAlertEmailAsync(User user, String alertType, String ipAddress,
                                     String location, String deviceInfo) {
+
+        if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
+            log.warn("Cannot send alert email: user or email is null/empty | AlertType: {}", alertType);
+            return;
+        }
+
+        log.info("Publishing alert email event - userId: {} | AlertType: {}", user.getId(), alertType);
+
         try {
             Map<String, Object> event = Map.of(
                     "toEmail", user.getEmail() != null ? user.getEmail() : "",
@@ -87,10 +117,18 @@ public class NotificationPublisher {
                     "deviceInfo", deviceInfo != null ? deviceInfo : "",
                     "userId", user.getId()
             );
-            rabbitTemplate.convertAndSend(rabbitMQConfig.exchange, rabbitMQConfig.alertRoutingKey, event);
-            log.info("Alert email event published for userId: {}", user.getId());
+
+            rabbitTemplate.convertAndSend(
+                    rabbitMQConfig.exchange,
+                    rabbitMQConfig.alertRoutingKey,
+                    event
+            );
+
+            log.debug("Alert email event published successfully for userId: {}", user.getId());
+
         } catch (Exception e) {
-            log.error("Failed to publish alert email event: {}", e.getMessage());
+            log.error("Failed to publish alert email event for userId: {} | AlertType: {}",
+                    user.getId(), alertType, e);
         }
     }
 }

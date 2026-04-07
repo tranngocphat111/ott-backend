@@ -10,12 +10,14 @@ import iuh.fit.userservice.repository.UserRepository;
 import iuh.fit.userservice.utils.ValidationUtils;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ProfileService {
 
     private final UserRepository userRepository;
@@ -23,62 +25,126 @@ public class ProfileService {
     private final ValidationUtils validationUtils;
 
     public UserProfileResponse getUserProfile(String userId) {
+        log.debug("Fetching profile for userId: {}", userId);
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-        if (user.getDeletedAt() != null) throw new AppException(ErrorCode.ACCOUNT_DELETED);
+
+        if (user.getDeletedAt() != null) {
+            log.warn("Deleted account attempted to access profile - userId: {}", userId);
+            throw new AppException(ErrorCode.ACCOUNT_DELETED);
+        }
+
+        log.info("Profile retrieved successfully for userId: {}", userId);
         return userMapper.toUserProfileResponse(user);
     }
 
     public UserProfileResponse getPublicProfile(String userId) {
+        log.debug("Fetching public profile for userId: {}", userId);
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
         if (user.getDeletedAt() != null || !user.getIsActive()) {
+            log.warn("Public profile access denied (deleted/inactive) - userId: {}", userId);
             throw new AppException(ErrorCode.USER_NOT_FOUND);
         }
+
+        log.debug("Public profile retrieved for userId: {}", userId);
         return userMapper.toUserProfileResponse(user);
     }
 
     @Transactional
     public UserProfileResponse updateProfile(String userId, UpdateProfileRequest request) {
+        log.info("Updating profile for userId: {}", userId);
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
         validateUserStatus(user);
+
+        boolean hasChanges = false;
 
         if (request.getFullName() != null) {
             String name = validationUtils.sanitizeString(request.getFullName());
-            if (name.isEmpty() || name.length() > 100) throw new AppException(ErrorCode.INVALID_FULL_NAME);
+            if (name.isEmpty() || name.length() > 100) {
+                log.warn("Invalid full name length for userId: {}", userId);
+                throw new AppException(ErrorCode.INVALID_FULL_NAME);
+            }
             user.setFullName(name);
-        }
-        if (request.getBio() != null) {
-            String bio = validationUtils.sanitizeString(request.getBio());
-            if (bio.length() > 500) throw new AppException(ErrorCode.BIO_TOO_LONG);
-            user.setBio(bio);
-        }
-        if (request.getDateOfBirth() != null) {
-            if (request.getDateOfBirth().isAfter(java.time.LocalDate.now()))
-                throw new AppException(ErrorCode.INVALID_DATE_OF_BIRTH);
-            user.setDateOfBirth(request.getDateOfBirth());
-        }
-        if (request.getGender()    != null) user.setGender(request.getGender());
-        if (request.getAvatarUrl() != null) {
-            if (!isValidUrl(request.getAvatarUrl())) throw new AppException(ErrorCode.INVALID_AVATAR_URL);
-            user.setAvatarUrl(request.getAvatarUrl());
-        }
-        if (request.getCoverUrl()  != null) {
-            if (!isValidUrl(request.getCoverUrl()))  throw new AppException(ErrorCode.INVALID_COVER_URL);
-            user.setCoverUrl(request.getCoverUrl());
+            hasChanges = true;
         }
 
-        return userMapper.toUserProfileResponse(userRepository.save(user));
+        if (request.getBio() != null) {
+            String bio = validationUtils.sanitizeString(request.getBio());
+            if (bio.length() > 500) {
+                log.warn("Bio too long for userId: {}", userId);
+                throw new AppException(ErrorCode.BIO_TOO_LONG);
+            }
+            user.setBio(bio);
+            hasChanges = true;
+        }
+
+        if (request.getDateOfBirth() != null) {
+            if (request.getDateOfBirth().isAfter(java.time.LocalDate.now())) {
+                log.warn("Invalid date of birth (future date) for userId: {}", userId);
+                throw new AppException(ErrorCode.INVALID_DATE_OF_BIRTH);
+            }
+            user.setDateOfBirth(request.getDateOfBirth());
+            hasChanges = true;
+        }
+
+        if (request.getGender() != null) {
+            user.setGender(request.getGender());
+            hasChanges = true;
+        }
+
+        if (request.getAvatarUrl() != null) {
+            if (!isValidUrl(request.getAvatarUrl())) {
+                log.warn("Invalid avatar URL for userId: {}", userId);
+                throw new AppException(ErrorCode.INVALID_AVATAR_URL);
+            }
+            user.setAvatarUrl(request.getAvatarUrl());
+            hasChanges = true;
+        }
+
+        if (request.getCoverUrl() != null) {
+            if (!isValidUrl(request.getCoverUrl())) {
+                log.warn("Invalid cover URL for userId: {}", userId);
+                throw new AppException(ErrorCode.INVALID_COVER_URL);
+            }
+            user.setCoverUrl(request.getCoverUrl());
+            hasChanges = true;
+        }
+
+        if (hasChanges) {
+            user = userRepository.save(user);
+            log.info("Profile updated successfully for userId: {}", userId);
+        } else {
+            log.debug("No changes in profile update request for userId: {}", userId);
+        }
+
+        return userMapper.toUserProfileResponse(user);
     }
 
     private void validateUserStatus(User user) {
-        if (user.getDeletedAt() != null) throw new AppException(ErrorCode.ACCOUNT_DELETED);
-        if (!user.getIsActive())         throw new AppException(ErrorCode.USER_NOT_ACTIVE);
+        if (user.getDeletedAt() != null) {
+            log.warn("Deleted account attempted profile update - userId: {}", user.getId());
+            throw new AppException(ErrorCode.ACCOUNT_DELETED);
+        }
+        if (!user.getIsActive()) {
+            log.warn("Inactive account attempted profile update - userId: {}", user.getId());
+            throw new AppException(ErrorCode.USER_NOT_ACTIVE);
+        }
         if (user.getIsBlocked()) {
-            if (user.getBlockedUntil() != null && user.getBlockedUntil().isAfter(LocalDateTime.now()))
+            if (user.getBlockedUntil() != null && user.getBlockedUntil().isAfter(LocalDateTime.now())) {
+                log.warn("Blocked account attempted profile update - userId: {}", user.getId());
                 throw new AppException(ErrorCode.USER_BLOCKED);
-            user.setIsBlocked(false); user.setBlockedUntil(null); user.setBlockedReason(null);
+            }
+            log.info("Auto-unblocking user due to expired block - userId: {}", user.getId());
+            user.setIsBlocked(false);
+            user.setBlockedUntil(null);
+            user.setBlockedReason(null);
             userRepository.save(user);
         }
     }

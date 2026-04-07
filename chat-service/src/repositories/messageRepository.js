@@ -6,11 +6,137 @@
  * - Load older messages from MongoDB (pagination)
  */
 
-const Message = require('../models/Message');
-const messageCacheService = require('../services/messageCacheService');
-const logger = require('../utils/logger');
+const Message = require("../models/Message");
+const User = require("../models/User");
+const messageCacheService = require("../services/messageCacheService");
+const logger = require("../utils/logger");
+
+const getFileNameFromKey = (key) => {
+  const rawName =
+    String(key || "")
+      .split("/")
+      .pop() || "File";
+  const match = rawName.match(/^[a-f0-9]+_(.+)$/i);
+  return match ? match[1] : rawName;
+};
+
+const buildReplyPreview = (message, senderName = "") => {
+  if (!message) return null;
+
+  const rawContent = Array.isArray(message.content)
+    ? message.content[0] || ""
+    : message.content || "";
+
+  const mediaUrls = Array.isArray(message.content)
+    ? message.content.filter(Boolean).map((item) => String(item))
+    : rawContent
+      ? [String(rawContent)]
+      : [];
+
+  const isUrlLike = /^(https?:\/\/|www\.)/i.test(rawContent);
+  const mediaUrl = rawContent && !isUrlLike ? rawContent : "";
+  const fileName =
+    message.type === "file" ||
+    message.type === "video" ||
+    message.type === "audio"
+      ? getFileNameFromKey(rawContent)
+      : "";
+
+  let preview = "";
+  switch (message.type) {
+    case "image":
+      preview = rawContent;
+      break;
+    case "video":
+      preview = rawContent;
+      break;
+    case "file":
+      preview = fileName || "[Tệp tin]";
+      break;
+    case "audio":
+      preview = fileName || "[Âm thanh]";
+      break;
+    case "link":
+      preview = rawContent;
+      break;
+    default:
+      preview = rawContent;
+      break;
+  }
+
+  return {
+    msg_id: message.msg_id,
+    sender_id: message.sender_id,
+    sender_name: senderName || message.sender_name || "",
+    type: message.type,
+    content: preview.length > 120 ? preview.substring(0, 120) + "..." : preview,
+    raw_content: rawContent,
+    file_name: fileName,
+    url: mediaUrl || rawContent,
+    media_urls: message.type === "image" ? mediaUrls : undefined,
+    media_count: message.type === "image" ? mediaUrls.length : undefined,
+    is_deleted: !!message.is_deleted,
+    is_revoked: !!message.is_revoked,
+  };
+};
 
 class MessageRepository {
+  isVisibleToUser(message, userId) {
+    if (message.is_deleted) return false;
+    if (!userId) return true;
+
+    const deletedFor = Array.isArray(message.deleted_for)
+      ? message.deleted_for
+      : [];
+    return !deletedFor.includes(userId);
+  }
+
+  async hydrateReplyPreviews(conversationId, messages) {
+    const replyIds = [
+      ...new Set(
+        messages
+          .map((m) => m.reply_to_msg_id)
+          .filter(
+            (replyId) => typeof replyId === "string" && replyId.length > 0,
+          ),
+      ),
+    ];
+
+    if (replyIds.length === 0) {
+      return messages.map((m) => ({ ...m, reply_to: null }));
+    }
+
+    const referencedMessages = await Message.find({
+      conversation_id: conversationId,
+      msg_id: { $in: replyIds },
+    }).lean();
+
+    const referencedSenderIds = [
+      ...new Set(referencedMessages.map((m) => m.sender_id)),
+    ];
+    const referencedSenders = await User.find({
+      user_id: { $in: referencedSenderIds },
+    })
+      .select("user_id name")
+      .lean();
+
+    const senderNameMap = new Map(
+      referencedSenders.map((user) => [user.user_id, user.name || ""]),
+    );
+
+    const referencedMap = new Map(
+      referencedMessages.map((m) => [
+        m.msg_id,
+        buildReplyPreview(m, senderNameMap.get(m.sender_id) || ""),
+      ]),
+    );
+
+    return messages.map((m) => ({
+      ...m,
+      reply_to: referencedMap.get(m.reply_to_msg_id) || null,
+    }));
+  }
+
   /**
    * Create and save a new message
    * 1. Save to MongoDB
@@ -28,7 +154,7 @@ class MessageRepository {
         conversation_id: conversationId, // Match schema field name!
         sender_id: userId, // Match schema field name!
         content: [messageData.text || messageData.content], // Schema expects array
-        type: messageData.type || 'text',
+        type: messageData.type || "text",
       });
 
       // Step 2: Save to MongoDB
@@ -42,7 +168,7 @@ class MessageRepository {
 
       return messageObj;
     } catch (error) {
-      logger.error('Error creating message:', error);
+      logger.error("Error creating message:", error);
       throw error;
     }
   }
@@ -56,30 +182,38 @@ class MessageRepository {
    * @param {number} limit - number of messages to retrieve
    * @returns {Promise<Array>} messages (oldest to newest)
    */
-  async getConversationMessages(conversationId, limit = 20) {
+  async getConversationMessages(conversationId, limit = 20, userId) {
     try {
       // Step 1: Check Redis cache
-      const cachedExists = await messageCacheService.cacheExists(
-        conversationId
-      );
+      const cachedExists =
+        await messageCacheService.cacheExists(conversationId);
 
       if (cachedExists) {
-        const messages = await messageCacheService.getCachedMessages(
-          conversationId
-        );
+        const messages =
+          await messageCacheService.getCachedMessages(conversationId);
 
         if (messages && messages.length > 0) {
           logger.info(
-            `✓ CACHE HIT: ${messages.length} messages for ${conversationId}`
+            `✓ CACHE HIT: ${messages.length} messages for ${conversationId}`,
           );
-          return messages;
+          const visibleMessages = messages.filter((m) =>
+            this.isVisibleToUser(m, userId),
+          );
+          return await this.hydrateReplyPreviews(
+            conversationId,
+            visibleMessages,
+          );
         }
       }
 
       // Step 2: Cache miss - fetch from MongoDB
       logger.info(`✗ CACHE MISS: Fetching from MongoDB for ${conversationId}`);
 
-      const messages = await Message.find({ conversation_id: conversationId })
+      const messages = await Message.find({
+        conversation_id: conversationId,
+        is_deleted: false,
+        ...(userId ? { deleted_for: { $ne: userId } } : {}),
+      })
         .sort({ createdAt: -1 })
         .limit(limit)
         .lean();
@@ -95,16 +229,96 @@ class MessageRepository {
       // Step 4: Cache the results
       await messageCacheService.addMultipleMessages(
         conversationId,
-        orderedMessages
+        orderedMessages,
       );
 
-      logger.info(
-        `✓ Cached ${orderedMessages.length} messages from MongoDB`
-      );
+      logger.info(`✓ Cached ${orderedMessages.length} messages from MongoDB`);
 
       return orderedMessages;
     } catch (error) {
-      logger.error('Error getting messages:', error);
+      logger.error("Error getting messages:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a focused message window around a target message.
+   * Returns oldest -> newest order: [before..., target, after...]
+   */
+  async getMessageContext(
+    conversationId,
+    messageId,
+    beforeLimit = 20,
+    afterLimit = 20,
+    userId,
+  ) {
+    try {
+      const targetId = String(messageId || "");
+      if (!targetId) return null;
+
+      const targetMessage = await Message.findOne({
+        conversation_id: conversationId,
+        msg_id: targetId,
+        is_deleted: false,
+        ...(userId ? { deleted_for: { $ne: userId } } : {}),
+      }).lean();
+
+      if (!targetMessage || !this.isVisibleToUser(targetMessage, userId)) {
+        return null;
+      }
+
+      const visibilityFilter = {
+        conversation_id: conversationId,
+        is_deleted: false,
+        ...(userId ? { deleted_for: { $ne: userId } } : {}),
+      };
+
+      const [beforeMessages, afterMessages] = await Promise.all([
+        Message.find({
+          ...visibilityFilter,
+          msg_id: { $lt: targetId },
+        })
+          .sort({ msg_id: -1 })
+          .limit(Math.max(0, beforeLimit) + 1)
+          .lean(),
+        Message.find({
+          ...visibilityFilter,
+          msg_id: { $gt: targetId },
+        })
+          .sort({ msg_id: 1 })
+          .limit(Math.max(0, afterLimit) + 1)
+          .lean(),
+      ]);
+
+      const hasMoreBefore = beforeMessages.length > Math.max(0, beforeLimit);
+      const hasMoreAfter = afterMessages.length > Math.max(0, afterLimit);
+
+      const trimmedBefore = hasMoreBefore
+        ? beforeMessages.slice(0, Math.max(0, beforeLimit))
+        : beforeMessages;
+      const trimmedAfter = hasMoreAfter
+        ? afterMessages.slice(0, Math.max(0, afterLimit))
+        : afterMessages;
+
+      const orderedMessages = [
+        ...trimmedBefore.reverse(),
+        targetMessage,
+        ...trimmedAfter,
+      ];
+
+      const hydratedMessages = await this.hydrateReplyPreviews(
+        conversationId,
+        orderedMessages,
+      );
+
+      return {
+        targetMessageId: targetId,
+        messages: hydratedMessages,
+        hasMoreBefore,
+        hasMoreAfter,
+      };
+    } catch (error) {
+      logger.error("Error getting message context:", error);
       throw error;
     }
   }
@@ -119,19 +333,22 @@ class MessageRepository {
    * @param {number} limit - number of messages to fetch
    * @returns {Promise<Array>} older messages
    */
-  async getOlderMessages(conversationId, beforeMsgId, limit = 20) {
+  async getOlderMessages(conversationId, beforeMsgId, limit = 20, userId) {
     try {
       logger.info(
-        `📥 Loading older messages for ${conversationId}, before msg_id: ${beforeMsgId}`
+        `📥 Loading older messages for ${conversationId}, before msg_id: ${beforeMsgId}`,
       );
 
-      // Convert to number for comparison
-      const beforeId = Number(beforeMsgId);
+      // msg_id is stored as string (Snowflake). Keep string comparison to avoid
+      // precision loss when converting large IDs to Number.
+      const beforeId = String(beforeMsgId);
 
       // Fetch from MongoDB (messages with msg_id < beforeMsgId)
       const messages = await Message.find({
         conversation_id: conversationId,
-        msg_id: { $lt: beforeId }, // Snowflake IDs are comparable as numbers
+        is_deleted: false,
+        ...(userId ? { deleted_for: { $ne: userId } } : {}),
+        msg_id: { $lt: beforeId },
       })
         .sort({ msg_id: -1 }) // newest first (largest ID first)
         .limit(limit + 1) // +1 to check if more exist
@@ -155,7 +372,7 @@ class MessageRepository {
       const orderedMessages = result.reverse();
 
       logger.info(
-        `✓ Loaded ${orderedMessages.length} older messages from DB (hasMore: ${hasMore})`
+        `✓ Loaded ${orderedMessages.length} older messages from DB (hasMore: ${hasMore})`,
       );
 
       // Store hasMore for response
@@ -163,7 +380,7 @@ class MessageRepository {
 
       return orderedMessages;
     } catch (error) {
-      logger.error('Error getting older messages:', error);
+      logger.error("Error getting older messages:", error);
       throw error;
     }
   }
@@ -177,18 +394,21 @@ class MessageRepository {
    * @param {number} limit - number of messages to fetch
    * @returns {Promise<Array>} newer messages
    */
-  async getNewerMessages(conversationId, afterMsgId, limit = 20) {
+  async getNewerMessages(conversationId, afterMsgId, limit = 20, userId) {
     try {
       logger.info(
-        `📤 Loading newer messages for ${conversationId}, after msg_id: ${afterMsgId}`
+        `📤 Loading newer messages for ${conversationId}, after msg_id: ${afterMsgId}`,
       );
 
-      // Convert to number for comparison
-      const afterId = Number(afterMsgId);
+      // msg_id is stored as string (Snowflake). Keep string comparison to avoid
+      // precision loss when converting large IDs to Number.
+      const afterId = String(afterMsgId);
 
       const messages = await Message.find({
         conversation_id: conversationId,
-        msg_id: { $gt: afterId }, // Snowflake IDs are comparable
+        is_deleted: false,
+        ...(userId ? { deleted_for: { $ne: userId } } : {}),
+        msg_id: { $gt: afterId },
       })
         .sort({ msg_id: 1 }) // oldest first (smallest ID first)
         .limit(limit)
@@ -203,7 +423,7 @@ class MessageRepository {
 
       return messages;
     } catch (error) {
-      logger.error('Error getting newer messages:', error);
+      logger.error("Error getting newer messages:", error);
       throw error;
     }
   }
@@ -229,7 +449,7 @@ class MessageRepository {
       const updated = await Message.findOneAndUpdate(
         { msg_id: messageId, conversation_id: conversationId }, // Match schema!
         updateData,
-        { new: true }
+        { new: true },
       ).lean();
 
       if (!updated) {
@@ -242,12 +462,12 @@ class MessageRepository {
       await messageCacheService.updateMessage(
         conversationId,
         messageId,
-        updated
+        updated,
       );
 
       return updated;
     } catch (error) {
-      logger.error('Error updating message:', error);
+      logger.error("Error updating message:", error);
       throw error;
     }
   }
@@ -265,7 +485,7 @@ class MessageRepository {
       const deleted = await Message.findOneAndUpdate(
         { msg_id: messageId, conversation_id: conversationId }, // Match schema!
         { is_deleted: true },
-        { new: true }
+        { new: true },
       ).lean();
 
       if (!deleted) {
@@ -279,7 +499,7 @@ class MessageRepository {
 
       return deleted;
     } catch (error) {
-      logger.error('Error deleting message:', error);
+      logger.error("Error deleting message:", error);
       throw error;
     }
   }
@@ -302,12 +522,12 @@ class MessageRepository {
       });
 
       if (!message) {
-        throw new Error('Message not found');
+        throw new Error("Message not found");
       }
 
       // Check if reaction already exists
       const reactionIndex = message.reactions.findIndex(
-        (r) => r.user_id === userId && r.type === emoji
+        (r) => r.user_id === userId && r.type === emoji,
       );
 
       if (reactionIndex === -1) {
@@ -325,12 +545,12 @@ class MessageRepository {
       await messageCacheService.updateMessage(
         conversationId,
         messageId,
-        updated
+        updated,
       );
 
       return updated;
     } catch (error) {
-      logger.error('Error adding reaction:', error);
+      logger.error("Error adding reaction:", error);
       throw error;
     }
   }
@@ -348,7 +568,7 @@ class MessageRepository {
       });
       return count;
     } catch (error) {
-      logger.error('Error getting message count:', error);
+      logger.error("Error getting message count:", error);
       return 0;
     }
   }

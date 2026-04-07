@@ -15,6 +15,7 @@ import iuh.fit.authservice.exception.ErrorCode;
 import iuh.fit.authservice.repository.InvalidatedTokenRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.NonFinal;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -27,6 +28,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class JwtService {
 
     @NonFinal
@@ -48,6 +50,8 @@ public class JwtService {
     private final InvalidatedTokenRepository invalidatedTokenRepository;
 
     public String generateToken(UserServiceClient.UserDto user) {
+        log.info("Generating access token for userId: {}", user.getId());
+
         JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
         AccountType accountType = AccountType.valueOf(user.getAccountType());
         String scope = buildScope(accountType);
@@ -71,20 +75,28 @@ public class JwtService {
 
         try {
             jwsObject.sign(new MACSigner(SIGNER_KEY.getBytes()));
-            return jwsObject.serialize();
+            String token = jwsObject.serialize();
+            log.debug("Access token generated successfully for userId: {}", user.getId());
+            return token;
         } catch (JOSEException e) {
+            log.error("Failed to sign access token for userId: {}", user.getId(), e);
             throw new RuntimeException(e);
         }
     }
 
     public String generateRefreshToken() {
+        log.debug("Generating refresh token");
         SecureRandom random = new SecureRandom();
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        String refreshToken = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        log.debug("Refresh token generated successfully");
+        return refreshToken;
     }
 
     public SignedJWT verifyToken(String token, boolean isRefresh) throws JOSEException, ParseException {
+        log.debug("Verifying {} token", isRefresh ? "refresh" : "access");
+
         JWSVerifier verifier = new MACVerifier(SIGNER_KEY.getBytes());
         SignedJWT signedJWT = SignedJWT.parse(token);
 
@@ -95,23 +107,30 @@ public class JwtService {
 
         var verified = signedJWT.verify(verifier);
 
-        if (!(verified && expiryTime.after(new Date())))
+        if (!(verified && expiryTime.after(new Date()))) {
+            log.warn("Token verification failed: signature or expiration invalid");
             throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
 
-        if (invalidatedTokenRepository.existsById(signedJWT.getJWTClaimsSet().getJWTID()))
+        if (invalidatedTokenRepository.existsById(signedJWT.getJWTClaimsSet().getJWTID())) {
+            log.warn("Token has been invalidated, jwtId: {}", signedJWT.getJWTClaimsSet().getJWTID());
             throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
 
+        log.debug("Token verified successfully, jwtId: {}", signedJWT.getJWTClaimsSet().getJWTID());
         return signedJWT;
     }
 
     public IntrospectResponse introspect(IntrospectRequest request) throws JOSEException, ParseException {
-        String token = request.getToken();
-        boolean isValid = true;
+        log.info("Introspecting token");
 
+        boolean isValid = true;
         try {
-            verifyToken(token, false);
+            verifyToken(request.getToken(), false);
+            log.info("Token is valid");
         } catch (AppException e) {
             isValid = false;
+            log.info("Token is invalid");
         }
 
         return IntrospectResponse.builder()
@@ -120,6 +139,8 @@ public class JwtService {
     }
 
     public void invalidateToken(String jwtId, LocalDateTime expiryTime, String userId, String tokenType, String reason) {
+        log.info("Invalidating token - jwtId: {}, type: {}, reason: {}", jwtId, tokenType, reason);
+
         InvalidatedToken invalidatedToken = InvalidatedToken.builder()
                 .id(jwtId)
                 .expiryTime(expiryTime)
@@ -128,26 +149,12 @@ public class JwtService {
                 .build();
 
         invalidatedTokenRepository.save(invalidatedToken);
+        log.debug("Token invalidated successfully");
     }
-
-    public long getExpiration() {
-        return EXPIRATION;
-    }
-
-    public long getRefreshExpiration() {
-        return REFRESH_EXPIRATION;
-    }
-
-    private String buildScope(AccountType accountType) {
-        return switch (accountType) {
-            case ADMIN -> "ADMIN";
-            case OA -> "OA";
-            case USER -> "USER";
-        };
-    }
-
 
     public String generateTempToken(UserServiceClient.UserDto user, String loginMethod) {
+        log.info("Generating 2FA temp token for userId: {}", user.getId());
+
         JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
 
         JWTClaimsSet jwtClaimsSet = new JWTClaimsSet.Builder()
@@ -168,13 +175,17 @@ public class JwtService {
 
         try {
             jwsObject.sign(new MACSigner(SIGNER_KEY.getBytes()));
+            log.debug("Temp token generated for 2FA");
             return jwsObject.serialize();
         } catch (JOSEException e) {
+            log.error("Failed to generate temp token", e);
             throw new RuntimeException(e);
         }
     }
 
     public String generateGoogleTempToken(GoogleUserInfo userInfo) {
+        log.info("Generating Google temp token for email: {}", userInfo.getEmail());
+
         JWSHeader header = new JWSHeader(JWSAlgorithm.HS512);
 
         JWTClaimsSet jwtClaimsSet = new JWTClaimsSet.Builder()
@@ -197,28 +208,35 @@ public class JwtService {
 
         try {
             jwsObject.sign(new MACSigner(SIGNER_KEY.getBytes()));
+            log.debug("Google temp token generated successfully");
             return jwsObject.serialize();
         } catch (JOSEException e) {
+            log.error("Failed to generate Google temp token", e);
             throw new RuntimeException(e);
         }
     }
 
     public Map<String, String> verifyTempToken(String token) {
+        log.debug("Verifying temp token");
+
         try {
             JWSVerifier verifier = new MACVerifier(SIGNER_KEY.getBytes());
             SignedJWT signedJWT = SignedJWT.parse(token);
 
             if (!signedJWT.verify(verifier)) {
+                log.warn("Temp token signature verification failed");
                 throw new AppException(ErrorCode.UNAUTHENTICATED);
             }
 
             Date expiryTime = signedJWT.getJWTClaimsSet().getExpirationTime();
             if (!expiryTime.after(new Date())) {
+                log.warn("Temp token has expired");
                 throw new AppException(ErrorCode.UNAUTHENTICATED);
             }
 
             Boolean isTemp = signedJWT.getJWTClaimsSet().getBooleanClaim("temp");
             if (!Boolean.TRUE.equals(isTemp)) {
+                log.warn("Token is not a temp token");
                 throw new AppException(ErrorCode.UNAUTHENTICATED);
             }
 
@@ -227,41 +245,68 @@ public class JwtService {
             claims.put("purpose", signedJWT.getJWTClaimsSet().getStringClaim("purpose"));
             claims.put("loginMethod", signedJWT.getJWTClaimsSet().getStringClaim("loginMethod"));
 
+            log.debug("Temp token verified successfully");
             return claims;
 
         } catch (Exception e) {
+            log.warn("Temp token verification failed");
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
     }
 
     public GoogleUserInfo verifyGoogleTempToken(String token) {
+        log.debug("Verifying Google temp token");
+
         try {
             JWSVerifier verifier = new MACVerifier(SIGNER_KEY.getBytes());
             SignedJWT signedJWT = SignedJWT.parse(token);
 
             if (!signedJWT.verify(verifier)) {
+                log.warn("Google temp token signature verification failed");
                 throw new AppException(ErrorCode.UNAUTHENTICATED);
             }
 
             Date expiryTime = signedJWT.getJWTClaimsSet().getExpirationTime();
             if (!expiryTime.after(new Date())) {
+                log.warn("Google temp token has expired");
                 throw new AppException(ErrorCode.UNAUTHENTICATED);
             }
 
             String purpose = signedJWT.getJWTClaimsSet().getStringClaim("purpose");
             if (!"GOOGLE_PHONE_SETUP".equals(purpose)) {
+                log.warn("Invalid purpose in Google temp token");
                 throw new AppException(ErrorCode.UNAUTHENTICATED);
             }
 
-            return GoogleUserInfo.builder()
+            GoogleUserInfo userInfo = GoogleUserInfo.builder()
                     .googleId(signedJWT.getJWTClaimsSet().getStringClaim("googleId"))
                     .email(signedJWT.getJWTClaimsSet().getStringClaim("email"))
                     .name(signedJWT.getJWTClaimsSet().getStringClaim("name"))
                     .picture(signedJWT.getJWTClaimsSet().getStringClaim("picture"))
                     .build();
 
+            log.debug("Google temp token verified successfully");
+            return userInfo;
+
         } catch (Exception e) {
+            log.warn("Google temp token verification failed");
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
+    }
+
+    private String buildScope(AccountType accountType) {
+        return switch (accountType) {
+            case ADMIN -> "ADMIN";
+            case OA -> "OA";
+            case USER -> "USER";
+        };
+    }
+
+    public long getExpiration() {
+        return EXPIRATION;
+    }
+
+    public long getRefreshExpiration() {
+        return REFRESH_EXPIRATION;
     }
 }
