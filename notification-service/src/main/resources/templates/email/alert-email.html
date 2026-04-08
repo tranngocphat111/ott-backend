@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${appName} + ' security alert'">Riff security alert</title>
+</head>
+<body style="margin:0;padding:0;background:#f6efe8;font-family:Arial,Helvetica,sans-serif;color:#5c4330;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f6efe8;padding:32px 16px;">
+    <tr>
+        <td align="center">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;background:#fffaf6;border:1px solid #ead9cc;border-radius:24px;overflow:hidden;box-shadow:0 18px 50px rgba(133,96,65,0.12);">
+                <tr>
+                    <td style="background:linear-gradient(135deg,#8e4f44 0%,#c26b54 100%);padding:30px 32px;text-align:center;">
+                        <img th:src="'cid:' + ${logoCid}" alt="Riff" width="60" height="60" style="display:block;margin:0 auto 12px;border-radius:18px;" />
+                        <div style="font-size:28px;line-height:1.1;color:#ffffff;font-weight:800;" th:text="${appName}">Riff</div>
+                        <div style="margin-top:8px;font-size:13px;letter-spacing:1.2px;text-transform:uppercase;color:#ffe9e1;font-weight:700;">Security alert</div>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:34px 32px 22px;">
+                        <h1 style="margin:0 0 14px;font-size:30px;line-height:1.25;color:#2f2218;">Security alert detected</h1>
+                        <p style="margin:0 0 18px;font-size:16px;line-height:1.8;color:#6f5136;">
+                            Hi <strong th:text="${fullName}">User</strong>, we noticed a <strong th:text="${alertType}">security event</strong> on your account. Review the details below and take action if this was not you.
+                        </p>
+
+                        <div style="border:1px solid #f0ddcf;background:#fff4eb;border-radius:20px;padding:20px 22px;">
+                            <div style="font-size:14px;font-weight:800;color:#8e4f44;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">Incident details</div>
+                            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border-spacing:0 10px;color:#6f5136;font-size:14px;line-height:1.6;">
+                                <tr th:if="${timestamp != null}">
+                                    <td style="width:140px;font-weight:700;color:#9a7454;vertical-align:top;">Time</td>
+                                    <td th:text="${timestamp}">Jan 01, 2024 12:00:00</td>
+                                </tr>
+                                <tr th:if="${ipAddress != null}">
+                                    <td style="font-weight:700;color:#9a7454;vertical-align:top;">IP address</td>
+                                    <td th:text="${ipAddress}">192.168.1.1</td>
+                                </tr>
+                                <tr th:if="${location != null}">
+                                    <td style="font-weight:700;color:#9a7454;vertical-align:top;">Location</td>
+                                    <td th:text="${location}">Unknown</td>
+                                </tr>
+                                <tr th:if="${deviceInfo != null}">
+                                    <td style="font-weight:700;color:#9a7454;vertical-align:top;">Device</td>
+                                    <td th:text="${deviceInfo}">Unknown device</td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <div style="margin-top:18px;padding:18px 20px;border-radius:18px;background:#fff0ec;border:1px solid #f0d2cb;">
+                            <p style="margin:0;font-size:14px;line-height:1.7;color:#8e4f44;">
+                                If you do not recognize this activity, change your password immediately and review your active sessions.
+                            </p>
+                            <p style="margin:12px 0 0;font-size:14px;line-height:1.7;color:#8e4f44;">
+                                Need help? Contact <a th:href="'mailto:' + ${supportEmail}" th:text="${supportEmail}" style="color:#8e4f44;text-decoration:none;font-weight:700;">support</a>.
+                            </p>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:0 32px 30px;">
+                        <div style="height:1px;background:#ead9cc;margin:6px 0 18px;"></div>
+                        <p style="margin:0;font-size:14px;line-height:1.7;color:#7b5a40;">
+                            Stay safe,<br>
+                            <strong th:text="${appName}">Riff</strong>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:18px 32px 28px;background:#fff6ef;text-align:center;border-top:1px solid #ead9cc;">
+                        <p style="margin:0 0 8px;font-size:12px;line-height:1.6;color:#a67d57;">This is an automated security message. Please do not reply.</p>
+                        <p style="margin:0;font-size:12px;line-height:1.6;color:#a67d57;">
+                            <a th:href="${websiteUrl}" th:text="${websiteUrl}" style="color:#8e4f44;text-decoration:none;font-weight:700;">Website</a>
+                            <span style="padding:0 8px;color:#d1b49f;">•</span>
+                            <a th:href="'mailto:' + ${supportEmail}" th:text="${supportEmail}" style="color:#8e4f44;text-decoration:none;font-weight:700;">Support</a>
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>
