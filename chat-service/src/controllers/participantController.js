@@ -28,6 +28,8 @@ exports.getConversationsByUserId = async (req, res) => {
   try {
     const { userId } = req.params;
 
+    await ParticipantService.ensureSelfConversation(userId);
+
     const participants =
       await ParticipantService.getConversationsByUserId(userId);
     // Trả về đầy đủ participant data + conversation data + unread_count

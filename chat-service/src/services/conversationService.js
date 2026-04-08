@@ -1,5 +1,7 @@
 const Conversation = require("../models/Conversation");
 const User = require("../models/User");
+const Participant = require("../models/Participant");
+const Message = require("../models/Message");
 
 exports.createConversation = async ({
   creatorId,
@@ -87,6 +89,23 @@ exports.updateConversation = async (conversationId, updateData) => {
     throw new Error("Chỉ có thể cập nhật thông tin nhóm chat");
   }
 
+  if (updateData.requesterId) {
+    const isOwner =
+      String(conversation.created_by) === String(updateData.requesterId);
+    if (!isOwner) {
+      const participant = await Participant.findOne({
+        conversation_id: conversationId,
+        user_id: updateData.requesterId,
+      })
+        .select("roles")
+        .lean();
+
+      if (!participant || participant.roles !== "admin") {
+        throw new Error("Chỉ trưởng nhóm hoặc phó nhóm mới có quyền cập nhật nhóm");
+      }
+    }
+  }
+
   const allowedFields = ["name", "avatar", "background"];
   const filteredData = {};
   
@@ -101,4 +120,43 @@ exports.updateConversation = async (conversationId, updateData) => {
     filteredData,
     { new: true }
   );
+};
+
+exports.dissolveGroup = async (conversationId, requesterId) => {
+  const conversation = await Conversation.findById(conversationId).lean();
+
+  if (!conversation) {
+    throw new Error("Cuộc hội thoại không tồn tại");
+  }
+
+  if (conversation.type !== "group") {
+    throw new Error("Chỉ trưởng nhóm mới có thể giải tán nhóm");
+  }
+
+  if (String(conversation.created_by) !== String(requesterId)) {
+    throw new Error("Chỉ trưởng nhóm mới có thể giải tán nhóm");
+  }
+
+  const participants = await Participant.find({ conversation_id: conversationId })
+    .select("user_id")
+    .lean();
+
+  const affectedUserIds = participants
+    .map((item) => item.user_id)
+    .filter(Boolean);
+
+  const [messageResult, participantResult] = await Promise.all([
+    Message.deleteMany({ conversation_id: conversationId }),
+    Participant.deleteMany({ conversation_id: conversationId }),
+  ]);
+
+  await Conversation.deleteOne({ _id: conversationId });
+
+  return {
+    success: true,
+    conversationId,
+    affectedUserIds,
+    deletedMessages: messageResult.deletedCount || 0,
+    deletedParticipants: participantResult.deletedCount || 0,
+  };
 };

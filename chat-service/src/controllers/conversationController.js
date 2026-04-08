@@ -2,6 +2,7 @@ const ConversationService = require("../services/conversationService");
 const ParticipantService = require("../services/participantService");
 const MessageService = require("../services/messageService");
 const UserService = require("../services/userService");
+const Conversation = require("../models/Conversation");
 
 exports.createConversation = async (req, res) => {
   try {
@@ -98,7 +99,15 @@ exports.addMember = async (req, res) => {
       return res.status(400).json({ error: "Cần ít nhất một thành viên" });
     }
 
-    const Conversation = require("../models/Conversation");
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(400).json({ error: "Cuộc hội thoại không tồn tại" });
+    }
+
+    if (conversation.type === "group") {
+      await ParticipantService.assertGroupManager(conversationId, addedBy);
+    }
+
     const addedMembers = [];
 
     for (const memberId of memberIds) {
@@ -146,9 +155,9 @@ exports.addMember = async (req, res) => {
     });
 
     // Emit to new members so they can get the conversation
-    const conversation = await ConversationService.getConversationById(conversationId);
+    const updatedConversation = await ConversationService.getConversationById(conversationId);
     memberIds.forEach((memberId) => {
-      req.io.to(`user:${memberId}`).emit("tao_phong_moi", conversation);
+      req.io.to(`user:${memberId}`).emit("tao_phong_moi", updatedConversation);
     });
     
     console.log(
@@ -158,6 +167,32 @@ exports.addMember = async (req, res) => {
     res.status(200).json({ members: addedMembers, message: notificationMessage });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+};
+
+exports.dissolveGroup = async (req, res) => {
+  try {
+    const { conversationId, userId } = req.params;
+    const result = await ConversationService.dissolveGroup(conversationId, userId);
+
+    result.affectedUserIds.forEach((targetUserId) => {
+      req.io.to(`user:${targetUserId}`).emit("giai_tan_nhom", {
+        conversationId,
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      conversationId,
+      deletedMessages: result.deletedMessages,
+      deletedParticipants: result.deletedParticipants,
+    });
+  } catch (error) {
+    const isClientError =
+      error.message.includes("không tồn tại") ||
+      error.message.includes("không có quyền") ||
+      error.message.includes("Chỉ trưởng nhóm");
+    res.status(isClientError ? 400 : 500).json({ error: error.message });
   }
 };
 

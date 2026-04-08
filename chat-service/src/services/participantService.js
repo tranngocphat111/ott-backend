@@ -1,6 +1,89 @@
 const Participant = require("../models/Participant");
 const Conversation = require("../models/Conversation");
 
+const assertGroupManager = async (conversationId, requesterId) => {
+  const conversation = await Conversation.findById(conversationId);
+  if (!conversation) {
+    throw new Error("Cuộc hội thoại không tồn tại");
+  }
+
+  if (conversation.type !== "group") {
+    throw new Error("Chỉ có thể thực hiện thao tác này trong nhóm chat");
+  }
+
+  const isOwner = String(conversation.created_by) === String(requesterId);
+  if (isOwner) {
+    return { conversation, isOwner: true };
+  }
+
+  const requester = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: requesterId,
+  });
+
+  if (!requester || requester.roles !== "admin") {
+    throw new Error("Chỉ trưởng nhóm hoặc phó nhóm mới có quyền thực hiện");
+  }
+
+  return { conversation, isOwner: false };
+};
+
+exports.ensureSelfConversation = async (userId) => {
+  if (!userId) return null;
+
+  const selfConversation = await Conversation.findOneAndUpdate(
+    {
+      is_self_conversation: true,
+      self_owner_id: userId,
+      is_deleted: false,
+    },
+    {
+      $setOnInsert: {
+        type: "private",
+        name: "My Documents",
+        avatar: "",
+        created_by: userId,
+        background: "",
+        is_self_conversation: true,
+        self_owner_id: userId,
+      },
+      $set: {
+        member_count: 1,
+      },
+    },
+    {
+      upsert: true,
+      new: true,
+    },
+  );
+
+  const participant = await Participant.findOneAndUpdate(
+    {
+      conversation_id: selfConversation._id,
+      user_id: userId,
+    },
+    {
+      $setOnInsert: {
+        roles: "admin",
+        added_by: userId,
+      },
+    },
+    {
+      upsert: true,
+      new: true,
+    },
+  );
+
+  if (!participant?.settings?.is_pinned) {
+    await Participant.findByIdAndUpdate(participant._id, {
+      "settings.is_pinned": true,
+      "settings.pinned_at": new Date(),
+    });
+  }
+
+  return { selfConversation, participant };
+};
+
 exports.addParticipant = async ({ conversationId, userId, role, addedBy }) => {
   const existing = await Participant.findOne({
     conversation_id: conversationId,
@@ -208,6 +291,10 @@ exports.leaveGroup = async (conversationId, userId) => {
     throw new Error("Chỉ có thể rời khỏi nhóm chat");
   }
 
+  if (String(conversation.created_by) === String(userId)) {
+    throw new Error("Trưởng nhóm không thể rời nhóm. Vui lòng giải tán nhóm");
+  }
+
   const participant = await Participant.findOne({
     conversation_id: conversationId,
     user_id: userId,
@@ -231,20 +318,16 @@ exports.leaveGroup = async (conversationId, userId) => {
   return { success: true, conversationId, userId };
 };
 
-// Update member role (owner only)
+// Update member role (owner or admin)
 exports.updateMemberRole = async (conversationId, userId, newRole, adminId) => {
-  const conversation = await Conversation.findById(conversationId);
-  
-  if (!conversation) {
-    throw new Error("Cuộc hội thoại không tồn tại");
+  const { conversation } = await assertGroupManager(conversationId, adminId);
+
+  if (!["admin", "user"].includes(String(newRole))) {
+    throw new Error("Vai trò không hợp lệ");
   }
 
-  if (conversation.type !== "group") {
-    throw new Error("Chỉ có thể cập nhật vai trò trong nhóm chat");
-  }
-
-  if (String(conversation.created_by) !== String(adminId)) {
-    throw new Error("Chỉ trưởng nhóm mới có quyền thay đổi vai trò thành viên");
+  if (String(userId) === String(conversation.created_by)) {
+    throw new Error("Không thể thay đổi vai trò của trưởng nhóm");
   }
 
   const participant = await Participant.findOne({
@@ -257,7 +340,7 @@ exports.updateMemberRole = async (conversationId, userId, newRole, adminId) => {
   }
 
   // Cannot change own role
-  if (userId === adminId) {
+  if (String(userId) === String(adminId)) {
     throw new Error("Bạn không thể thay đổi vai trò của chính mình");
   }
 
@@ -268,21 +351,9 @@ exports.updateMemberRole = async (conversationId, userId, newRole, adminId) => {
   return { success: true, conversationId, userId, newRole };
 };
 
-// Remove member from group (owner only)
+// Remove member from group (owner or admin)
 exports.removeMember = async (conversationId, userId, adminId) => {
-  const conversation = await Conversation.findById(conversationId);
-  
-  if (!conversation) {
-    throw new Error("Cuộc hội thoại không tồn tại");
-  }
-
-  if (conversation.type !== "group") {
-    throw new Error("Chỉ có thể xóa thành viên khỏi nhóm chat");
-  }
-
-  if (String(conversation.created_by) !== String(adminId)) {
-    throw new Error("Chỉ trưởng nhóm mới có quyền xóa thành viên");
-  }
+  const { conversation } = await assertGroupManager(conversationId, adminId);
 
   const participant = await Participant.findOne({
     conversation_id: conversationId,
@@ -298,6 +369,10 @@ exports.removeMember = async (conversationId, userId, adminId) => {
     throw new Error("Không thể xóa trưởng nhóm");
   }
 
+  if (String(userId) === String(adminId)) {
+    throw new Error("Bạn không thể tự xóa chính mình. Hãy dùng chức năng rời nhóm");
+  }
+
   // Remove participant
   await Participant.deleteOne({
     conversation_id: conversationId,
@@ -311,3 +386,5 @@ exports.removeMember = async (conversationId, userId, adminId) => {
 
   return { success: true, conversationId, userId };
 };
+
+exports.assertGroupManager = assertGroupManager;

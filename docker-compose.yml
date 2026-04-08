@@ -86,6 +86,8 @@ services:
     container_name: ott-media
     restart: unless-stopped
     env_file: .env
+    ports:
+      - "8090:8080"
     networks:
       - ott-network
     depends_on:

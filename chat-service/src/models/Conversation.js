@@ -41,6 +41,16 @@ const ConversationSchema = new mongoose.Schema(
     },
 
     background: { type: String, default: "" },
+
+    is_self_conversation: {
+      type: Boolean,
+      default: false,
+    },
+
+    self_owner_id: {
+      type: String,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -50,5 +60,12 @@ const ConversationSchema = new mongoose.Schema(
 ConversationSchema.index({ type: 1 });
 ConversationSchema.index({ is_deleted: 1 });
 ConversationSchema.index({ updatedAt: -1 });
+ConversationSchema.index(
+  { is_self_conversation: 1, self_owner_id: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { is_self_conversation: true },
+  },
+);
 
 module.exports = mongoose.model("Conversation", ConversationSchema);
