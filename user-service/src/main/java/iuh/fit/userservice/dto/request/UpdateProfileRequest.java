@@ -17,6 +17,4 @@ public class UpdateProfileRequest {
     private String bio;
     private LocalDate dateOfBirth;
     private Gender gender;
-    private String avatarUrl;
-    private String coverUrl;
 }

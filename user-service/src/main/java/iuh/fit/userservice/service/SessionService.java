@@ -24,6 +24,7 @@ import java.util.List;
 public class SessionService {
 
     private final UserSessionRepository userSessionRepository;
+    private final AuthSessionClient authSessionClient;
 
     @Value("${jwt.expiration:3600}")
     private long jwtExpiration;
@@ -120,7 +121,10 @@ public class SessionService {
         sessions.forEach(s -> s.revoke(reason));
         userSessionRepository.saveAll(sessions);
 
-        log.info("Successfully revoked {} sessions for userId: {}", sessions.size(), userId);
+        int authRevoked = authSessionClient.revokeAllSessions(userId, reason);
+
+        log.info("Successfully revoked sessions for userId: {} | user-service: {} | auth-service: {}",
+                userId, sessions.size(), authRevoked);
         return sessions.size();
     }
 

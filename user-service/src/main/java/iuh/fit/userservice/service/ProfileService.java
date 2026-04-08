@@ -24,6 +24,7 @@ public class ProfileService {
     private final UserMapper userMapper;
     private final ValidationUtils validationUtils;
 
+
     public UserProfileResponse getUserProfile(String userId) {
         log.debug("Fetching profile for userId: {}", userId);
 
@@ -99,23 +100,6 @@ public class ProfileService {
             hasChanges = true;
         }
 
-        if (request.getAvatarUrl() != null) {
-            if (!isValidUrl(request.getAvatarUrl())) {
-                log.warn("Invalid avatar URL for userId: {}", userId);
-                throw new AppException(ErrorCode.INVALID_AVATAR_URL);
-            }
-            user.setAvatarUrl(request.getAvatarUrl());
-            hasChanges = true;
-        }
-
-        if (request.getCoverUrl() != null) {
-            if (!isValidUrl(request.getCoverUrl())) {
-                log.warn("Invalid cover URL for userId: {}", userId);
-                throw new AppException(ErrorCode.INVALID_COVER_URL);
-            }
-            user.setCoverUrl(request.getCoverUrl());
-            hasChanges = true;
-        }
 
         if (hasChanges) {
             user = userRepository.save(user);
@@ -153,4 +137,5 @@ public class ProfileService {
         if (url == null || url.trim().isEmpty()) return false;
         return url.matches("^(https?://)?([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}(/.*)?$");
     }
+
 }

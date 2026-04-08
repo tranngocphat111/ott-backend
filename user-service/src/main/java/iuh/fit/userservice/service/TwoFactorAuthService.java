@@ -107,12 +107,20 @@ public class TwoFactorAuthService {
         User user = userValidationUtil.getUserById(userId);
 
         if (!twoFactorAuthRepository.existsByUserIdAndIsEnabledTrue(userId)) {
-            log.warn("2FA is not enabled for userId: {}", userId);
             throw new AppException(ErrorCode.TWO_FACTOR_AUTH_NOT_ENABLED);
         }
 
+        if (user.getPasswordHash() == null) {
+            throw new AppException(ErrorCode.PASSWORD_NOT_SET);
+        }
+        if (request.getPassword() == null || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            log.warn("Invalid password for 2FA disable request, userId: {}", userId);
+            throw new AppException(ErrorCode.INCORRECT_PASSWORD);
+        }
+
         OtpCode otpCode = otpService.generateOtp(user, null, user.getEmail(), OtpType.DISABLE_TWO_FACTOR, request.getIpAddress());
-        notificationPublisher.sendOtpEmail(user.getEmail(), user.getFullName(), otpCode.getCode(), OtpType.DISABLE_TWO_FACTOR, request.getIpAddress(), null, userId);
+        notificationPublisher.sendOtpEmail(user.getEmail(), user.getFullName(), otpCode.getCode(),
+                OtpType.DISABLE_TWO_FACTOR, request.getIpAddress(), null, userId);
 
         log.info("2FA disable OTP sent successfully to userId: {}", userId);
 

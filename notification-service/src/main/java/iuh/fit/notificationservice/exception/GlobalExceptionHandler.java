@@ -21,13 +21,13 @@ public class GlobalExceptionHandler {
             AppException ex, HttpServletRequest request) {
 
         ErrorCode errorCode = ex.getErrorCode();
-        log.error("AppException: {} - {} at {}", errorCode.getCode(), ex.getMessage(), request.getRequestURI());
 
         return ResponseEntity
                 .status(errorCode.getStatusCode())
                 .body(Map.of(
-                        "code",      errorCode.getCode(),
-                        "message",   ex.getMessage() != null ? ex.getMessage() : errorCode.getMessage(),
+                        "code", errorCode.getCode(),
+                        "message", errorCode.getMessage(),
+                        "result", Map.of(), // đồng bộ format
                         "timestamp", LocalDateTime.now().toString()
                 ));
     }
@@ -37,18 +37,14 @@ public class GlobalExceptionHandler {
             MethodArgumentNotValidException ex) {
 
         Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getAllErrors().forEach(error -> {
-            String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
+        ex.getBindingResult().getFieldErrors().forEach(error -> {
+            errors.put(error.getField(), error.getDefaultMessage()); // KEY
         });
 
-        log.error("Validation error: {}", errors);
-
         return ResponseEntity.badRequest().body(Map.of(
-                "code",      ErrorCode.VALIDATION_FAILED.getCode(),
-                "message",   "Validation failed",
-                "errors",    errors,
+                "code", 1111,
+                "message", "VALIDATION_FAILED",
+                "result", errors,
                 "timestamp", LocalDateTime.now().toString()
         ));
     }
@@ -57,11 +53,10 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleException(
             Exception ex, HttpServletRequest request) {
 
-        log.error("Unexpected exception at {}: ", request.getRequestURI(), ex);
-
         return ResponseEntity.internalServerError().body(Map.of(
-                "code",      ErrorCode.UNCATEGORIZED_EXCEPTION.getCode(),
-                "message",   "An unexpected error occurred",
+                "code", 9999,
+                "message", "UNCATEGORIZED_EXCEPTION",
+                "result", Map.of(),
                 "timestamp", LocalDateTime.now().toString()
         ));
     }

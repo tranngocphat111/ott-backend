@@ -11,10 +11,11 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ChangeEmailRequest {
-    @NotBlank(message = "New email is required")
+
+    @NotBlank(message = "NEW_EMAIL_IS_REQUIRED")
     private String newEmail;
 
-    @NotBlank(message = "OTP is required")
+    @NotBlank(message = "OTP_IS_REQUIRED")
     private String otp;
 
     private String ipAddress;

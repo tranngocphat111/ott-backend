@@ -11,10 +11,11 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ChangePasswordRequest {
-    @NotBlank(message = "Old password is required")
+
+    @NotBlank(message = "OLD_PASSWORD_IS_REQUIRED")
     private String oldPassword;
 
-    @NotBlank(message = "New password is required")
+    @NotBlank(message = "NEW_PASSWORD_IS_REQUIRED")
     private String newPassword;
 
     private String ipAddress;

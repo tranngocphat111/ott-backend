@@ -5,6 +5,17 @@ import org.springframework.stereotype.Component;
 @Component
 public class ValidationUtils {
 
+    public String normalizePhone(String phone) {
+        if (phone == null) return null;
+        String normalized = phone.replaceAll("[^0-9+]", "").trim();
+        if (normalized.startsWith("+84")) {
+            normalized = "0" + normalized.substring(3);
+        } else if (normalized.startsWith("84") && normalized.length() >= 11) {
+            normalized = "0" + normalized.substring(2);
+        }
+        return normalized;
+    }
+
     public boolean isValidEmail(String email) {
         if (email == null || email.trim().isEmpty()) return false;
         return email.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
@@ -12,7 +23,8 @@ public class ValidationUtils {
 
     public boolean isValidPhone(String phone) {
         if (phone == null || phone.trim().isEmpty()) return false;
-        return phone.matches("^0[0-9]{9,10}$");
+        String normalized = normalizePhone(phone);
+        return normalized != null && normalized.matches("^0[0-9]{9,10}$");
     }
 
     public boolean isValidPassword(String password) {

@@ -76,6 +76,7 @@ public class OtpService {
 
     @Transactional
     public OtpCode validateOtp(String phone, String email, String code, OtpType type) {
+
         log.debug("Validating OTP - Type: {} | Phone: {} | Email: {}", type, phone, email);
 
         if (phone == null && email == null) throw new AppException(ErrorCode.INVALID_REQUEST);
@@ -105,7 +106,7 @@ public class OtpService {
             log.warn("Invalid OTP attempt - Type: {}, Remaining attempts: {}", type, remaining);
 
             if (remaining <= 0) throw new AppException(ErrorCode.OTP_MAX_ATTEMPTS_EXCEEDED);
-            throw new AppException(ErrorCode.INVALID_OTP_CODE, "Invalid OTP. " + remaining + " attempts remaining.");
+            throw new AppException(ErrorCode.INVALID_OTP_CODE);
         }
 
         log.info("OTP validated successfully - Type: {}", type);

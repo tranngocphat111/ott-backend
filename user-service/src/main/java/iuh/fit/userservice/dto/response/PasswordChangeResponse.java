@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PasswordChangeResponse {
-    private boolean success;
+    private Boolean success;
     private String message;
     private int sessionsRevoked;
 }

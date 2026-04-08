@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class TwoFactorAuthStatus {
-    private boolean enabled;
+    private Boolean enabled;
     private LocalDateTime enabledAt;
     private LocalDateTime lastUsedAt;
     private int remainingBackupCodes;

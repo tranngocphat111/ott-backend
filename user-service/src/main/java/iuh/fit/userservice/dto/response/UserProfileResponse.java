@@ -22,11 +22,11 @@ public class UserProfileResponse {
     private String dateOfBirth;
     private Gender gender;
     private AccountType accountType;
-    private boolean isPhoneVerified;
-    private boolean isEmailVerified;
-    private boolean hasPassword;
-    private boolean hasGoogleLinked;
-    private boolean is2FAEnabled;
+    private Boolean isPhoneVerified;
+    private Boolean isEmailVerified;
+    private Boolean hasPassword;
+    private Boolean hasGoogleLinked;
+    private Boolean is2FAEnabled;
     private LocalDateTime createdAt;
     private LocalDateTime lastLoginAt;
     private LocalDateTime passwordChangedAt;

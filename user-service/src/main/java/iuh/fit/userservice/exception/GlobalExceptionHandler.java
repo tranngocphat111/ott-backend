@@ -19,35 +19,37 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AppException.class)
     public ResponseEntity<ApiResponse<Void>> handleAppException(AppException ex, HttpServletRequest req) {
         ErrorCode ec = ex.getErrorCode();
-        log.error("AppException: {} - {} at {}", ec.getCode(), ex.getMessage(), req.getRequestURI());
+
         return ResponseEntity.status(ec.getStatusCode())
                 .body(ApiResponse.<Void>builder()
                         .code(ec.getCode())
-                        .message(ex.getMessage() != null ? ex.getMessage() : ec.getMessage())
+                        .message(ec.getMessage())
                         .build());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Map<String, String>>> handleValidation(MethodArgumentNotValidException ex) {
+
         Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getAllErrors().forEach(e ->
-                errors.put(((FieldError) e).getField(), e.getDefaultMessage()));
-        log.error("Validation error: {}", errors);
+        ex.getBindingResult().getFieldErrors().forEach(e ->
+                errors.put(e.getField(), e.getDefaultMessage()) // KEY
+        );
+
         return ResponseEntity.badRequest()
                 .body(ApiResponse.<Map<String, String>>builder()
-                        .code(ErrorCode.VALIDATION_FAILED.getCode())
-                        .message("Validation failed")
+                        .code(1111)
+                        .message("VALIDATION_FAILED")
                         .result(errors)
                         .build());
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception ex, HttpServletRequest req) {
-        log.error("Unexpected error at {}: ", req.getRequestURI(), ex);
+
         return ResponseEntity.internalServerError()
                 .body(ApiResponse.<Void>builder()
-                        .code(ErrorCode.UNCATEGORIZED_EXCEPTION.getCode())
-                        .message("An unexpected error occurred")
+                        .code(9999)
+                        .message("UNCATEGORIZED_EXCEPTION")
                         .build());
     }
 }

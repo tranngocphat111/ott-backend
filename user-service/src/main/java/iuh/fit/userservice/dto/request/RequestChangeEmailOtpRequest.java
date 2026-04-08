@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RequestChangeEmailOtpRequest {
-    @NotBlank(message = "New email is required")
+    @NotBlank(message = "NEW_EMAIL_IS_REQUIRED")
     private String newEmail;
 
     private String ipAddress;

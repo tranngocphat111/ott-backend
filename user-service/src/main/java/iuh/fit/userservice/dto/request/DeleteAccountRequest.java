@@ -11,7 +11,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class DeleteAccountRequest {
-    @NotBlank(message = "OTP is required")
+
+    @NotBlank(message = "OTP_IS_REQUIRED")
     private String otp;
 
     private String password;

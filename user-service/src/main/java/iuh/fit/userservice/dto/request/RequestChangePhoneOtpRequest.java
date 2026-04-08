@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RequestChangePhoneOtpRequest {
-    @NotBlank(message = "New phone is required")
+    @NotBlank(message = "NEW_PHONE_IS_REQUIRED")
     private String newPhone;
 
     private String ipAddress;

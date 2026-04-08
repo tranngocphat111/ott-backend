@@ -1,7 +1,6 @@
 version: "3.8"
 
 services:
-  # ==================== INFRASTRUCTURE ====================
   redis:
     image: redis:7-alpine
     container_name: ott-redis
@@ -39,7 +38,6 @@ services:
       timeout: 10s
       retries: 5
 
-  # ==================== SERVICES ====================
   notification-service:
     build: ./notification-service
     container_name: ott-notification

@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class AccountDeletionResponse {
-    private boolean success;
+    private Boolean success;
     private String message;
     private LocalDateTime deletedAt;
 }

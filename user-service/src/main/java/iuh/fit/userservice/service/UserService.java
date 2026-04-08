@@ -2,6 +2,7 @@ package iuh.fit.userservice.service;
 
 import iuh.fit.userservice.dto.request.RegisterRequest;
 import iuh.fit.userservice.dto.request.RequestRegisterOtpRequest;
+import iuh.fit.userservice.dto.request.UpdateContactRequest;
 import iuh.fit.userservice.dto.response.OtpResponse;
 import iuh.fit.userservice.dto.response.UserResponse;
 import iuh.fit.userservice.entity.OtpCode;
@@ -12,13 +13,16 @@ import iuh.fit.userservice.exception.AppException;
 import iuh.fit.userservice.exception.ErrorCode;
 import iuh.fit.userservice.mapper.UserMapper;
 import iuh.fit.userservice.repository.UserRepository;
+import iuh.fit.userservice.utils.UserValidationUtil;
 import iuh.fit.userservice.utils.ValidationUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -38,6 +42,16 @@ public class UserService {
     NotificationPublisher notificationPublisher;
     ValidationUtils validationUtils;
     EntityManager entityManager;
+    private final UserValidationUtil userValidationUtil;
+    private final AuthServiceClient authServiceClient;
+
+    @NonFinal
+    @Value("${aws.s3.default-avatar}")
+    String defaultAvatarUrl;
+
+    @NonFinal
+    @Value("${aws.s3.default-cover-photo}")
+    String defaultCoverPhotoUrl;
 
     @Transactional
     public OtpResponse requestRegisterOtp(RequestRegisterOtpRequest request) {
@@ -90,19 +104,20 @@ public class UserService {
         if (userRepository.existsByEmailAndDeletedAtIsNull(request.getEmail()))
             throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
 
-        // Handle soft-deleted account trùng phone
         Optional<User> deletedByPhone = userRepository.findByPhone(request.getPhone());
         if (deletedByPhone.isPresent() && deletedByPhone.get().getDeletedAt() != null) {
             User deletedUser = deletedByPhone.get();
-            LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
-            if (deletedUser.getDeletedAt().isAfter(thirtyDaysAgo)) {
-                throw new AppException(ErrorCode.ACCOUNT_CAN_BE_RESTORED,
-                        "Your account was recently deleted and can still be restored.");
-            } else {
-                log.info("🗑️ Hard deleting old account to release phone: {}", deletedUser.getId());
-                userRepository.delete(deletedUser);
-                entityManager.flush();
-            }
+            log.info("Hard deleting soft-deleted user by phone to allow new registration: {}", deletedUser.getId());
+            userRepository.delete(deletedUser);
+            entityManager.flush();
+        }
+
+        Optional<User> deletedByEmail = userRepository.findByEmail(request.getEmail());
+        if (deletedByEmail.isPresent() && deletedByEmail.get().getDeletedAt() != null) {
+            User deletedUser = deletedByEmail.get();
+            log.info("Hard deleting soft-deleted user by email to allow new registration: {}", deletedUser.getId());
+            userRepository.delete(deletedUser);
+            entityManager.flush();
         }
 
         OtpCode otpCode = otpService.validateOtp(
@@ -117,14 +132,31 @@ public class UserService {
                 .isEmailVerified(true).emailVerifiedAt(now)
                 .isActive(true).isBlocked(false)
                 .isFirstLogin(true).welcomeEmailSent(false)
+                .avatarUrl(defaultAvatarUrl)
+                .coverUrl(defaultCoverPhotoUrl)
                 .build();
 
         user = userRepository.save(user);
         otpService.markOtpAsUsed(otpCode);
 
+        authServiceClient.syncUser(user);
+
         // Welcome email async
         notificationPublisher.sendWelcomeEmailAsync(user);
 
         return userMapper.toUserResponse(user);
+    }
+
+    public void updateContact(String userId, UpdateContactRequest request) {
+        User user = userValidationUtil.getUserById(userId);
+        if (request.getNewPhone() != null) {
+            user.setPhone(request.getNewPhone());
+            user.setPhoneChangedAt(LocalDateTime.now());
+        }
+        if (request.getNewEmail() != null) {
+            user.setEmail(request.getNewEmail());
+            user.setEmailChangedAt(LocalDateTime.now());
+        }
+        userRepository.save(user);
     }
 }

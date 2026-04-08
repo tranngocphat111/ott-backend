@@ -21,6 +21,7 @@ public class UserMapper {
                 .googleId(user.getGoogleId())
                 .fullName(user.getFullName())
                 .avatarUrl(user.getAvatarUrl())
+                .coverUrl(user.getCoverUrl())
                 .accountType(user.getAccountType())
                 .isPhoneVerified(user.getIsPhoneVerified() != null && user.getIsPhoneVerified())
                 .isEmailVerified(user.getIsEmailVerified() != null && user.getIsEmailVerified())

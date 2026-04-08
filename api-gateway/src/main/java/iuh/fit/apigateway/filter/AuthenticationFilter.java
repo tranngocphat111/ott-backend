@@ -55,6 +55,7 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
 
             "/riff/api/users/account/password/forgot/request",
             "/riff/api/users/account/password/forgot/verify",
+            "/riff/api/users/account/password/forgot/otp/verify",
 
 
             "/actuator/**",

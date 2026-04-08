@@ -10,7 +10,7 @@ public class WelcomeEmailEvent {
     private String toEmail;
     private String toName;
     private String phone;
-    private boolean hasPassword;
-    private boolean hasGoogleLinked;
+    private Boolean hasPassword;
+    private Boolean hasGoogleLinked;
     private String userId;
 }

@@ -44,8 +44,8 @@ public class NotificationConsumer {
                     event.getToEmail(),
                     event.getToName(),
                     event.getPhone(),
-                    event.isHasPassword(),
-                    event.isHasGoogleLinked(),
+                    event.getHasPassword(),
+                    event.getHasGoogleLinked(),
                     event.getUserId()
             );
         } catch (Exception e) {

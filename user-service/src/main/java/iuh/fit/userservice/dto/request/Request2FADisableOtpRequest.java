@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Request2FADisableOtpRequest {
-    @NotBlank(message = "Password is required")
+    @NotBlank(message = "PASSWORD_IS_REQUIRED")
     private String password;
 
     private String ipAddress;

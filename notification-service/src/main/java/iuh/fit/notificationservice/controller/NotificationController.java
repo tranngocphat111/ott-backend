@@ -49,7 +49,7 @@ public class NotificationController {
         emailService.sendOtpEmail(
                 request.getToEmail(),
                 request.getToName(),
-                otp,  // ← dùng otp đã generate
+                otp,
                 OtpType.valueOf(request.getOtpType()),
                 request.getIpAddress(),
                 request.getLocation(),
@@ -69,11 +69,12 @@ public class NotificationController {
 
         boolean valid = otpCacheService.validateOtp(request.getEmail(), request.getOtpType(), request.getCode());
 
-        if (valid) {
-            otpCacheService.deleteOtp(request.getEmail(), request.getOtpType());
+        if (!valid) {
+            return ResponseEntity.badRequest().body(Map.of("valid", false));
         }
 
-        return ResponseEntity.ok(Map.of("valid", valid));
+        otpCacheService.deleteOtp(request.getEmail(), request.getOtpType());
+        return ResponseEntity.ok(Map.of("valid", true));
     }
 
     @GetMapping("/health")
@@ -84,7 +85,7 @@ public class NotificationController {
     private void validateKey(String key) {
         if (!internalApiKey.equals(key)) {
             log.warn("Invalid internal API key attempt");
-            throw new AppException(ErrorCode.UNAUTHORIZED, "Invalid internal API key");
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
     }
 }

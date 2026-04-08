@@ -1,10 +1,12 @@
 package iuh.fit.userservice.controller;
 
+import iuh.fit.userservice.dto.request.UpdateContactRequest;
 import iuh.fit.userservice.dto.response.ApiResponse;
 import iuh.fit.userservice.dto.response.UserResponse;
 import iuh.fit.userservice.exception.AppException;
 import iuh.fit.userservice.exception.ErrorCode;
 import iuh.fit.userservice.service.InternalUserService;
+import iuh.fit.userservice.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,6 +20,7 @@ import java.util.Map;
 public class InternalUserController {
 
     private final InternalUserService internalUserService;
+    private final UserService userService;
 
     @Value("${internal.api.key}")
     private String internalApiKey;
@@ -66,9 +69,13 @@ public class InternalUserController {
     @PostMapping
     public ApiResponse<UserResponse> createUser(@RequestBody Map<String, Object> body, @RequestHeader("X-Internal-Key") String key) {
         validateKey(key);
+        String coverPhotoUrl = (String) body.get("coverPhotoUrl");
+        if (coverPhotoUrl == null) {
+            coverPhotoUrl = (String) body.get("coverUrl");
+        }
         return ApiResponse.<UserResponse>builder().result(internalUserService.createUser(
                 (String) body.get("phone"), (String) body.get("email"), (String) body.get("googleId"),
-                (String) body.get("fullName"), (String) body.get("avatarUrl"),
+                (String) body.get("fullName"), (String) body.get("avatarUrl"), coverPhotoUrl,
                 (String) body.getOrDefault("accountType", "USER")
         )).build();
     }
@@ -103,4 +110,27 @@ public class InternalUserController {
         );
         return ApiResponse.<Void>builder().message("Session created").build();
     }
+
+    @PostMapping("/{userId}/backup-code/validate")
+    public ApiResponse<Boolean> validateBackupCode(
+            @PathVariable String userId,
+            @RequestBody Map<String, String> body,
+            @RequestHeader("X-Internal-Key") String key) {
+        validateKey(key);
+        String code = body.get("code");
+        boolean valid = internalUserService.validateAndConsumeBackupCode(userId, code);
+        if (!valid) throw new AppException(ErrorCode.INVALID_BACKUP_CODE);
+        return ApiResponse.<Boolean>builder().result(true).build();
+    }
+
+    @PatchMapping("/{userId}/contact")
+    public ApiResponse<Void> updateContact(
+            @PathVariable String userId,
+            @RequestBody UpdateContactRequest request,
+            @RequestHeader("X-Internal-Key") String key) {
+        validateKey(key);
+        userService.updateContact(userId, request);
+        return ApiResponse.<Void>builder().message("Contact updated").build();
+    }
+
 }

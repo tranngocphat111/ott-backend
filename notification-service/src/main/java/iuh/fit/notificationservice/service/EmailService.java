@@ -96,7 +96,7 @@ public class EmailService {
             emailLog.setErrorMessage(e.getMessage());
             emailLog.setFailedAt(LocalDateTime.now());
             log.error("Failed to send OTP email to: {} | Type: {}", toEmail, otpType, e);
-            throw new AppException(ErrorCode.EMAIL_SEND_FAILED, "Failed to send OTP email");
+            throw new AppException(ErrorCode.EMAIL_SEND_FAILED);
         } finally {
             emailLogRepository.save(emailLog);
         }
@@ -147,7 +147,7 @@ public class EmailService {
             emailLog.setErrorMessage(e.getMessage());
             emailLog.setFailedAt(LocalDateTime.now());
             log.error("Failed to send welcome email to: {}", toEmail, e);
-            throw new AppException(ErrorCode.EMAIL_SEND_FAILED, "Failed to send welcome email");
+            throw new AppException(ErrorCode.EMAIL_SEND_FAILED);
         } finally {
             emailLogRepository.save(emailLog);
         }
@@ -195,7 +195,7 @@ public class EmailService {
             emailLog.setErrorMessage(e.getMessage());
             emailLog.setFailedAt(LocalDateTime.now());
             log.error("Failed to send alert email to: {} | Type: {}", toEmail, alertType, e);
-            throw new AppException(ErrorCode.EMAIL_SEND_FAILED, "Failed to send alert email");
+            throw new AppException(ErrorCode.EMAIL_SEND_FAILED);
         } finally {
             emailLogRepository.save(emailLog);
         }

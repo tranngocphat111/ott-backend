@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Enable2FAResponse {
-    private boolean enabled;
+    private Boolean enabled;
     private String[] backupCodes;
     private String message;
 }

@@ -113,4 +113,11 @@ public class AccountController {
         return ApiResponse.<AccountDeletionResponse>builder()
                 .message("Account deleted successfully").result(response).build();
     }
+
+    @PostMapping("/password/forgot/otp/verify")
+    public ApiResponse<Void> verifyForgotPasswordOtp(
+            @Valid @RequestBody VerifyForgotOtpRequest request) {
+        accountService.verifyForgotPasswordOtp(request);
+        return ApiResponse.<Void>builder().message("OTP verified").build();
+    }
 }

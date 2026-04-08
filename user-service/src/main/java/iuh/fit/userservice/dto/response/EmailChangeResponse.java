@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class EmailChangeResponse {
-    private boolean success;
+    private Boolean success;
     private String newEmail;
     private String message;
     private int sessionsRevoked;

@@ -1,4 +1,4 @@
-package iuh.fit.authservice.config;
+package iuh.fit.userservice.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -13,4 +13,5 @@ public class AwsS3Properties {
     private String region;
     private String bucket;
     private String defaultAvatar;
+    private String defaultCoverPhoto;
 }

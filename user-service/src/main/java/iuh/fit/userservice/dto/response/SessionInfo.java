@@ -22,7 +22,7 @@ public class SessionInfo {
     private LocalDateTime createdAt;
     private LocalDateTime lastActiveAt;
     private LocalDateTime expiresAt;
-    private boolean isActive;
-    private boolean isCurrent;
-    private boolean twoFactorVerified;
+    private Boolean isActive;
+    private Boolean isCurrent;
+    private Boolean twoFactorVerified;
 }

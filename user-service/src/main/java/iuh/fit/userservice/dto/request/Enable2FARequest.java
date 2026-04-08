@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class Enable2FARequest {
-    @NotBlank(message = "OTP is required")
+
+    @NotBlank(message = "OTP_IS_REQUIRED")
     private String otp;
 }
