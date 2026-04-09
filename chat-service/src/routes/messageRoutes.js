@@ -286,24 +286,22 @@ router.get(
         });
       }
 
-      const afterTimestamp = parseInt(after, 10);
+      const afterMsgId = String(after);
       const limitNum = parseInt(limit, 10);
 
-      if (isNaN(afterTimestamp) || isNaN(limitNum)) {
+      if (!afterMsgId || isNaN(limitNum)) {
         return res.status(400).json({
           success: false,
-          error: "Invalid timestamp or limit",
+          error: "Invalid after or limit",
         });
       }
 
-      logger.info(
-        `📤 GET /newer - loaded newer messages after ${new Date(afterTimestamp).toISOString()}`,
-      );
+      logger.info(`📤 GET /newer - loaded newer messages after msg_id: ${afterMsgId}`);
 
       // Fetch from MongoDB database (newer messages)
       const messages = await messageRepository.getNewerMessages(
         conversationId,
-        afterTimestamp,
+        afterMsgId,
         limitNum,
         userId,
       );

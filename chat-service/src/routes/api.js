@@ -17,6 +17,10 @@ router.put(
   "/conversations/:conversationId",
   ConversationController.updateConversation,
 );
+router.delete(
+  "/conversations/:conversationId/dissolve/:userId",
+  ConversationController.dissolveGroup,
+);
 
 router.get(
   "/participants/:userId",

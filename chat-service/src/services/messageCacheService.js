@@ -11,19 +11,38 @@ const logger = require('../utils/logger');
 
 class MessageCacheService {
   constructor() {
-    this.client = redis.createClient({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: process.env.REDIS_PORT || 6379,
-      password: process.env.REDIS_PASSWORD,
-      db: 0,
-    });
+    const redisUrl = process.env.REDIS_URL || process.env.REDIS_URI;
+    const redisConfig = redisUrl
+      ? { url: redisUrl }
+      : {
+          socket: {
+            host: process.env.REDIS_HOST || 'localhost',
+            port: Number(process.env.REDIS_PORT || 6379),
+          },
+          username: process.env.REDIS_USERNAME || undefined,
+          password: process.env.REDIS_PASSWORD || undefined,
+          database: Number(process.env.REDIS_DB || 0),
+        };
+
+    this.client = redis.createClient(redisConfig);
+    this.redisAvailable = true;
 
     this.client.on('error', (err) => {
       logger.error('Redis Client Error:', err);
+
+      const message = String(err?.message || '');
+      if (/NOAUTH|WRONGPASS|AUTH/i.test(message)) {
+        this.redisAvailable = false;
+      }
     });
 
     this.client.connect().catch((err) => {
       logger.error('Failed to connect to Redis:', err);
+
+      const message = String(err?.message || '');
+      if (/NOAUTH|WRONGPASS|AUTH/i.test(message)) {
+        this.redisAvailable = false;
+      }
     });
 
     this.CACHE_KEY_PREFIX = 'messages:';
@@ -37,6 +56,10 @@ class MessageCacheService {
    * @returns {Promise<Array>} messages array
    */
   async getCachedMessages(conversationId) {
+    if (!this.redisAvailable) {
+      return [];
+    }
+
     try {
       const key = `${this.CACHE_KEY_PREFIX}${conversationId}`;
 
@@ -68,6 +91,10 @@ class MessageCacheService {
    * @returns {Promise<boolean>}
    */
   async cacheExists(conversationId) {
+    if (!this.redisAvailable) {
+      return false;
+    }
+
     try {
       const key = `${this.CACHE_KEY_PREFIX}${conversationId}`;
       const count = await this.client.zCard(key);
@@ -89,6 +116,10 @@ class MessageCacheService {
    * @returns {Promise<boolean>}
    */
   async addMessage(conversationId, message) {
+    if (!this.redisAvailable) {
+      return false;
+    }
+
     try {
       const key = `${this.CACHE_KEY_PREFIX}${conversationId}`;
 
@@ -140,6 +171,10 @@ class MessageCacheService {
    * @returns {Promise<boolean>}
    */
   async addMultipleMessages(conversationId, messages) {
+    if (!this.redisAvailable) {
+      return false;
+    }
+
     try {
       if (!messages || messages.length === 0) {
         return true;
@@ -203,6 +238,10 @@ class MessageCacheService {
    * @returns {Promise<boolean>}
    */
   async updateMessage(conversationId, messageId, updatedMessage) {
+    if (!this.redisAvailable) {
+      return false;
+    }
+
     try {
       // 1. Remove old message
       const removed = await this.removeMessage(conversationId, messageId);
@@ -230,6 +269,10 @@ class MessageCacheService {
    * @returns {Promise<boolean>}
    */
   async removeMessage(conversationId, messageId) {
+    if (!this.redisAvailable) {
+      return false;
+    }
+
     try {
       const key = `${this.CACHE_KEY_PREFIX}${conversationId}`;
 
@@ -259,6 +302,10 @@ class MessageCacheService {
    * @returns {Promise<boolean>}
    */
   async clearCache(conversationId) {
+    if (!this.redisAvailable) {
+      return false;
+    }
+
     try {
       const key = `${this.CACHE_KEY_PREFIX}${conversationId}`;
       await this.client.del(key);
@@ -276,6 +323,18 @@ class MessageCacheService {
    * @returns {Promise<Object>}
    */
   async getCacheStats(conversationId) {
+    if (!this.redisAvailable) {
+      return {
+        conversationId,
+        messageCount: 0,
+        maxMessages: this.MAX_MESSAGES,
+        ttlSeconds: null,
+        isCached: false,
+        isEmpty: true,
+        redisAvailable: false,
+      };
+    }
+
     try {
       const key = `${this.CACHE_KEY_PREFIX}${conversationId}`;
       const count = await this.client.zCard(key);
@@ -288,6 +347,7 @@ class MessageCacheService {
         ttlSeconds: ttl === -1 ? null : ttl,
         isCached: count > 0,
         isEmpty: count === 0,
+        redisAvailable: true,
       };
     } catch (error) {
       logger.error(`Error getting cache stats:`, error);

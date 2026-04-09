@@ -3,138 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome Email</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f4f4f4;
-        }
-        .container {
-            background-color: #ffffff;
-            border-radius: 10px;
-            padding: 40px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .logo {
-            font-size: 32px;
-            font-weight: bold;
-            color: #4CAF50;
-            margin-bottom: 10px;
-        }
-        h1 {
-            color: #2c3e50;
-            font-size: 24px;
-            margin-bottom: 20px;
-        }
-        .welcome-message {
-            font-size: 16px;
-            margin-bottom: 20px;
-            color: #555;
-        }
-        .features {
-            background-color: #f8f9fa;
-            border-left: 4px solid #4CAF50;
-            padding: 20px;
-            margin: 20px 0;
-        }
-        .features h2 {
-            color: #4CAF50;
-            font-size: 18px;
-            margin-bottom: 15px;
-        }
-        .features ul {
-            list-style: none;
-            padding-left: 0;
-        }
-        .features li {
-            padding: 8px 0;
-            padding-left: 25px;
-            position: relative;
-        }
-        .features li:before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            color: #4CAF50;
-            font-weight: bold;
-        }
-        .cta-button {
-            display: inline-block;
-            padding: 12px 30px;
-            background-color: #4CAF50;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            margin: 20px 0;
-            font-weight: bold;
-        }
-        .footer {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #e0e0e0;
-            text-align: center;
-            font-size: 12px;
-            color: #888;
-        }
-    </style>
+    <title th:text="'Welcome to ' + ${appName}">Welcome to Riff</title>
 </head>
-<body>
-<div class="container">
-    <div class="header">
-        <div class="logo" th:text="${appName}">OTT Platform</div>
-    </div>
+<body style="margin:0;padding:0;background:#f6efe8;font-family:Arial,Helvetica,sans-serif;color:#5c4330;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f6efe8;padding:32px 16px;">
+    <tr>
+        <td align="center">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;background:#fffaf6;border:1px solid #ead9cc;border-radius:24px;overflow:hidden;box-shadow:0 18px 50px rgba(133,96,65,0.12);">
+                <tr>
+                    <td style="background:linear-gradient(135deg,#b97a4f 0%,#e2a46a 100%);padding:30px 32px;text-align:center;">
+                        <img th:src="'cid:' + ${logoCid}" alt="Riff" width="64" height="64" style="display:block;margin:0 auto 14px;border-radius:20px;" />
+                        <div style="font-size:28px;line-height:1.1;color:#ffffff;font-weight:800;" th:text="${appName}">Riff</div>
+                        <div style="margin-top:8px;font-size:13px;letter-spacing:1.2px;text-transform:uppercase;color:#fff3e8;font-weight:700;">Your new home for conversations</div>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:34px 32px 22px;">
+                        <h1 style="margin:0 0 14px;font-size:30px;line-height:1.25;color:#2f2218;">Welcome, <span th:text="${fullName}">User</span>!</h1>
+                        <p style="margin:0 0 18px;font-size:16px;line-height:1.8;color:#6f5136;">
+                            Your account has been created successfully. You can now start chatting, manage your profile, and keep your account secured inside <strong th:text="${appName}">Riff</strong>.
+                        </p>
 
-    <h1>Welcome to <span th:text="${appName}">OTT Platform</span>!</h1>
+                        <div style="border:1px solid #f0ddcf;background:#fff4eb;border-radius:20px;padding:20px 22px;">
+                            <div style="font-size:14px;font-weight:800;color:#b97a4f;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">What you can do next</div>
+                            <ul style="margin:0;padding-left:20px;color:#6f5136;line-height:1.9;font-size:14px;">
+                                <li>Complete your profile and add a friendly avatar.</li>
+                                <li>Connect with friends and continue private conversations.</li>
+                                <li>Enable extra security with two-factor authentication.</li>
+                                <li>Review account and device sessions anytime.</li>
+                            </ul>
+                        </div>
 
-    <p class="welcome-message">
-        Hi <strong th:text="${fullName}">User</strong>,
-    </p>
-
-    <p class="welcome-message">
-        Thank you for joining us! We're excited to have you on board.
-        Your account has been successfully created and you're ready to explore
-        all the amazing features we have to offer.
-    </p>
-
-    <div class="features">
-        <h2>What you can do now:</h2>
-        <ul>
-            <li>Stream unlimited movies and TV shows</li>
-            <li>Create personalized watchlists</li>
-            <li>Download content for offline viewing</li>
-            <li>Enable two-factor authentication for extra security</li>
-            <li>Manage your account settings anytime</li>
-        </ul>
-    </div>
-
-    <p style="text-align: center;">
-        <a href="#" class="cta-button">Start Watching Now</a>
-    </p>
-
-    <p class="welcome-message">
-        If you have any questions or need assistance, our support team is here to help.
-        Feel free to reach out to us at
-        <a th:href="'mailto:' + ${supportEmail}" th:text="${supportEmail}">support@ottplatform.com</a>
-    </p>
-
-    <p class="welcome-message">
-        Happy streaming!<br>
-        The <span th:text="${appName}">OTT Platform</span> Team
-    </p>
-
-    <div class="footer">
-        <p>&copy; <span th:text="${year}">2024</span> <span th:text="${appName}">OTT Platform</span>. All rights reserved.</p>
-        <p>This is an automated message, please do not reply to this email.</p>
-    </div>
-</div>
+                        <div style="margin-top:18px;padding:18px 20px;border-radius:18px;background:#fffaf6;border:1px solid #ead9cc;">
+                            <p style="margin:0;font-size:14px;line-height:1.7;color:#7b5a40;">
+                                Need help? Contact our support team at
+                                <a th:href="'mailto:' + ${supportEmail}" th:text="${supportEmail}" style="color:#b97a4f;text-decoration:none;font-weight:700;">support</a>.
+                            </p>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:0 32px 30px;">
+                        <div style="height:1px;background:#ead9cc;margin:6px 0 18px;"></div>
+                        <p style="margin:0;font-size:14px;line-height:1.7;color:#7b5a40;">
+                            Happy chatting,<br>
+                            <strong th:text="${appName}">Riff</strong>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:18px 32px 28px;background:#fff6ef;text-align:center;border-top:1px solid #ead9cc;">
+                        <p style="margin:0 0 8px;font-size:12px;line-height:1.6;color:#a67d57;">This is an automated message. Please do not reply.</p>
+                        <p style="margin:0;font-size:12px;line-height:1.6;color:#a67d57;">
+                            <a th:href="${websiteUrl}" th:text="${websiteUrl}" style="color:#b97a4f;text-decoration:none;font-weight:700;">Website</a>
+                            <span style="padding:0 8px;color:#d1b49f;">•</span>
+                            <a th:href="'mailto:' + ${supportEmail}" th:text="${supportEmail}" style="color:#b97a4f;text-decoration:none;font-weight:700;">Support</a>
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
 </body>
 </html>

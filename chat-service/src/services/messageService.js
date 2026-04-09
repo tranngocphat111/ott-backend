@@ -704,12 +704,12 @@ exports.getFileMessages = async (conversationId, limit = 20, skip = 0) => {
 
 // Extract and get links from messages
 exports.getLinkMessages = async (conversationId, limit = 20, skip = 0) => {
-  // URL regex pattern
-  const urlPattern = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
+  const urlPatternGlobal = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
+  const urlPatternTest = /https?:\/\/[^\s<>"{}|\\^`[\]]+/i;
 
   const messages = await Message.find({
     conversation_id: conversationId,
-    type: "text",
+    type: { $in: ["text", "link"] },
     is_deleted: false,
     is_revoked: false,
   }).sort({ createdAt: -1 });
@@ -719,7 +719,7 @@ exports.getLinkMessages = async (conversationId, limit = 20, skip = 0) => {
     const content = Array.isArray(msg.content)
       ? msg.content.join(" ")
       : msg.content;
-    return urlPattern.test(content);
+    return urlPatternTest.test(String(content || ""));
   });
 
   // Extract links from messages
@@ -727,7 +727,7 @@ exports.getLinkMessages = async (conversationId, limit = 20, skip = 0) => {
     const content = Array.isArray(msg.content)
       ? msg.content.join(" ")
       : msg.content;
-    const links = content.match(urlPattern) || [];
+    const links = String(content || "").match(urlPatternGlobal) || [];
 
     return {
       _id: msg._id,

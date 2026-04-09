@@ -41,4 +41,14 @@ public class FallbackController {
                         .message("NOTIFICATION_SERVICE_UNAVAILABLE")
                         .build());
     }
+
+    @RequestMapping("/media")
+    public ResponseEntity<ApiResponse<Void>> mediaFallback() {
+        log.warn("Circuit breaker triggered for media-service");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.<Void>builder()
+                        .code(5003)
+                        .message("MEDIA_SERVICE_UNAVAILABLE")
+                        .build());
+    }
 }

@@ -1,132 +1,69 @@
-
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Welcome to [[${appName}]]</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f4f4f4;
-        }
-        .container {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .header {
-            text-align: center;
-            padding-bottom: 30px;
-            border-bottom: 3px solid #4F46E5;
-        }
-        .logo {
-            font-size: 36px;
-            font-weight: bold;
-            color: #4F46E5;
-            margin-bottom: 10px;
-        }
-        .welcome-title {
-            font-size: 28px;
-            color: #1F2937;
-            margin: 30px 0 20px 0;
-            text-align: center;
-        }
-        .content {
-            margin: 30px 0;
-            color: #4B5563;
-        }
-        .button {
-            display: inline-block;
-            padding: 14px 30px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            margin: 20px 0;
-            font-weight: 600;
-            text-align: center;
-        }
-        .features {
-            background: #F9FAFB;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 20px 0;
-        }
-        .feature-item {
-            margin: 15px 0;
-            padding-left: 30px;
-            position: relative;
-        }
-        .feature-item:before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            color: #10B981;
-            font-weight: bold;
-            font-size: 20px;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #E5E7EB;
-            color: #6B7280;
-            font-size: 14px;
-        }
-    </style>
+    <title th:text="'Welcome to ' + ${appName}">Welcome to Riff</title>
 </head>
-<body>
-<div class="container">
-    <div class="header">
-        <div class="logo">[[${appName}]]</div>
-        <p style="color: #6B7280; margin: 0;">Your Social Media Platform</p>
-    </div>
+<body style="margin:0;padding:0;background:#f6efe8;font-family:Arial,Helvetica,sans-serif;color:#5c4330;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f6efe8;padding:32px 16px;">
+    <tr>
+        <td align="center">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;background:#fffaf6;border:1px solid #ead9cc;border-radius:24px;overflow:hidden;box-shadow:0 18px 50px rgba(133,96,65,0.12);">
+                <tr>
+                    <td style="background:linear-gradient(135deg,#b97a4f 0%,#e2a46a 100%);padding:30px 32px;text-align:center;">
+                        <img th:src="'cid:' + ${logoCid}" alt="Riff" width="64" height="64" style="display:block;margin:0 auto 14px;border-radius:20px;" />
+                        <div style="font-size:28px;line-height:1.1;color:#ffffff;font-weight:800;" th:text="${appName}">Riff</div>
+                        <div style="margin-top:8px;font-size:13px;letter-spacing:1.2px;text-transform:uppercase;color:#fff3e8;font-weight:700;">Welcome to the app</div>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:34px 32px 22px;">
+                        <h1 style="margin:0 0 14px;font-size:30px;line-height:1.25;color:#2f2218;">Welcome, <span th:text="${fullName}">User</span>!</h1>
+                        <p style="margin:0 0 18px;font-size:16px;line-height:1.8;color:#6f5136;">
+                            Thanks for joining <strong th:text="${appName}">Riff</strong>. Your account is ready, and you can start exploring messages, profile settings, and security options right away.
+                        </p>
 
-    <h1 class="welcome-title">🎉 Welcome, [[${fullName}]]!</h1>
+                        <div style="border:1px solid #f0ddcf;background:#fff4eb;border-radius:20px;padding:20px 22px;">
+                            <div style="font-size:14px;font-weight:800;color:#b97a4f;text-transform:uppercase;letter-spacing:1px;margin-bottom:14px;">What you can do now</div>
+                            <ul style="margin:0;padding-left:20px;color:#6f5136;line-height:1.9;font-size:14px;">
+                                <li>Complete your profile and add a cover image.</li>
+                                <li>Keep conversations in one place with a clean inbox.</li>
+                                <li>Turn on two-factor authentication for extra security.</li>
+                                <li>Review your devices and sign-in history anytime.</li>
+                            </ul>
+                        </div>
 
-    <div class="content">
-        <p>We're thrilled to have you join our community! Your account has been successfully created.</p>
-
-        <div style="text-align: center; margin: 30px 0;">
-            <a th:href="${websiteUrl}" class="button">Get Started Now</a>
-        </div>
-
-        <div class="features">
-            <h3 style="margin-top: 0; color: #1F2937;">What you can do:</h3>
-            <div class="feature-item">Connect with friends and family</div>
-            <div class="feature-item">Share your moments and stories</div>
-            <div class="feature-item">Discover interesting content</div>
-            <div class="feature-item">Join communities with similar interests</div>
-            <div class="feature-item">Stay updated with real-time notifications</div>
-        </div>
-
-        <h3 style="color: #1F2937;">Security Tips:</h3>
-        <ul style="color: #4B5563;">
-            <li>Keep your password secure and unique</li>
-            <li>Enable two-factor authentication for extra security</li>
-            <li>Never share your login credentials with anyone</li>
-            <li>Review your privacy settings regularly</li>
-        </ul>
-    </div>
-
-    <div class="footer">
-        <p>Need help? Contact us at <a th:href="'mailto:' + ${supportEmail}" style="color: #4F46E5;">[[${supportEmail}]]</a></p>
-        <p style="margin-top: 20px;">
-            <a th:href="${websiteUrl}" style="color: #4F46E5; text-decoration: none; margin: 0 10px;">Visit Website</a> |
-            <a th:href="${websiteUrl + '/help'}" style="color: #4F46E5; text-decoration: none; margin: 0 10px;">Help Center</a> |
-            <a th:href="${websiteUrl + '/privacy'}" style="color: #4F46E5; text-decoration: none; margin: 0 10px;">Privacy Policy</a>
-        </p>
-        <p style="margin-top: 20px; color: #9CA3AF;">
-            © [[${currentYear}]] [[${appName}]]. All rights reserved.
-        </p>
-    </div>
-</div>
+                        <div style="margin-top:18px;padding:18px 20px;border-radius:18px;background:#fffaf6;border:1px solid #ead9cc;">
+                            <p style="margin:0;font-size:14px;line-height:1.7;color:#7b5a40;">
+                                Need help? Contact us at
+                                <a th:href="'mailto:' + ${supportEmail}" th:text="${supportEmail}" style="color:#b97a4f;text-decoration:none;font-weight:700;">support</a>.
+                            </p>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:0 32px 30px;">
+                        <div style="height:1px;background:#ead9cc;margin:6px 0 18px;"></div>
+                        <p style="margin:0;font-size:14px;line-height:1.7;color:#7b5a40;">
+                            Best regards,<br>
+                            <strong th:text="${appName}">Riff</strong>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:18px 32px 28px;background:#fff6ef;text-align:center;border-top:1px solid #ead9cc;">
+                        <p style="margin:0 0 8px;font-size:12px;line-height:1.6;color:#a67d57;">This is an automated message. Please do not reply.</p>
+                        <p style="margin:0;font-size:12px;line-height:1.6;color:#a67d57;">
+                            <a th:href="${websiteUrl}" th:text="${websiteUrl}" style="color:#b97a4f;text-decoration:none;font-weight:700;">Website</a>
+                            <span style="padding:0 8px;color:#d1b49f;">•</span>
+                            <a th:href="'mailto:' + ${supportEmail}" th:text="${supportEmail}" style="color:#b97a4f;text-decoration:none;font-weight:700;">Support</a>
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
 </body>
 </html>

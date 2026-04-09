@@ -226,15 +226,21 @@ class MessageRepository {
       // Step 3: Reverse to get oldest → newest order
       const orderedMessages = messages.reverse();
 
-      // Step 4: Cache the results
-      await messageCacheService.addMultipleMessages(
+      // Always hydrate reply preview so payload is consistent between cache-hit and cache-miss paths.
+      const hydratedMessages = await this.hydrateReplyPreviews(
         conversationId,
         orderedMessages,
       );
 
+      // Step 4: Cache the results
+      await messageCacheService.addMultipleMessages(
+        conversationId,
+        hydratedMessages,
+      );
+
       logger.info(`✓ Cached ${orderedMessages.length} messages from MongoDB`);
 
-      return orderedMessages;
+      return hydratedMessages;
     } catch (error) {
       logger.error("Error getting messages:", error);
       throw error;
@@ -371,14 +377,19 @@ class MessageRepository {
       // Reverse to get oldest → newest
       const orderedMessages = result.reverse();
 
+      const hydratedMessages = await this.hydrateReplyPreviews(
+        conversationId,
+        orderedMessages,
+      );
+
       logger.info(
         `✓ Loaded ${orderedMessages.length} older messages from DB (hasMore: ${hasMore})`,
       );
 
       // Store hasMore for response
-      orderedMessages._hasMore = hasMore;
+      hydratedMessages._hasMore = hasMore;
 
-      return orderedMessages;
+      return hydratedMessages;
     } catch (error) {
       logger.error("Error getting older messages:", error);
       throw error;
@@ -421,7 +432,7 @@ class MessageRepository {
 
       logger.info(`✓ Loaded ${messages.length} newer messages from DB`);
 
-      return messages;
+      return await this.hydrateReplyPreviews(conversationId, messages);
     } catch (error) {
       logger.error("Error getting newer messages:", error);
       throw error;

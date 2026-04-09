@@ -3,159 +3,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OTP Verification</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f4f4f4;
-        }
-        .container {
-            background-color: #ffffff;
-            border-radius: 10px;
-            padding: 40px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .logo {
-            font-size: 28px;
-            font-weight: bold;
-            color: #4CAF50;
-        }
-        h1 {
-            color: #2c3e50;
-            font-size: 22px;
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        .otp-box {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 10px;
-            padding: 30px;
-            text-align: center;
-            margin: 30px 0;
-        }
-        .otp-code {
-            font-size: 36px;
-            font-weight: bold;
-            color: #ffffff;
-            letter-spacing: 8px;
-            font-family: 'Courier New', monospace;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-        }
-        .otp-label {
-            color: #ffffff;
-            font-size: 14px;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-        .warning-box {
-            background-color: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 5px;
-        }
-        .warning-box p {
-            margin: 5px 0;
-            color: #856404;
-        }
-        .info-table {
-            width: 100%;
-            margin: 20px 0;
-            border-collapse: collapse;
-        }
-        .info-table td {
-            padding: 10px;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        .info-table td:first-child {
-            font-weight: bold;
-            color: #666;
-            width: 40%;
-        }
-        .footer {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #e0e0e0;
-            text-align: center;
-            font-size: 12px;
-            color: #888;
-        }
-        .security-note {
-            background-color: #e7f3ff;
-            border-left: 4px solid #2196F3;
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 5px;
-        }
-    </style>
+    <title th:text="${appName} + ' verification code'">Riff verification code</title>
 </head>
-<body>
-<div class="container">
-    <div class="header">
-        <div class="logo" th:text="${appName}">OTT Platform</div>
-    </div>
+<body style="margin:0;padding:0;background:#f6efe8;font-family:Arial,Helvetica,sans-serif;color:#5c4330;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f6efe8;padding:32px 16px;">
+    <tr>
+        <td align="center">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;background:#fffaf6;border:1px solid #ead9cc;border-radius:24px;overflow:hidden;box-shadow:0 18px 50px rgba(133,96,65,0.12);">
+                <tr>
+                    <td style="background:linear-gradient(135deg,#b97a4f 0%,#e2a46a 100%);padding:28px 32px;text-align:center;">
+                        <table align="center" cellpadding="0" cellspacing="0" border="0">
+                            <tr>
+                                <td style="padding-right:12px;">
+                                    <img th:src="'cid:' + ${logoCid}" alt="Riff" width="52" height="52" style="display:block;border-radius:18px;" />
+                                </td>
+                                <td style="text-align:left;">
+                                    <div style="font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:#fff3e8;font-weight:700;">Security check</div>
+                                    <div style="font-size:28px;line-height:1.1;color:#ffffff;font-weight:800;" th:text="${appName}">Riff</div>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:34px 32px 18px;">
+                        <div style="font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:#b97a4f;font-weight:700;margin-bottom:10px;" th:text="${otpType}">Login verification</div>
+                        <h1 style="margin:0 0 14px;font-size:28px;line-height:1.25;color:#2f2218;" th:text="${otpType} + ' code'">Login verification code</h1>
+                        <p style="margin:0 0 20px;font-size:16px;line-height:1.8;color:#6f5136;">
+                            Hi <strong th:text="${fullName}">User</strong>, use the code below to complete your request securely.
+                        </p>
 
-    <h1 th:text="${otpType} + ' - Verification Code'">Verification Code</h1>
+                        <div style="background:linear-gradient(135deg,#8c5f42 0%,#d48b58 100%);border-radius:22px;padding:28px 18px;text-align:center;">
+                            <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#ffe9db;font-weight:700;">Your verification code</div>
+                            <div style="margin-top:8px;font-size:42px;line-height:1.1;font-weight:800;letter-spacing:10px;color:#ffffff;font-family:'Courier New',monospace;" th:text="${otpCode}">123456</div>
+                            <div style="margin-top:14px;font-size:13px;color:#fff0e4;">Expires in <strong th:text="${expiryMinutes}">5</strong> minutes</div>
+                        </div>
 
-    <p>Hi <strong th:text="${fullName}">User</strong>,</p>
+                        <div style="margin-top:18px;padding:18px 20px;border-radius:18px;background:#fff3ea;border:1px solid #f0ddcf;">
+                            <p style="margin:0 0 8px;font-size:14px;line-height:1.7;color:#7b5a40;">
+                                <strong>Important:</strong> never share this code with anyone.
+                            </p>
+                            <p style="margin:0;font-size:14px;line-height:1.7;color:#7b5a40;">
+                                If you did not request this, you can safely ignore this message or contact
+                                <a th:href="'mailto:' + ${supportEmail}" th:text="${supportEmail}" style="color:#b97a4f;text-decoration:none;font-weight:700;">support</a>.
+                            </p>
+                        </div>
 
-    <p>We received a request for <span th:text="${otpType}">verification</span>.
-        Please use the following code to complete the process:</p>
-
-    <div class="otp-box">
-        <div class="otp-label">Your Verification Code</div>
-        <div class="otp-code" th:text="${otpCode}">123456</div>
-    </div>
-
-    <div class="warning-box">
-        <p><strong>⚠️ Important:</strong></p>
-        <p>• This code will expire in <strong th:text="${expiryMinutes}">5</strong> minutes</p>
-        <p>• Do not share this code with anyone</p>
-        <p>• Our team will never ask you for this code</p>
-    </div>
-
-    <div class="security-note">
-        <h3 style="margin-top: 0; color: #2196F3;">🔒 Security Information</h3>
-        <table class="info-table">
-            <tr>
-                <td>Request Time:</td>
-                <td th:text="${dateTime}">01/01/2024 12:00:00</td>
-            </tr>
-            <tr>
-                <td>IP Address:</td>
-                <td th:text="${ipAddress}">192.168.1.1</td>
-            </tr>
-            <tr>
-                <td>Location:</td>
-                <td th:text="${location}">Unknown</td>
-            </tr>
-        </table>
-    </div>
-
-    <p style="margin-top: 30px;">
-        If you didn't request this code, please ignore this email or contact our support team immediately at
-        <a th:href="'mailto:' + ${supportEmail}" th:text="${supportEmail}">support@ottplatform.com</a>
-    </p>
-
-    <p>
-        Best regards,<br>
-        The <span th:text="${appName}">OTT Platform</span> Team
-    </p>
-
-    <div class="footer">
-        <p>This is an automated security message, please do not reply to this email.</p>
-        <p>&copy; <span th:text="${year}">2024</span> <span th:text="${appName}">OTT Platform</span>. All rights reserved.</p>
-    </div>
-</div>
+                        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:18px;border-collapse:separate;border-spacing:0 10px;color:#6f5136;font-size:14px;line-height:1.6;">
+                            <tr th:if="${timestamp != null}">
+                                <td style="width:150px;font-weight:700;color:#9a7454;vertical-align:top;">Request time</td>
+                                <td th:text="${timestamp}">Jan 01, 2024 12:00:00</td>
+                            </tr>
+                            <tr th:if="${ipAddress != null}">
+                                <td style="font-weight:700;color:#9a7454;vertical-align:top;">IP address</td>
+                                <td th:text="${ipAddress}">192.168.1.1</td>
+                            </tr>
+                            <tr th:if="${location != null}">
+                                <td style="font-weight:700;color:#9a7454;vertical-align:top;">Location</td>
+                                <td th:text="${location}">Unknown</td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:0 32px 30px;">
+                        <div style="height:1px;background:#ead9cc;margin:6px 0 18px;"></div>
+                        <p style="margin:0;font-size:14px;line-height:1.7;color:#7b5a40;">
+                            Best regards,<br>
+                            <strong th:text="${appName}">Riff</strong>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:18px 32px 28px;background:#fff6ef;text-align:center;border-top:1px solid #ead9cc;">
+                        <p style="margin:0 0 8px;font-size:12px;line-height:1.6;color:#a67d57;">This is an automated security message. Please do not reply.</p>
+                        <p style="margin:0;font-size:12px;line-height:1.6;color:#a67d57;">
+                            <a th:href="${websiteUrl}" th:text="${websiteUrl}" style="color:#b97a4f;text-decoration:none;font-weight:700;">Website</a>
+                            <span style="padding:0 8px;color:#d1b49f;">•</span>
+                            <a th:href="'mailto:' + ${supportEmail}" th:text="${supportEmail}" style="color:#b97a4f;text-decoration:none;font-weight:700;">Support</a>
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
 </body>
 </html>

@@ -13,6 +13,7 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -75,6 +76,7 @@ public class EmailService {
             context.setVariable("websiteUrl", websiteUrl);
             context.setVariable("supportEmail", supportEmail);
             context.setVariable("otpType", getOtpTypeName(otpType));
+            context.setVariable("logoCid", "riffLogo");
             context.setVariable("timestamp", LocalDateTime.now()
                     .format(DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm:ss")));
 
@@ -134,6 +136,7 @@ public class EmailService {
             context.setVariable("supportEmail", supportEmail);
             context.setVariable("hasPassword", hasPassword);
             context.setVariable("hasGoogleLinked", hasGoogleLinked);
+            context.setVariable("logoCid", "riffLogo");
 
             String htmlContent = templateEngine.process("email/welcome-email", context);
             sendHtmlEmail(toEmail, subject, htmlContent);
@@ -180,6 +183,7 @@ public class EmailService {
             context.setVariable("deviceInfo", deviceInfo);
             context.setVariable("websiteUrl", websiteUrl);
             context.setVariable("supportEmail", supportEmail);
+            context.setVariable("logoCid", "riffLogo");
             context.setVariable("timestamp", LocalDateTime.now()
                     .format(DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm:ss")));
 
@@ -211,6 +215,7 @@ public class EmailService {
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(htmlContent, true);
+            helper.addInline("riffLogo", new ClassPathResource("static/email/logo.jpg"), "image/jpeg");
 
             mailSender.send(message);
             log.debug("Email sent via SMTP successfully to: {}", to);
