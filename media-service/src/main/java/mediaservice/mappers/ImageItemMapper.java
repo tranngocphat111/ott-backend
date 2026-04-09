@@ -15,6 +15,7 @@ public abstract class ImageItemMapper {
     @Autowired
     protected MediaUrlBuilder mediaUrlBuilder;
 
+    @Mapping(target = "id", ignore = true)
     public abstract ImageItem toEntity(ImageItemRequest request);
 
     public abstract ImageItemResponse toResponse(ImageItem imageItem);

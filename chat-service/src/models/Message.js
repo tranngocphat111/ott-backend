@@ -23,7 +23,7 @@ const MessageSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["text", "image", "video", "file", "system_add"],
+      enum: ["text", "link", "image", "video", "file", "audio", "system_add"],
       default: "text",
     },
 
@@ -41,6 +41,12 @@ const MessageSchema = new mongoose.Schema(
 
     is_deleted: { type: Boolean, default: false },
     is_revoked: { type: Boolean, default: false },
+    deleted_for: [{ type: String, ref: "User" }],
+
+    // Pinned message fields
+    is_pinned: { type: Boolean, default: false },
+    pinned_at: { type: Date, default: null },
+    pinned_by: { type: String, ref: "User", default: null },
   },
   {
     timestamps: true,
@@ -48,5 +54,7 @@ const MessageSchema = new mongoose.Schema(
 );
 
 MessageSchema.index({ conversation_id: 1, msg_id: -1 });
+MessageSchema.index({ conversation_id: 1, is_pinned: 1 });
+MessageSchema.index({ conversation_id: 1, type: 1 });
 
 module.exports = mongoose.model("Message", MessageSchema);

@@ -15,6 +15,7 @@ public abstract class VideoItemMapper {
     @Autowired
     protected MediaUrlBuilder mediaUrlBuilder;
 
+    @Mapping(target = "id", ignore = true)
     public abstract VideoItem toEntity(VideoItemRequest request);
 
     public abstract VideoItemResponse toResponse(VideoItem videoItem);

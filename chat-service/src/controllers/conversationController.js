@@ -2,6 +2,7 @@ const ConversationService = require("../services/conversationService");
 const ParticipantService = require("../services/participantService");
 const MessageService = require("../services/messageService");
 const UserService = require("../services/userService");
+const Conversation = require("../models/Conversation");
 
 exports.createConversation = async (req, res) => {
   try {
@@ -38,7 +39,7 @@ exports.createConversation = async (req, res) => {
             role: "user",
           });
 
-          req.io.to(conversation._id).emit("them_nguoi_moi", member);
+          req.io.to(conversation._id.toString()).emit("them_nguoi_moi", member);
 
           console.log(
             `${userId} da duoc them vao phong ${conversation._id} o database`,
@@ -65,7 +66,7 @@ exports.createConversation = async (req, res) => {
         conversationId: conversation._id,
         senderId: creatorId,
         content: notificationContent,
-        type: "text",
+        type: "system_add",
       });
 
       console.log("Tin nhắn thông báo đã được tạo:", notificationMessage);
@@ -74,7 +75,11 @@ exports.createConversation = async (req, res) => {
     // Lấy lại conversation đã được cập nhật với last_message
     const updatedConversation = await ConversationService.getConversationById(conversation._id);
 
-    req.io.emit("tao_phong_moi", updatedConversation);
+    // Emit chỉ tới user room của từng thành viên (không broadcast toàn bộ)
+    const allParticipantIds = [creatorId, ...(memberIds || [])];
+    allParticipantIds.forEach(userId => {
+      req.io.to(`user:${userId}`).emit("tao_phong_moi", updatedConversation);
+    });
     console.log(`Phong ${conversation._id} moi duoc tao ra o database`);
 
     res.status(201).json(updatedConversation);
@@ -85,23 +90,134 @@ exports.createConversation = async (req, res) => {
 
 exports.addMember = async (req, res) => {
   try {
-    const { conversationId, userId } = req.body;
+    const { conversationId, userId, userIds, addedBy } = req.body;
+    
+    // Support both single userId and multiple userIds
+    const memberIds = userIds || (userId ? [userId] : []);
+    
+    if (memberIds.length === 0) {
+      return res.status(400).json({ error: "Cần ít nhất một thành viên" });
+    }
 
-    const member = await ParticipantService.addParticipant({
-      conversationId,
-      userId,
-      role: "user",
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(400).json({ error: "Cuộc hội thoại không tồn tại" });
+    }
+
+    if (conversation.type === "group") {
+      await ParticipantService.assertGroupManager(conversationId, addedBy);
+    }
+
+    const addedMembers = [];
+
+    for (const memberId of memberIds) {
+      const member = await ParticipantService.addParticipant({
+        conversationId,
+        userId: memberId,
+        role: "user",
+        addedBy: addedBy,
+      });
+      addedMembers.push(member);
+    }
+
+    // Update member count
+    await Conversation.findByIdAndUpdate(conversationId, {
+      $inc: { member_count: memberIds.length },
     });
 
-    req.io.to(conversationId).emit("them_nguoi_moi", member);
-    console.log(
-      `${userId} da duoc them vao phong ${conversationId} o database`,
+    // Get user info for notification message
+    const memberUsers = await Promise.all(
+      memberIds.map(async (id) => {
+        const user = await UserService.getUser(id);
+        return user ? user.name : "Unknown";
+      })
     );
 
-    res.status(200).json(member);
+    // Create system notification message
+    const adderUser = await UserService.getUser(addedBy);
+    const adderName = adderUser ? adderUser.name : "Ai đó";
+    const memberNames = memberUsers.join(", ");
+    const notificationContent = `${memberNames} được ${adderName} thêm vào nhóm`;
+
+    const notificationMessage = await MessageService.sendMessage({
+      conversationId,
+      senderId: addedBy,
+      content: notificationContent,
+      type: "system_add",
+    });
+
+    // Emit to all existing participants
+    const participants = await ParticipantService.getParticipants(conversationId);
+    participants.forEach((p) => {
+      addedMembers.forEach((member) => {
+        req.io.to(`user:${p.user_id}`).emit("them_nguoi_moi", member);
+      });
+    });
+
+    // Emit to new members so they can get the conversation
+    const updatedConversation = await ConversationService.getConversationById(conversationId);
+    memberIds.forEach((memberId) => {
+      req.io.to(`user:${memberId}`).emit("tao_phong_moi", updatedConversation);
+    });
+    
+    console.log(
+      `${memberIds.length} members added to room ${conversationId}`,
+    );
+
+    res.status(200).json({ members: addedMembers, message: notificationMessage });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
 
+exports.dissolveGroup = async (req, res) => {
+  try {
+    const { conversationId, userId } = req.params;
+    const result = await ConversationService.dissolveGroup(conversationId, userId);
 
+    result.affectedUserIds.forEach((targetUserId) => {
+      req.io.to(`user:${targetUserId}`).emit("giai_tan_nhom", {
+        conversationId,
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      conversationId,
+      deletedMessages: result.deletedMessages,
+      deletedParticipants: result.deletedParticipants,
+    });
+  } catch (error) {
+    const isClientError =
+      error.message.includes("không tồn tại") ||
+      error.message.includes("không có quyền") ||
+      error.message.includes("Chỉ trưởng nhóm");
+    res.status(isClientError ? 400 : 500).json({ error: error.message });
+  }
+};
+
+// Update conversation (name, avatar)
+exports.updateConversation = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const updateData = req.body;
+
+    const conversation = await ConversationService.updateConversation(
+      conversationId,
+      updateData
+    );
+
+    // Emit to all participants
+    const participants = await ParticipantService.getParticipants(conversationId);
+    participants.forEach((p) => {
+      req.io.to(`user:${p.user_id}`).emit("cap_nhat_nhom", conversation);
+    });
+
+    res.status(200).json(conversation);
+  } catch (error) {
+    const isClientError =
+      error.message.includes("không tồn tại") ||
+      error.message.includes("Chỉ có thể");
+    res.status(isClientError ? 400 : 500).json({ error: error.message });
+  }
+};

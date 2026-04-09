@@ -2,6 +2,7 @@ package mediaservice.controllers;
 
 import lombok.RequiredArgsConstructor;
 import mediaservice.dtos.requests.PostRequest;
+import mediaservice.dtos.requests.AccessControlRequest;
 import mediaservice.dtos.responses.CommentResponse;
 import mediaservice.dtos.responses.PostResponse;
 import mediaservice.dtos.responses.ReactionResponse;
@@ -11,6 +12,8 @@ import mediaservice.models.enums.VisibilityType;
 import mediaservice.services.CommentService;
 import mediaservice.services.PostService;
 import mediaservice.services.ReactionService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -31,6 +34,7 @@ public class PostController {
     private final PostService postService;
     private final ReactionService reactionService;
     private final CommentService commentService;
+    private final ObjectMapper objectMapper;
 
     /** POST /posts – tạo bài post mới kèm upload ảnh lên S3. */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -39,9 +43,21 @@ public class PostController {
             @RequestParam("caption") String caption,
             @RequestParam(value = "visibility", defaultValue = "PUBLIC") String visibility,
             @RequestParam(value = "files", required = false) List<MultipartFile> files,
-            @RequestParam(value = "captions", required = false) List<String> captions) {
+            @RequestParam(value = "captions", required = false) List<String> captions,
+            @RequestParam(value = "accessControls", required = false) String accessControlsJson) {
         VisibilityType vis = VisibilityType.valueOf(visibility.toUpperCase());
-        return ResponseEntity.ok(postService.createPost(accountId, caption, vis, files, captions));
+        List<AccessControlRequest> accessControls = List.of();
+        if (accessControlsJson != null && !accessControlsJson.isBlank()) {
+            try {
+                accessControls = objectMapper.readValue(
+                        accessControlsJson,
+                        new TypeReference<List<AccessControlRequest>>() {}
+                );
+            } catch (Exception ignored) {
+                accessControls = List.of();
+            }
+        }
+        return ResponseEntity.ok(postService.createPost(accountId, caption, vis, files, captions, accessControls));
     }
 
     /** GET /posts  – tất cả bài post */
@@ -53,7 +69,7 @@ public class PostController {
     /** GET /posts/page  – có phân trang */
     @GetMapping("/page")
     public ResponseEntity<Page<PostResponse>> getPostsPaged(
-            @PageableDefault(size = 0, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+            @PageableDefault(size = 5, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ResponseEntity.ok(postService.getAllPosts(pageable));
     }
 

@@ -12,7 +12,8 @@ import java.util.List;
 public interface PostService {
     PostResponse createPost(PostRequest request);
     PostResponse createPost(String accountId, String caption, VisibilityType visibility,
-                            List<MultipartFile> files, List<String> captions);
+                            List<MultipartFile> files, List<String> captions,
+                            List<mediaservice.dtos.requests.AccessControlRequest> accessControls);
     PostResponse getPostById(String id);
 
 

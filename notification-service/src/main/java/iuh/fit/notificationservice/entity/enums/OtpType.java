@@ -1,0 +1,18 @@
+package iuh.fit.notificationservice.entity.enums;
+
+public enum OtpType {
+    REGISTER,
+    EMAIL_VERIFICATION,
+    LOGIN_OTP_EMAIL,
+    TWO_FACTOR_AUTH,
+    RESET_PASSWORD,
+    CHANGE_PASSWORD,
+    CHANGE_EMAIL,
+    CHANGE_PHONE,
+    LINK_GOOGLE_ACCOUNT,
+    LINK_PHONE,
+    LINK_EMAIL,
+    DELETE_ACCOUNT,
+    ENABLE_TWO_FACTOR,
+    DISABLE_TWO_FACTOR
+}

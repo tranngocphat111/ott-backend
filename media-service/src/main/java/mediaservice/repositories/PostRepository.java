@@ -25,59 +25,67 @@ public interface PostRepository extends JpaRepository<Post, String> {
     * @param accountId: id tài khoản người dùng muốn xem post trên feed
     * */
     @Query(value =
-        "SELECT p FROM Post p " +
-        "JOIN FETCH p.account a  " +
-        "WHERE p.status = :status AND " +
-        "( " +
-            "p.visibility = :publicVis OR " +
-            "( p.visibility = :privateVis AND a.id = :accountId ) OR " +
-            "( p.visibility = :friendVis AND EXISTS " +
+    "SELECT p FROM Post p " +
+    "JOIN FETCH p.account a  " +
+    "WHERE p.status = :status AND " +
+    "( " +
+        "a.id = :accountId OR " +  // ⭐ THÊM DÒNG NÀY
+        "p.visibility = :publicVis OR " +
+        "( p.visibility = :privateVis AND a.id = :accountId ) OR " +
+        "( p.visibility = :friendVis AND EXISTS " +
+            "(" +
+            "SELECT 1 FROM Relationship r " +
+            "WHERE r.acceptedAt IS NOT NULL " +
+            "AND r.status = :relationshipStatus " +
+            "AND ((r.requester.id = :accountId AND r.receiver.id = a.id) " +
+            "OR (r.receiver.id = :accountId AND r.requester.id = a.id))" +
+            ")" +
+        ") OR " +
+        "( p.visibility = :customVis AND (" +
+            "EXISTS " +
+                "(SELECT 1 FROM ContentAccessControl ac " +
+                "WHERE ac.ruleType = :whiteListRuleType " +
+                "AND ac.content = p " +
+                "AND ac.account.id = :accountId) " +
+            " OR NOT EXISTS " +
+                "(SELECT 1 FROM ContentAccessControl ac " +
+                "WHERE ac.ruleType = :blackListRuleType " +
+                "AND ac.content = p " +
+                "AND ac.account.id = :accountId) " +
+        ")) " +
+    ") " +
+    "ORDER BY p.createdAt DESC",
+    countQuery =
+            "SELECT count(p.id) FROM Post p " +
+            "JOIN Account a ON a.id = p.account.id " +
+            "WHERE p.status = :status AND " +
+                "( " +
+                    "a.id = :accountId OR " +  // ⭐ THÊM DÒNG NÀY
+                    "p.visibility = :publicVis OR " +
+                    "( p.visibility = :privateVis AND a.id = :accountId ) OR " +
+                    "( p.visibility = :friendVis AND EXISTS " +
                     "(" +
-                    "SELECT 1 FROM Relationship r " +
-                    "WHERE (r.status = :relationshipStatus AND r.receiver.id = :accountId) OR (r.requester.id = :accountId)" +
+                        "SELECT 1 FROM Relationship r " +
+                        "WHERE r.acceptedAt IS NOT NULL " +
+                        "AND r.status = :relationshipStatus " +
+                        "AND ((r.requester.id = :accountId AND r.receiver.id = a.id) " +
+                        "OR (r.receiver.id = :accountId AND r.requester.id = a.id))" +
                     ")" +
-            ") OR " +
-            "( p.visibility = :customVis AND " +
-                    "EXISTS " +
-                        "(SELECT 1 FROM ContentAccessControl ac " +
-                        "WHERE ac.ruleType = :whiteListRuleType " +
-                        "AND ac.content = p " +
-                        "AND ac.account.id = :accountId) " +
-                    " OR NOT EXISTS " +
-                        "(SELECT ac FROM ContentAccessControl ac " +
-                        "WHERE ac.ruleType = :blackListRuleType " +
-                        "AND ac.content = p " +
-                        "AND ac.account.id <> :accountId) " +
-            ") " +
-        ") " +
-        "ORDER BY p.createdAt DESC",
-        countQuery =
-                "SELECT count(p.id) FROM Post p " +
-                "JOIN Account a ON a.id = p.account.id " +
-                "WHERE p.status = :status AND " +
-                    "( " +
-                        "p.visibility = :publicVis OR " +
-                        "( p.visibility = :privateVis AND a.id = :accountId ) OR " +
-                        "( p.visibility = :friendVis AND EXISTS " +
-                        "(" +
-                            "SELECT 1 FROM Relationship r " +
-                            "WHERE (r.status = :relationshipStatus AND r.receiver.id = :accountId) OR (r.requester.id = :accountId)" +
-                        ")" +
-                        ") OR " +
-                        "( p.visibility = :customVis AND " +
-                            "EXISTS " +
-                                "(SELECT 1 FROM ContentAccessControl ac " +
-                                "WHERE ac.ruleType = :whiteListRuleType " +
-                                "AND ac.content = p " +
-                                "AND ac.account.id = :accountId) " +
-                            " OR NOT EXISTS " +
-                                "(SELECT ac FROM ContentAccessControl ac " +
-                                "WHERE ac.ruleType = :blackListRuleType " +
-                                "AND ac.content = p " +
-                                "AND ac.account.id <> :accountId) " +
-                    ") " +
-                ") "
-    )
+                    ") OR " +
+                    "( p.visibility = :customVis AND (" +
+                        "EXISTS " +
+                            "(SELECT 1 FROM ContentAccessControl ac " +
+                            "WHERE ac.ruleType = :whiteListRuleType " +
+                            "AND ac.content = p " +
+                            "AND ac.account.id = :accountId) " +
+                        " OR NOT EXISTS " +
+                            "(SELECT 1 FROM ContentAccessControl ac " +
+                            "WHERE ac.ruleType = :blackListRuleType " +
+                            "AND ac.content = p " +
+                            "AND ac.account.id = :accountId) " +
+                ")) " +
+            ") "
+)
     Page<Post> findAllPostsWithAuthorized(
         @Param("status") ContentStatusType status,                              // check trạng thái
         @Param("publicVis") VisibilityType publicVis,                           // check PUBLIC

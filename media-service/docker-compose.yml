@@ -1,6 +1,18 @@
-version: '3.8'
-
 services:
+
+  media-app:
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy # Đợi Redis Ping thành công rồi app mới chạy
+    environment:
+      # Ghi đè localhost trong application.properties thành tên container redis
+      - SPRING_DATA_REDIS_HOST=redis
+    networks:
+      - media-network
+
   redis:
     image: redis:latest
     container_name: redis-media-service
@@ -37,4 +49,3 @@ volumes:
 networks:
   media-network:
     driver: bridge
-
