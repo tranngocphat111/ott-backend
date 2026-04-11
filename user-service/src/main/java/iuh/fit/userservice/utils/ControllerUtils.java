@@ -20,7 +20,16 @@ public class ControllerUtils {
 
     public String getCurrentSessionToken() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.getCredentials() != null) return auth.getCredentials().toString();
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+
+        Object principal = auth.getPrincipal();
+        if (principal instanceof org.springframework.security.oauth2.jwt.Jwt jwt) {
+            return jwt.getTokenValue();
+        }
+
         throw new AppException(ErrorCode.UNAUTHENTICATED);
     }
 

@@ -91,18 +91,17 @@ public class SessionService {
 
     @Transactional
     public void revokeSession(String userId, String sessionId) {
-        log.info("Revoking session - sessionId: {}, userId: {}", sessionId, userId);
-
         UserSession session = userSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new AppException(ErrorCode.SESSION_NOT_FOUND));
 
         if (!session.getUser().getId().equals(userId)) {
-            log.warn("Unauthorized revoke attempt - sessionId: {}, requested by userId: {}", sessionId, userId);
             throw new AppException(ErrorCode.UNAUTHORIZED);
         }
 
         session.revoke("Revoked by user");
         userSessionRepository.save(session);
+
+        authSessionClient.revokeSession(session.getSessionToken(), userId);
 
         log.info("Session revoked successfully - sessionId: {}", sessionId);
     }
@@ -121,10 +120,9 @@ public class SessionService {
         sessions.forEach(s -> s.revoke(reason));
         userSessionRepository.saveAll(sessions);
 
-        int authRevoked = authSessionClient.revokeAllSessions(userId, reason);
+        authSessionClient.revokeAllSessions(userId, reason);
 
-        log.info("Successfully revoked sessions for userId: {} | user-service: {} | auth-service: {}",
-                userId, sessions.size(), authRevoked);
+        log.info("Successfully revoked {} sessions for userId: {}", sessions.size(), userId);
         return sessions.size();
     }
 
@@ -150,19 +148,7 @@ public class SessionService {
         }
     }
 
-    @Transactional
-    public void revokeSessionByDevice(String userId, String deviceId) {
-        log.info("Revoking session by deviceId: {} for userId: {}", deviceId, userId);
 
-        userSessionRepository.findByUserIdAndIsActiveTrue(userId).stream()
-                .filter(s -> deviceId.equals(s.getDeviceId()))
-                .forEach(s -> {
-                    s.revoke("Device logout");
-                    userSessionRepository.save(s);
-                });
-
-        log.debug("Session revoke by device completed for deviceId: {}", deviceId);
-    }
 
     @Transactional
     public void updateSessionTokens(String deviceId, User user, String newToken, String newRefreshToken) {
@@ -200,4 +186,5 @@ public class SessionService {
                 .twoFactorVerified(session.getTwoFactorVerified())
                 .build();
     }
+
 }

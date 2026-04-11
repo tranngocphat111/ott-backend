@@ -1,5 +1,6 @@
 package iuh.fit.userservice.service;
 
+import com.nimbusds.jwt.SignedJWT;
 import iuh.fit.userservice.exception.AppException;
 import iuh.fit.userservice.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +50,39 @@ public class AuthSessionClient {
         } catch (Exception e) {
             log.error("Failed to revoke auth-service sessions for userId={}", userId, e);
             throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+        }
+    }
+
+    public void revokeSession(String sessionToken, String userId) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("X-Internal-Key", internalApiKey);
+
+            String jwtId = extractJwtId(sessionToken);
+            if (jwtId == null) {
+                log.warn("Cannot extract jwtId from token, skipping auth-service revoke");
+                return;
+            }
+
+            restTemplate.exchange(
+                    authServiceUrl + "/internal/sessions/revoke/" + jwtId + "?userId=" + userId,
+                    HttpMethod.POST,
+                    new HttpEntity<>(Map.of("reason", "Revoked by user"), headers),
+                    Map.class
+            );
+        } catch (Exception e) {
+            // best-effort, không throw
+            log.warn("Failed to blacklist token in auth-service: {}", e.getMessage());
+        }
+    }
+
+    private String extractJwtId(String token) {
+        try {
+            SignedJWT jwt = SignedJWT.parse(token);
+            return jwt.getJWTClaimsSet().getJWTID();
+        } catch (Exception e) {
+            log.warn("Failed to parse JWT token: {}", e.getMessage());
+            return null;
         }
     }
 }

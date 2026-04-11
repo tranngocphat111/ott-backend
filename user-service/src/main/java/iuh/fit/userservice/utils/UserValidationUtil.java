@@ -19,7 +19,7 @@ public class UserValidationUtil {
 
     public void validateUserStatus(User user) {
         if (user.getDeletedAt() != null) throw new AppException(ErrorCode.ACCOUNT_DELETED);
-        if (!user.getIsActive())         throw new AppException(ErrorCode.USER_NOT_ACTIVE);
+        if (!user.getIsActive()) throw new AppException(ErrorCode.USER_NOT_ACTIVE);
 
         if (user.getIsBlocked()) {
             if (user.getBlockedUntil() != null && user.getBlockedUntil().isAfter(LocalDateTime.now())) {

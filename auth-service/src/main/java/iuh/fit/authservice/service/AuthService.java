@@ -285,11 +285,17 @@ public class AuthService {
         String refreshToken = jwtService.generateRefreshToken();
 
         userSyncService.ensureUserExists(user);
-        sessionService.createUserSession(user.getId(), deviceId, deviceType, null,
-                ipAddress, deviceInfo, token, refreshToken, loginMethod);
+        userServiceClient.createSession(
+                user.getId(), deviceId, null,
+                ipAddress, deviceInfo,
+                token, refreshToken,
+                loginMethod.name(),
+                deviceType != null ? deviceType.name() : "UNKNOWN"
+        );
         logLoginHistory(user, ipAddress, deviceInfo, LoginStatus.SUCCESS, loginMethod, null);
         sendWelcomeEmailIfNeeded(user);
         userServiceClient.updateLastLogin(userId);
+
 
         return AuthenticationResponse.builder()
                 .token(token).refreshToken(refreshToken)

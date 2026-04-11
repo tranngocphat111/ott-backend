@@ -50,6 +50,7 @@ public class AccountService {
         userValidationUtil.userRepository.save(user);
 
         log.info("Initial password set successfully for userId: {}", userId);
+
     }
 
     @Transactional

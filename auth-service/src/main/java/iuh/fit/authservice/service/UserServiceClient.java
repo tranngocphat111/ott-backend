@@ -89,7 +89,7 @@ public class UserServiceClient {
             );
             UserDto user = extractResult(response);
             log.info("Retrieved user by id: {} successfully", userId);
-            log.error("🔥 RAW USER RESPONSE = {}", response.getBody());
+            log.error(" RAW USER RESPONSE = {}", response.getBody());
             return user;
         } catch (HttpClientErrorException.NotFound e) {
             log.warn("User not found by id: {}", userId);
