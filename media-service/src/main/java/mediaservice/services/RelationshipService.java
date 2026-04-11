@@ -2,6 +2,7 @@ package mediaservice.services;
 
 import mediaservice.dtos.requests.RelationshipRequest;
 import mediaservice.dtos.responses.RelationshipResponse;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -45,5 +46,6 @@ public interface RelationshipService {
 
     /** Lấy trạng thái quan hệ giữa hai user (null nếu không có). */
     Optional<RelationshipResponse> getRelationshipBetween(String userId1, String userId2);
+
 }
 

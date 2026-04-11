@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome Email</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 40px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo {
+            font-size: 32px;
+            font-weight: bold;
+            color: #4CAF50;
+            margin-bottom: 10px;
+        }
+        h1 {
+            color: #2c3e50;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .welcome-message {
+            font-size: 16px;
+            margin-bottom: 20px;
+            color: #555;
+        }
+        .features {
+            background-color: #f8f9fa;
+            border-left: 4px solid #4CAF50;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .features h2 {
+            color: #4CAF50;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+        .features ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .features li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+        .features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .cta-button {
+            display: inline-block;
+            padding: 12px 30px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            font-size: 12px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="logo" th:text="${appName}">OTT Platform</div>
+    </div>
+
+    <h1>Welcome to <span th:text="${appName}">OTT Platform</span>!</h1>
+
+    <p class="welcome-message">
+        Hi <strong th:text="${fullName}">User</strong>,
+    </p>
+
+    <p class="welcome-message">
+        Thank you for joining us! We're excited to have you on board.
+        Your account has been successfully created and you're ready to explore
+        all the amazing features we have to offer.
+    </p>
+
+    <div class="features">
+        <h2>What you can do now:</h2>
+        <ul>
+            <li>Stream unlimited movies and TV shows</li>
+            <li>Create personalized watchlists</li>
+            <li>Download content for offline viewing</li>
+            <li>Enable two-factor authentication for extra security</li>
+            <li>Manage your account settings anytime</li>
+        </ul>
+    </div>
+
+    <p style="text-align: center;">
+        <a href="#" class="cta-button">Start Watching Now</a>
+    </p>
+
+    <p class="welcome-message">
+        If you have any questions or need assistance, our support team is here to help.
+        Feel free to reach out to us at
+        <a th:href="'mailto:' + ${supportEmail}" th:text="${supportEmail}">support@ottplatform.com</a>
+    </p>
+
+    <p class="welcome-message">
+        Happy streaming!<br>
+        The <span th:text="${appName}">OTT Platform</span> Team
+    </p>
+
+    <div class="footer">
+        <p>&copy; <span th:text="${year}">2024</span> <span th:text="${appName}">OTT Platform</span>. All rights reserved.</p>
+        <p>This is an automated message, please do not reply to this email.</p>
+    </div>
+</div>
+</body>
+</html>

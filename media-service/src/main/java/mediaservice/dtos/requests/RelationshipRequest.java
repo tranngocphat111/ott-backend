@@ -14,5 +14,7 @@ public class RelationshipRequest {
     private String receiverId;  // UserAccount ID
     private RelationshipStatusType status;
     private RelationshipType type;
+
+    private String blockedById; // useraccount ID that block the other
 }
 

@@ -45,4 +45,8 @@ public class Relationship {
 
     private LocalDateTime acceptedAt;
 
+    @ManyToOne
+    @JoinColumn(name = "blocked_by")
+    private UserAccount blockedBy;
+
 }

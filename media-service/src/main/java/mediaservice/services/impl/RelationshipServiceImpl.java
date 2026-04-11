@@ -11,6 +11,7 @@ import mediaservice.models.enums.RelationshipType;
 import mediaservice.repositories.RelationshipRepository;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.RelationshipService;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -87,15 +88,17 @@ public class RelationshipServiceImpl implements RelationshipService {
         if (requesterId.equals(receiverId)) {
             throw new IllegalArgumentException("Không thể tự kết bạn với chính mình.");
         }
-        // Kiểm tra đã tồn tại chưa
+        // Kiểm tra đã là bạn bè chưa
         relationshipRepository.findBetweenUsers(requesterId, receiverId).ifPresent(r -> {
-            throw new IllegalStateException("Đã tồn tại quan hệ giữa hai người dùng này.");
+            if(r.getStatus() == RelationshipStatusType.ACCEPTED) throw new IllegalStateException("Đã tồn tại quan hệ giữa hai người dùng này.");
         });
 
         UserAccount requester = findUserOrThrow(requesterId);
         UserAccount receiver  = findUserOrThrow(receiverId);
 
-        Relationship rel = new Relationship();
+
+        Relationship rel = relationshipRepository.findBetweenUsers(requesterId, receiverId).orElse(new Relationship());
+
         rel.setRequester(requester);
         rel.setReceiver(receiver);
         rel.setStatus(RelationshipStatusType.PENDING);
@@ -173,6 +176,7 @@ public class RelationshipServiceImpl implements RelationshipService {
         return relationshipRepository.findBetweenUsers(userId1, userId2)
                 .map(relationshipMapper::toResponse);
     }
+
 
     // ── Private helpers ────────────────────────────────────────────────────
 

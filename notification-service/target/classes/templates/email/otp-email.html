@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OTP Verification</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 10px;
+            padding: 40px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        h1 {
+            color: #2c3e50;
+            font-size: 22px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .otp-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+            margin: 30px 0;
+        }
+        .otp-code {
+            font-size: 36px;
+            font-weight: bold;
+            color: #ffffff;
+            letter-spacing: 8px;
+            font-family: 'Courier New', monospace;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        .otp-label {
+            color: #ffffff;
+            font-size: 14px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .warning-box {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .warning-box p {
+            margin: 5px 0;
+            color: #856404;
+        }
+        .info-table {
+            width: 100%;
+            margin: 20px 0;
+            border-collapse: collapse;
+        }
+        .info-table td {
+            padding: 10px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .info-table td:first-child {
+            font-weight: bold;
+            color: #666;
+            width: 40%;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            font-size: 12px;
+            color: #888;
+        }
+        .security-note {
+            background-color: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="logo" th:text="${appName}">OTT Platform</div>
+    </div>
+
+    <h1 th:text="${otpType} + ' - Verification Code'">Verification Code</h1>
+
+    <p>Hi <strong th:text="${fullName}">User</strong>,</p>
+
+    <p>We received a request for <span th:text="${otpType}">verification</span>.
+        Please use the following code to complete the process:</p>
+
+    <div class="otp-box">
+        <div class="otp-label">Your Verification Code</div>
+        <div class="otp-code" th:text="${otpCode}">123456</div>
+    </div>
+
+    <div class="warning-box">
+        <p><strong>⚠️ Important:</strong></p>
+        <p>• This code will expire in <strong th:text="${expiryMinutes}">5</strong> minutes</p>
+        <p>• Do not share this code with anyone</p>
+        <p>• Our team will never ask you for this code</p>
+    </div>
+
+    <div class="security-note">
+        <h3 style="margin-top: 0; color: #2196F3;">🔒 Security Information</h3>
+        <table class="info-table">
+            <tr>
+                <td>Request Time:</td>
+                <td th:text="${dateTime}">01/01/2024 12:00:00</td>
+            </tr>
+            <tr>
+                <td>IP Address:</td>
+                <td th:text="${ipAddress}">192.168.1.1</td>
+            </tr>
+            <tr>
+                <td>Location:</td>
+                <td th:text="${location}">Unknown</td>
+            </tr>
+        </table>
+    </div>
+
+    <p style="margin-top: 30px;">
+        If you didn't request this code, please ignore this email or contact our support team immediately at
+        <a th:href="'mailto:' + ${supportEmail}" th:text="${supportEmail}">support@ottplatform.com</a>
+    </p>
+
+    <p>
+        Best regards,<br>
+        The <span th:text="${appName}">OTT Platform</span> Team
+    </p>
+
+    <div class="footer">
+        <p>This is an automated security message, please do not reply to this email.</p>
+        <p>&copy; <span th:text="${year}">2024</span> <span th:text="${appName}">OTT Platform</span>. All rights reserved.</p>
+    </div>
+</div>
+</body>
+</html>

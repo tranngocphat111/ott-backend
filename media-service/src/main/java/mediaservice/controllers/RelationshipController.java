@@ -32,6 +32,22 @@ public class RelationshipController {
 
     private final RelationshipService relationshipService;
 
+
+    @GetMapping
+    public ResponseEntity<RelationshipResponse> getRelationshipOf(
+            @RequestParam String user1,
+            @RequestParam String user2
+    ) {
+        return ResponseEntity.ok(relationshipService.getRelationshipBetween(user1, user2).orElse(null));
+    }
+
+
+    @GetMapping ("/send")
+    public ResponseEntity<RelationshipResponse> getFriendRequest(
+            @RequestParam String requesterId,
+            @RequestParam String receiverId) {
+        return ResponseEntity.ok(relationshipService.getRelationshipBetween(requesterId, receiverId).orElse(null));
+    }
     /* ─── Gửi lời mời kết bạn ─────────────────────────────── */
     @PostMapping("/send")
     public ResponseEntity<RelationshipResponse> sendFriendRequest(

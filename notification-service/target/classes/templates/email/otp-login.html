@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OTP Login Code</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background-color: #f4f4f4;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f4f4f4; padding: 40px 0;">
+    <tr>
+        <td align="center">
+            <table width="600" cellpadding="0" cellspacing="0" border="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+
+                <!-- Header -->
+                <tr>
+                    <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
+                        <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600;">🔐 [[${appName}]]</h1>
+                    </td>
+                </tr>
+
+                <!-- Content -->
+                <tr>
+                    <td style="padding: 40px 30px;">
+                        <p style="font-size: 18px; color: #333333; margin: 0 0 20px 0;">
+                            Hi <strong>[[${fullName}]]</strong>,
+                        </p>
+
+                        <p style="font-size: 16px; color: #666666; line-height: 1.8; margin: 0 0 30px 0;">
+                            You've requested to login to your account. Use the verification code below to complete your login:
+                        </p>
+
+                        <!-- OTP Box -->
+                        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); border-radius: 12px; margin: 30px 0; border: 2px solid rgba(102, 126, 234, 0.3);">
+                            <tr>
+                                <td style="padding: 30px; text-align: center;">
+                                    <div style="font-size: 14px; color: #666666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;">
+                                        YOUR VERIFICATION CODE
+                                    </div>
+                                    <div style="font-size: 42px; font-weight: 700; color: #667eea; letter-spacing: 8px; font-family: 'Courier New', monospace; margin: 10px 0;">
+                                        [[${otpCode}]]
+                                    </div>
+                                    <div style="font-size: 14px; color: #999999; margin-top: 15px;">
+                                        ⏱️ Expires in <strong>[[${expiryMinutes}]] minutes</strong>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- Warning Box -->
+                        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px; margin: 25px 0;">
+                            <tr>
+                                <td style="padding: 15px;">
+                                    <p style="font-size: 14px; color: #856404; margin: 0;">
+                                        ⚠️ <strong>Security Notice:</strong> Never share this code with anyone.
+                                        Our team will never ask for your verification code.
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <!-- Device Info (nếu có) -->
+                        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f8f9fa; border-radius: 8px; margin: 25px 0;" th:if="${ipAddress != null}">
+                            <tr>
+                                <td style="padding: 20px;">
+                                    <h3 style="font-size: 16px; color: #333333; margin: 0 0 12px 0;">📱 Login Attempt Details</h3>
+
+                                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                                        <tr>
+                                            <td style="padding: 8px 0; border-bottom: 1px solid #e9ecef;">
+                                                <span style="font-size: 14px; color: #666666; font-weight: 500;">Time:</span>
+                                            </td>
+                                            <td align="right" style="padding: 8px 0; border-bottom: 1px solid #e9ecef;">
+                                                <span style="font-size: 14px; color: #333333;">[[${timestamp}]]</span>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 8px 0; border-bottom: 1px solid #e9ecef;">
+                                                <span style="font-size: 14px; color: #666666; font-weight: 500;">IP Address:</span>
+                                            </td>
+                                            <td align="right" style="padding: 8px 0; border-bottom: 1px solid #e9ecef;">
+                                                <span style="font-size: 14px; color: #333333;">[[${ipAddress}]]</span>
+                                            </td>
+                                        </tr>
+                                        <tr th:if="${location != null}">
+                                            <td style="padding: 8px 0;">
+                                                <span style="font-size: 14px; color: #666666; font-weight: 500;">Location:</span>
+                                            </td>
+                                            <td align="right" style="padding: 8px 0;">
+                                                <span style="font-size: 14px; color: #333333;">[[${location}]]</span>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <p style="font-size: 16px; color: #666666; line-height: 1.8; margin: 0;">
+                            If you didn't request this code, please ignore this email or
+                            <a href="mailto:[[${supportEmail}]]" style="color: #667eea; text-decoration: none;">contact our support team</a>.
+                        </p>
+                    </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                    <td style="background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e9ecef;">
+                        <p style="font-size: 14px; color: #666666; margin: 5px 0;">
+                            This is an automated message, please do not reply.
+                        </p>
+                        <p style="font-size: 14px; color: #666666; margin: 5px 0;">
+                            © 2024 [[${appName}]]. All rights reserved.
+                        </p>
+
+                        <div style="margin: 20px 0;">
+                            <a href="[[${websiteUrl}]]" style="color: #667eea; text-decoration: none; margin: 0 10px;">Website</a>
+                            <span style="color: #cccccc;">|</span>
+                            <a href="mailto:[[${supportEmail}]]" style="color: #667eea; text-decoration: none; margin: 0 10px;">Support</a>
+                        </div>
+
+                        <p style="font-size: 12px; color: #999999; margin: 15px 0 0 0;">
+                            [[${appName}]], Ho Chi Minh City, Vietnam
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>
