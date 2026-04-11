@@ -81,6 +81,51 @@ const buildReplyPreview = (message, senderName = "") => {
 };
 
 class MessageRepository {
+  getMessageStableId(message) {
+    return String(message?.msg_id || message?._id || "").trim();
+  }
+
+  getLatestMessageId(messages) {
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return "";
+    }
+
+    let latest = "";
+    for (const message of messages) {
+      const currentId = this.getMessageStableId(message);
+      if (!currentId) continue;
+      if (!latest) {
+        latest = currentId;
+        continue;
+      }
+
+      try {
+        if (BigInt(currentId) > BigInt(latest)) {
+          latest = currentId;
+        }
+      } catch {
+        if (currentId > latest) {
+          latest = currentId;
+        }
+      }
+    }
+
+    return latest;
+  }
+
+  async getLatestVisibleMessageId(conversationId, userId) {
+    const latest = await Message.findOne({
+      conversation_id: conversationId,
+      is_deleted: false,
+      ...(userId ? { deleted_for: { $ne: userId } } : {}),
+    })
+      .sort({ msg_id: -1 })
+      .select("msg_id _id")
+      .lean();
+
+    return this.getMessageStableId(latest);
+  }
+
   isVisibleToUser(message, userId) {
     if (message.is_deleted) return false;
     if (!userId) return true;
@@ -199,9 +244,28 @@ class MessageRepository {
           const visibleMessages = messages.filter((m) =>
             this.isVisibleToUser(m, userId),
           );
-          return await this.hydrateReplyPreviews(
-            conversationId,
-            visibleMessages,
+
+          if (visibleMessages.length > 0) {
+            const cacheLatestId = this.getLatestMessageId(visibleMessages);
+            const dbLatestId = await this.getLatestVisibleMessageId(
+              conversationId,
+              userId,
+            );
+
+            if (!dbLatestId || cacheLatestId === dbLatestId) {
+              return await this.hydrateReplyPreviews(
+                conversationId,
+                visibleMessages,
+              );
+            }
+
+            logger.warn(
+              `↺ CACHE STALE: ${conversationId} cache latest ${cacheLatestId} != db latest ${dbLatestId}. Fallback DB`,
+            );
+          }
+
+          logger.info(
+            `↺ CACHE FALLBACK: cache has no visible messages for user ${userId || "anonymous"}, querying MongoDB`,
           );
         }
       }
