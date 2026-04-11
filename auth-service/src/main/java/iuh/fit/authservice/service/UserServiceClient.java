@@ -2,6 +2,7 @@ package iuh.fit.authservice.service;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonAlias;
+import iuh.fit.authservice.dto.event.UserCreatedEvent;
 import iuh.fit.authservice.exception.AppException;
 import iuh.fit.authservice.exception.ErrorCode;
 import lombok.*;
@@ -27,6 +28,7 @@ import java.util.Map;
 public class UserServiceClient {
 
     private final RestTemplate restTemplate;
+    private final UserEventPublisher userEventPublisher;
 
     @Value("${internal.user-service-url}")
     private String userServiceUrl;
@@ -295,6 +297,15 @@ public class UserServiceClient {
             );
             UserDto user = extractResult(response);
             log.info("User created successfully via user-service - userId: {}", user.getId());
+
+            UserCreatedEvent event = UserCreatedEvent.builder()
+                    .userId(user.getId())
+                    .username(user.getFullName())
+                    .avatar(user.getAvatarUrl())
+                    .email(user.getEmail())
+                    .build();
+            userEventPublisher.publishUserCreated(event);
+
             return user;
         } catch (Exception e) {
             log.error("Error calling user-service createUser", e);
@@ -356,24 +367,6 @@ public class UserServiceClient {
         } catch (Exception e) {
             log.error("Error validating backup code for userId={}", userId, e);
             return false;
-        }
-    }
-
-    public void updateContact(String userId, String newPhone, String newEmail) {
-        try {
-            Map<String, String> body = new HashMap<>();
-            if (newPhone != null) body.put("newPhone", newPhone);
-            if (newEmail != null) body.put("newEmail", newEmail);
-
-            restTemplate.exchange(
-                    userServiceUrl + "/internal/users/" + userId + "/contact",
-                    HttpMethod.PATCH,
-                    new HttpEntity<>(body, internalHeaders()),
-                    Void.class
-            );
-            log.info("Contact updated in user-service for userId: {}", userId);
-        } catch (Exception e) {
-            log.warn("Failed to sync contact update for userId={}: {}", userId, e.getMessage());
         }
     }
 }
