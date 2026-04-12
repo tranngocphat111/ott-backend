@@ -460,6 +460,8 @@ exports.revokeMessage = async ({ conversationId, msgId, userId }) => {
     };
   }
 
+  const wasPinned = Boolean(message.is_pinned);
+
   message.is_revoked = true;
   message.content = [REVOKED_PLACEHOLDER];
   message.reactions = [];
@@ -475,6 +477,33 @@ exports.revokeMessage = async ({ conversationId, msgId, userId }) => {
     conversationId,
     revokedMessage,
   );
+
+  let systemMessage = null;
+  if (wasPinned) {
+    const actorName = sender?.name || "Một thành viên";
+    const systemDoc = new Message({
+      conversation_id: conversationId,
+      sender_id: userId,
+      type: "system_unpin",
+      content: [`${actorName} đã gỡ ghim một tin nhắn`],
+      size: 0,
+    });
+
+    const savedSystemMessage = await systemDoc.save();
+    await ConversationService.updateLastMessage(
+      conversationId,
+      savedSystemMessage,
+    );
+    await messageCacheService.addMessage(conversationId, {
+      ...savedSystemMessage.toObject(),
+      sender_name: actorName,
+    });
+
+    systemMessage = {
+      ...savedSystemMessage.toObject(),
+      sender_name: actorName,
+    };
+  }
 
   await messageCacheService.updateMessage(conversationId, msgId, {
     ...revokedMessage.toObject(),
@@ -498,6 +527,7 @@ exports.revokeMessage = async ({ conversationId, msgId, userId }) => {
     createdAt: revokedMessage.createdAt,
     updatedAt: revokedMessage.updatedAt,
     last_message: updatedLastMessage,
+    systemMessage,
   };
 };
 
@@ -635,13 +665,56 @@ exports.pinMessage = async ({ conversationId, msgId, userId, isPinned }) => {
     }
   }
 
+  const wasPinned = Boolean(message.is_pinned);
+
   message.is_pinned = isPinned;
   message.pinned_at = isPinned ? new Date() : null;
   message.pinned_by = isPinned ? userId : null;
 
   const updatedMessage = await message.save();
 
-  return {
+  let systemMessage = null;
+  if (wasPinned !== Boolean(isPinned)) {
+    const actor = await User.findOne({ user_id: userId }).select("name").lean();
+    const actorName = actor?.name || "Một thành viên";
+    const systemType = isPinned ? "system_pin" : "system_unpin";
+    const systemContent = [
+      isPinned
+        ? `${actorName} đã ghim một tin nhắn`
+        : `${actorName} đã gỡ ghim một tin nhắn`,
+    ];
+
+    const systemDoc = new Message({
+      conversation_id: conversationId,
+      sender_id: userId,
+      type: systemType,
+      content: systemContent,
+      size: 0,
+    });
+
+    const savedSystemMessage = await systemDoc.save();
+    await ConversationService.updateLastMessage(
+      conversationId,
+      savedSystemMessage,
+    );
+    await messageCacheService.addMessage(conversationId, {
+      ...savedSystemMessage.toObject(),
+      sender_name: actorName,
+    });
+
+    systemMessage = {
+      ...savedSystemMessage.toObject(),
+      sender_name: actorName,
+    };
+  }
+
+  const updatedSender = await User.findOne({ user_id: updatedMessage.sender_id })
+    .select("name avatar")
+    .lean();
+  const senderName = updatedSender?.name || "";
+  const senderAvatar = sanitizeAvatarValue(updatedSender?.avatar || "");
+
+  const flatUpdatedMessage = {
     _id: updatedMessage._id,
     msg_id: updatedMessage.msg_id,
     conversation_id: updatedMessage.conversation_id,
@@ -651,14 +724,20 @@ exports.pinMessage = async ({ conversationId, msgId, userId, isPinned }) => {
     type: updatedMessage.type,
     content: updatedMessage.content,
     sender_id: updatedMessage.sender_id,
-    sender_name: (await User.findOne({ user_id: updatedMessage.sender_id }).select("name avatar").lean())?.name || "",
-    sender_avatar: sanitizeAvatarValue((await User.findOne({ user_id: updatedMessage.sender_id }).select("name avatar").lean())?.avatar || ""),
+    sender_name: senderName,
+    sender_avatar: senderAvatar,
     createdAt: updatedMessage.createdAt,
+  };
+
+  return {
+    ...flatUpdatedMessage,
+    updatedMessage: flatUpdatedMessage,
+    systemMessage,
   };
 };
 
 // Get pinned messages for a conversation
-exports.getPinnedMessages = async (conversationId) => {
+exports.getPinnedMessages = async (conversationId, userId) => {
   const messages = await Message.find({
     conversation_id: conversationId,
     is_pinned: true,
@@ -667,8 +746,14 @@ exports.getPinnedMessages = async (conversationId) => {
     .limit(3)
     .lean();
 
+  const visibleMessages = (Array.isArray(messages) ? messages : []).filter(
+    (message) => isVisibleToUser(message, userId),
+  );
+
   const senderIds = [
-    ...new Set(messages.map((message) => String(message.sender_id || ""))),
+    ...new Set(
+      visibleMessages.map((message) => String(message.sender_id || "")),
+    ),
   ].filter(Boolean);
 
   const senders = senderIds.length
@@ -681,7 +766,7 @@ exports.getPinnedMessages = async (conversationId) => {
     senders.map((sender) => [String(sender.user_id || ""), sender]),
   );
 
-  return messages.map((message) => ({
+  return visibleMessages.map((message) => ({
     ...message,
     sender_name: senderNameMap.get(String(message.sender_id || ""))?.name || "",
     sender_avatar: sanitizeAvatarValue(senderNameMap.get(String(message.sender_id || ""))?.avatar || ""),

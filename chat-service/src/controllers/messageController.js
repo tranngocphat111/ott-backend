@@ -118,6 +118,11 @@ exports.revokeMessage = async (req, res) => {
       await ParticipantService.getParticipants(conversationId);
     participants.forEach((p) => {
       req.io.to(`user:${p.user_id}`).emit("tin_nhan_thu_hoi", revokedMessage);
+      if (revokedMessage.systemMessage) {
+        req.io
+          .to(`user:${p.user_id}`)
+          .emit("tin_nhan", revokedMessage.systemMessage);
+      }
     });
 
     res.status(200).json(revokedMessage);
@@ -166,7 +171,7 @@ exports.pinMessage = async (req, res) => {
     const { msgId } = req.params;
     const { conversationId, userId, isPinned } = req.body;
 
-    const updatedMessage = await MessageService.pinMessage({
+    const result = await MessageService.pinMessage({
       conversationId,
       msgId,
       userId,
@@ -177,10 +182,15 @@ exports.pinMessage = async (req, res) => {
     const participants =
       await ParticipantService.getParticipants(conversationId);
     participants.forEach((p) => {
-      req.io.to(`user:${p.user_id}`).emit("tin_nhan_pin", updatedMessage);
+      req.io
+        .to(`user:${p.user_id}`)
+        .emit("tin_nhan_pin", result.updatedMessage);
+      if (result.systemMessage) {
+        req.io.to(`user:${p.user_id}`).emit("tin_nhan", result.systemMessage);
+      }
     });
 
-    res.status(200).json(updatedMessage);
+    res.status(200).json(result);
   } catch (error) {
     if (
       error.message === "Tin nhắn không tồn tại" ||
@@ -197,8 +207,12 @@ exports.pinMessage = async (req, res) => {
 exports.getPinnedMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
+    const { userId } = req.query;
 
-    const messages = await MessageService.getPinnedMessages(conversationId);
+    const messages = await MessageService.getPinnedMessages(
+      conversationId,
+      userId,
+    );
 
     res.status(200).json(messages);
   } catch (error) {

@@ -108,10 +108,11 @@ exports.getConversationsByUserId = async (req, res) => {
                     String(visibleLastMessage.sender_id || ""),
                   ) || "",
                 content: buildConversationPreviewContent(visibleLastMessage),
-                type:
-                  visibleLastMessage.type === "system_add"
-                    ? "text"
-                    : visibleLastMessage.type,
+                type: String(visibleLastMessage.type || "").startsWith(
+                  "system_",
+                )
+                  ? "text"
+                  : visibleLastMessage.type,
                 createdAt:
                   visibleLastMessage.createdAt || new Date().toISOString(),
               }
