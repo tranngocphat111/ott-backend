@@ -438,16 +438,24 @@ exports.reactToMessage = async ({
     throw new Error("Reaction không hợp lệ");
   }
 
-  const existingReactionIndex = message.reactions.findIndex(
-    (reaction) =>
-      reaction.user_id === userId && reaction.type === normalizedReaction,
-  );
+  if (!Array.isArray(message.reactions)) {
+    message.reactions = [];
+  }
 
-  if (existingReactionIndex >= 0) {
-    // Bấm lại cùng emoji thì bỏ reaction đó.
-    message.reactions.splice(existingReactionIndex, 1);
-  } else {
-    // Cho phép 1 user có nhiều emoji reaction trên cùng 1 tin nhắn.
+  const currentReactionIndex = message.reactions.findIndex(
+    (reaction) => reaction.user_id === userId,
+  );
+  const currentReactionType =
+    currentReactionIndex >= 0
+      ? String(message.reactions[currentReactionIndex]?.type || "")
+      : "";
+
+  if (currentReactionIndex >= 0) {
+    message.reactions.splice(currentReactionIndex, 1);
+  }
+
+  // Toggle off when user clicks the same reaction.
+  if (currentReactionType !== normalizedReaction) {
     message.reactions.push({
       user_id: userId,
       type: normalizedReaction,
@@ -455,6 +463,10 @@ exports.reactToMessage = async ({
   }
 
   const updatedMessage = await message.save();
+
+  await messageCacheService.updateMessage(conversationId, msgId, {
+    ...updatedMessage.toObject(),
+  });
 
   return {
     _id: updatedMessage._id,
