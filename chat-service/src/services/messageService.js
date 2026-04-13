@@ -4,7 +4,11 @@ const Conversation = require("../models/Conversation");
 const User = require("../models/User");
 const ConversationService = require("./conversationService");
 const messageCacheService = require("./messageCacheService");
-const { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require("@aws-sdk/client-s3");
+const {
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+} = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { s3Client, bucketName } = require("../config/s3");
 
@@ -113,9 +117,14 @@ const maybeTranscodeVoiceKey = async (key) => {
     return key;
   }
 
-  const tempRoot = await ensureDirectory(path.join(os.tmpdir(), "ott-voice-transcode"));
+  const tempRoot = await ensureDirectory(
+    path.join(os.tmpdir(), "ott-voice-transcode"),
+  );
   const requestId = crypto.randomBytes(8).toString("hex");
-  const inputPath = path.join(tempRoot, `${requestId}-input.${getFileExtension(key) || "webm"}`);
+  const inputPath = path.join(
+    tempRoot,
+    `${requestId}-input.${getFileExtension(key) || "webm"}`,
+  );
   const outputPath = path.join(tempRoot, `${requestId}-output.m4a`);
   const outputKey = replaceKeyExtension(key, "m4a");
 
@@ -128,13 +137,13 @@ const maybeTranscodeVoiceKey = async (key) => {
     );
     return outputKey;
   } catch (error) {
-    console.warn("Voice transcode skipped or failed, keeping original file:", error.message);
+    console.warn(
+      "Voice transcode skipped or failed, keeping original file:",
+      error.message,
+    );
     return key;
   } finally {
-    await Promise.allSettled([
-      fs.unlink(inputPath),
-      fs.unlink(outputPath),
-    ]);
+    await Promise.allSettled([fs.unlink(inputPath), fs.unlink(outputPath)]);
   }
 };
 
@@ -146,7 +155,9 @@ const enrichMessageWithSender = async (message) => {
   return {
     ...message,
     sender_name: sender?.name || message.sender_name || "",
-    sender_avatar: sanitizeAvatarValue(sender?.avatar || message.sender_avatar || ""),
+    sender_avatar: sanitizeAvatarValue(
+      sender?.avatar || message.sender_avatar || "",
+    ),
   };
 };
 
@@ -294,7 +305,9 @@ exports.sendMessage = async ({
   const normalizedContent = [...contentArray];
 
   if (type === "audio" && normalizedContent.length > 0) {
-    normalizedContent[0] = await maybeTranscodeVoiceKey(String(normalizedContent[0] || ""));
+    normalizedContent[0] = await maybeTranscodeVoiceKey(
+      String(normalizedContent[0] || ""),
+    );
   }
 
   let replyMessage = null;
@@ -330,10 +343,13 @@ exports.sendMessage = async ({
   );
 
   // Add message to Redis cache (last 20 messages)
-  const sender = await User.findOne({ user_id: senderId }).select("name avatar").lean();
+  const sender = await User.findOne({ user_id: senderId })
+    .select("name avatar")
+    .lean();
   const enrichedMessage = {
     ...savedMessage.toObject(),
-    sender_name: sender?.name || updatedConversation?.last_message?.sender_name || "",
+    sender_name:
+      sender?.name || updatedConversation?.last_message?.sender_name || "",
     sender_avatar: sanitizeAvatarValue(sender?.avatar || ""),
     reply_to: buildReplyPreview(replyMessage, replySender?.name || ""),
   };
@@ -370,9 +386,15 @@ exports.getMessageHistory = async (
     ),
   ];
 
-  const senderIds = [...new Set(filteredMessages.map((m) => String(m.sender_id || "")).filter(Boolean))];
+  const senderIds = [
+    ...new Set(
+      filteredMessages.map((m) => String(m.sender_id || "")).filter(Boolean),
+    ),
+  ];
   const senders = senderIds.length
-    ? await User.find({ user_id: { $in: senderIds } }).select("user_id name avatar").lean()
+    ? await User.find({ user_id: { $in: senderIds } })
+        .select("user_id name avatar")
+        .lean()
     : [];
   const senderMap = new Map(
     senders.map((sender) => [String(sender.user_id || ""), sender]),
@@ -418,7 +440,9 @@ exports.getMessageHistory = async (
   return filteredMessages.map((m) => ({
     ...m.toObject(),
     sender_name: senderMap.get(String(m.sender_id || ""))?.name || "",
-    sender_avatar: sanitizeAvatarValue(senderMap.get(String(m.sender_id || ""))?.avatar || ""),
+    sender_avatar: sanitizeAvatarValue(
+      senderMap.get(String(m.sender_id || ""))?.avatar || "",
+    ),
     reply_to: referencedMap.get(m.reply_to_msg_id) || null,
   }));
 };
@@ -593,25 +617,20 @@ exports.reactToMessage = async ({
     throw new Error("Reaction không hợp lệ");
   }
 
-if (!Array.isArray(message.reactions)) {
+  if (!Array.isArray(message.reactions)) {
     message.reactions = [];
   }
 
   const currentReactionIndex = message.reactions.findIndex(
     (reaction) => reaction.user_id === userId,
   );
-  const currentReactionType =
-    currentReactionIndex >= 0
-      ? String(message.reactions[currentReactionIndex]?.type || "")
-      : "";
+  const currentReaction =
+    currentReactionIndex >= 0 ? message.reactions[currentReactionIndex] : null;
 
   if (currentReactionIndex >= 0) {
-    message.reactions.splice(currentReactionIndex, 1);
-  }
+    const currentReactionType = String(currentReaction?.type || "");
 
-if (currentReactionIndex >= 0) {
-    const existingReaction = message.reactions[currentReactionIndex];
-    if (existingReaction.type === normalizedReaction) {
+    if (currentReactionType === normalizedReaction) {
       // Bấm lại cùng emoji thì bỏ reaction đó.
       message.reactions.splice(currentReactionIndex, 1);
     } else {
@@ -630,13 +649,15 @@ if (currentReactionIndex >= 0) {
 
   const updatedMessage = await message.save();
 
-const sender = await User.findOne({ user_id: updatedMessage.sender_id })
+  const sender = await User.findOne({ user_id: updatedMessage.sender_id })
     .select("name avatar")
     .lean();
   const cachedMessage = {
     ...updatedMessage.toObject(),
     sender_name: sender?.name || updatedMessage.sender_name || "",
-    sender_avatar: sanitizeAvatarValue(sender?.avatar || updatedMessage.sender_avatar || ""),
+    sender_avatar: sanitizeAvatarValue(
+      sender?.avatar || updatedMessage.sender_avatar || "",
+    ),
   };
 
   await messageCacheService.updateMessage(conversationId, msgId, cachedMessage);
@@ -720,7 +741,9 @@ exports.pinMessage = async ({ conversationId, msgId, userId, isPinned }) => {
     };
   }
 
-  const updatedSender = await User.findOne({ user_id: updatedMessage.sender_id })
+  const updatedSender = await User.findOne({
+    user_id: updatedMessage.sender_id,
+  })
     .select("name avatar")
     .lean();
   const senderName = updatedSender?.name || "";
@@ -770,7 +793,7 @@ exports.getPinnedMessages = async (conversationId, userId) => {
 
   const senders = senderIds.length
     ? await User.find({ user_id: { $in: senderIds } })
-      .select("user_id name avatar")
+        .select("user_id name avatar")
         .lean()
     : [];
 
@@ -781,7 +804,9 @@ exports.getPinnedMessages = async (conversationId, userId) => {
   return visibleMessages.map((message) => ({
     ...message,
     sender_name: senderNameMap.get(String(message.sender_id || ""))?.name || "",
-    sender_avatar: sanitizeAvatarValue(senderNameMap.get(String(message.sender_id || ""))?.avatar || ""),
+    sender_avatar: sanitizeAvatarValue(
+      senderNameMap.get(String(message.sender_id || ""))?.avatar || "",
+    ),
   }));
 };
 
@@ -881,7 +906,7 @@ exports.getMediaGallery = async (conversationId, limit = 20, skip = 0) => {
 
   const senderList = senderIds.size
     ? await User.find({ user_id: { $in: Array.from(senderIds) } })
-      .select("user_id name avatar")
+        .select("user_id name avatar")
         .lean()
     : [];
   const senderNameMap = new Map(
@@ -896,7 +921,12 @@ exports.getMediaGallery = async (conversationId, limit = 20, skip = 0) => {
     .map((item) => ({
       ...item,
       sender_name: senderNameMap.get(String(item.sender_id || "")) || "",
-      sender_avatar: sanitizeAvatarValue(senderList.find((sender) => String(sender.user_id || "") === String(item.sender_id || ""))?.avatar || ""),
+      sender_avatar: sanitizeAvatarValue(
+        senderList.find(
+          (sender) =>
+            String(sender.user_id || "") === String(item.sender_id || ""),
+        )?.avatar || "",
+      ),
     }));
 
   const hasMore = mediaPool.length > safeSkip + safeLimit;
