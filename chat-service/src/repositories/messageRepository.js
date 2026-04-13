@@ -215,53 +215,6 @@ class MessageRepository {
     }));
   }
 
-  async hydrateLiveReactions(conversationId, messages) {
-    if (!Array.isArray(messages) || messages.length === 0) {
-      return messages;
-    }
-
-    const messageIds = [
-      ...new Set(
-        messages
-          .map((message) => String(message?.msg_id || "").trim())
-          .filter(Boolean),
-      ),
-    ];
-
-    if (messageIds.length === 0) {
-      return messages;
-    }
-
-    const reactionDocs = await Message.find({
-      conversation_id: conversationId,
-      msg_id: { $in: messageIds },
-    })
-      .select("msg_id reactions")
-      .lean();
-
-    const reactionMap = new Map(
-      reactionDocs.map((doc) => [
-        String(doc.msg_id || ""),
-        Array.isArray(doc.reactions) ? doc.reactions : [],
-      ]),
-    );
-
-    return messages.map((message) => {
-      const msgId = String(message?.msg_id || "");
-      if (!reactionMap.has(msgId)) {
-        return {
-          ...message,
-          reactions: Array.isArray(message?.reactions) ? message.reactions : [],
-        };
-      }
-
-      return {
-        ...message,
-        reactions: reactionMap.get(msgId),
-      };
-    });
-  }
-
   /**
    * Create and save a new message
    * 1. Save to MongoDB
@@ -333,21 +286,12 @@ class MessageRepository {
             );
 
             if (!dbLatestId || cacheLatestId === dbLatestId) {
-// Gộp cả 3 bước: Reaction -> Người gửi -> Reply
-            const liveReactionMessages = await this.hydrateLiveReactions(
-              conversationId,
-              visibleMessages
-            );
-            const hydratedSenders = await this.hydrateSenderInfo(
-              liveReactionMessages
-            );
-            return await this.hydrateReplyPreviews(
-              conversationId,
-              hydratedSenders
-            );
+              const hydratedSenders = await this.hydrateSenderInfo(
+                visibleMessages,
+              );
               return await this.hydrateReplyPreviews(
                 conversationId,
-                liveReactionMessages,
+                hydratedSenders,
               );
             }
 
@@ -693,45 +637,31 @@ class MessageRepository {
         throw new Error("Message not found");
       }
 
-if (!Array.isArray(message.reactions)) {
-        message.reactions = [];
-      }
-
-      const normalizedEmoji = String(emoji || "").trim();
-      if (!normalizedEmoji) {
-        throw new Error("Invalid reaction");
-      }
-
-      const currentReactionIndex = message.reactions.findIndex(
+      // One user can keep only one reaction on a message.
+      const reactionByUserIndex = message.reactions.findIndex(
         (r) => r.user_id === userId,
       );
-      const currentReactionType =
-        currentReactionIndex >= 0
-          ? String(message.reactions[currentReactionIndex]?.type || "")
-          : "";
 
-if (currentReactionIndex >= 0) {
-        if (message.reactions[currentReactionIndex].type === normalizedEmoji) {
+      if (reactionByUserIndex >= 0) {
+        if (message.reactions[reactionByUserIndex].type === emoji) {
           // Tap same emoji again -> remove reaction.
-          message.reactions.splice(currentReactionIndex, 1);
+          message.reactions.splice(reactionByUserIndex, 1);
         } else {
           // Replace with new emoji.
-          message.reactions[currentReactionIndex] = {
+          message.reactions[reactionByUserIndex] = {
             user_id: userId,
-            type: normalizedEmoji,
+            type: emoji,
           };
         }
       } else {
-        message.reactions.push({ user_id: userId, type: normalizedEmoji });
+        message.reactions.push({ user_id: userId, type: emoji });
       }
 
       // Save to MongoDB
       await message.save();
       const updated = message.toObject();
 
-      logger.info(
-        `😊 Reaction ${normalizedEmoji} updated on message ${messageId}`,
-      );
+      logger.info(`😊 Reaction ${emoji} added to message ${messageId}`);
 
       // Update Redis cache
       await messageCacheService.updateMessage(
