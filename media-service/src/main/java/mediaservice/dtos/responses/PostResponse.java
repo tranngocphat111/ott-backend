@@ -14,6 +14,7 @@ import java.util.List;
 public class PostResponse extends BaseContentResponse {
     private String caption;
     private List<MediaResponse> medias;
+    private List<ContentAccessControlResponse> accessControls;
     private int totalReactions;
     private int totalComments;
     private int totalShares;

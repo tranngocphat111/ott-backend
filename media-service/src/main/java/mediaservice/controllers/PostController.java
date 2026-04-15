@@ -97,6 +97,46 @@ public class PostController {
     }
 
     /** PUT /posts/{id} – cập nhật bài post */
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<PostResponse> updatePostMultipart(
+            @PathVariable String id,
+            @RequestParam("accountId") String accountId,
+            @RequestParam("caption") String caption,
+            @RequestParam(value = "visibility", defaultValue = "PUBLIC") String visibility,
+            @RequestParam(value = "files", required = false) List<MultipartFile> files,
+            @RequestParam(value = "captions", required = false) List<String> captions,
+            @RequestParam(value = "accessControls", required = false) String accessControlsJson,
+            @RequestParam(value = "existingMedias", required = false) String existingMediasJson) {
+        VisibilityType vis = VisibilityType.valueOf(visibility.toUpperCase());
+        List<AccessControlRequest> accessControls = List.of();
+        if (accessControlsJson != null && !accessControlsJson.isBlank()) {
+            try {
+                accessControls = objectMapper.readValue(
+                        accessControlsJson,
+                        new TypeReference<List<AccessControlRequest>>() {}
+                );
+            } catch (Exception ignored) {
+                accessControls = List.of();
+            }
+        }
+
+        List<mediaservice.dtos.requests.MediaRequest> existingMedias = List.of();
+        if (existingMediasJson != null && !existingMediasJson.isBlank()) {
+            try {
+                existingMedias = objectMapper.readValue(
+                        existingMediasJson,
+                        new TypeReference<List<mediaservice.dtos.requests.MediaRequest>>() {}
+                );
+            } catch (Exception ignored) {
+                existingMedias = List.of();
+            }
+        }
+
+        return ResponseEntity.ok(
+                postService.updatePost(id, accountId, caption, vis, files, captions, accessControls, existingMedias)
+        );
+    }
+
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<PostResponse> updatePost(
             @PathVariable String id,

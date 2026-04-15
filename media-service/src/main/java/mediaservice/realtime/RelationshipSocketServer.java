@@ -34,14 +34,19 @@ public class RelationshipSocketServer {
         server = new SocketIOServer(config);
 
         server.addConnectListener(client ->
-                logger.info("Relationship socket connected: {}", client.getSessionId())
+            logger.info("Relationship socket connected: {}", client.getSessionId())
         );
         server.addDisconnectListener(client ->
-                logger.info("Relationship socket disconnected: {}", client.getSessionId())
+            logger.info("Relationship socket disconnected: {}", client.getSessionId())
         );
 
-        server.start();
-        logger.info("Relationship Socket.IO server started on {}:{}", host, port);
+        try {
+            server.start();
+            logger.info("Relationship Socket.IO server started on {}:{}", host, port);
+        } catch (Exception ex) {
+            logger.error("Socket.IO server start failed at {}:{}; continuing without realtime.", host, port, ex);
+            server = null;
+        }
     }
 
     @PreDestroy
