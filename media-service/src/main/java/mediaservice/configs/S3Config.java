@@ -13,19 +13,19 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class S3Config {
 
-    @Value("${aws.s3.access-key}")
+    @Value("${aws.social.s3.access-key}")
     private String accessKey;
 
-    @Value("${aws.s3.secret-key}")
+    @Value("${aws.social.s3.secret-key}")
     private String secretKey;
 
-    @Value("${aws.s3.region}")
+    @Value("${aws.social.s3.region}")
     private String region;
 
-    @Value("${aws.s3.use-local:false}")
+    @Value("${aws.social.s3.use-local:false}")
     private boolean useLocal;
 
-    @Value("${aws.s3.local-endpoint:http://localhost:4566}")
+    @Value("${aws.social.s3.local-endpoint:http://localhost:4566}")
     private String localEndpoint;
 
     @Bean

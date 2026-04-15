@@ -15,10 +15,10 @@ public class MediaUrlBuilder {
     @Value("${aws.s3.base-url}")
     private String baseUrl;
 
-    @Value("${aws.s3.bucket-name}")
+    @Value("${aws.social.s3.bucket-name}")
     private String bucketName;
 
-    @Value("${aws.s3.region}")
+    @Value("${aws.social.s3.region}")
     private String region;
 
     /**

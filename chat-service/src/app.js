@@ -3,13 +3,14 @@ const http = require("http");
 const { Server } = require("socket.io");
 const dotenv = require("dotenv");
 const cors = require("cors");
+
+dotenv.config();
+
 const connectDB = require("./config/db");
 const apiRoutes = require("./routes/api");
 const messageRoutes = require("./routes/messageRoutes");
 const messageEventsHandler = require("./events/messageEvents");
 const ParticipantService = require("./services/participantService");
-
-dotenv.config();
 connectDB();
 
 const app = express();

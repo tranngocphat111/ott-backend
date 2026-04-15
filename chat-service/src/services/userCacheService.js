@@ -3,19 +3,38 @@ const logger = require("../utils/logger");
 
 class UserCacheService {
   constructor() {
-    this.client = redis.createClient({
-      host: process.env.REDIS_HOST || "localhost",
-      port: process.env.REDIS_PORT || 6379,
-      password: process.env.REDIS_PASSWORD,
-      db: 0,
-    });
+    const redisUrl = process.env.REDIS_URL || process.env.REDIS_URI;
+    const redisConfig = redisUrl
+      ? { url: redisUrl }
+      : {
+          socket: {
+            host: process.env.REDIS_HOST || "localhost",
+            port: Number(process.env.REDIS_PORT || 6379),
+          },
+          username: process.env.REDIS_USERNAME || undefined,
+          password: process.env.REDIS_PASSWORD || undefined,
+          database: Number(process.env.REDIS_DB || 0),
+        };
+
+    this.client = redis.createClient(redisConfig);
+    this.redisAvailable = true;
 
     this.client.on("error", (err) => {
       logger.error("User Redis Client Error:", err);
+
+      const message = String(err?.message || "");
+      if (/NOAUTH|WRONGPASS|AUTH/i.test(message)) {
+        this.redisAvailable = false;
+      }
     });
 
     this.client.connect().catch((err) => {
       logger.error("Failed to connect User Redis:", err);
+
+      const message = String(err?.message || "");
+      if (/NOAUTH|WRONGPASS|AUTH/i.test(message)) {
+        this.redisAvailable = false;
+      }
     });
 
     this.USER_KEY_PREFIX = "users:profile:";
@@ -27,6 +46,10 @@ class UserCacheService {
   }
 
   async getCachedUser(userId) {
+    if (!this.redisAvailable) {
+      return null;
+    }
+
     try {
       const key = this.getUserKey(userId);
       const cached = await this.client.get(key);
@@ -39,6 +62,10 @@ class UserCacheService {
   }
 
   async setCachedUser(userId, user) {
+    if (!this.redisAvailable) {
+      return false;
+    }
+
     try {
       const key = this.getUserKey(userId);
       await this.client.setEx(key, this.CACHE_TTL, JSON.stringify(user));
@@ -50,6 +77,10 @@ class UserCacheService {
   }
 
   async clearCachedUser(userId) {
+    if (!this.redisAvailable) {
+      return false;
+    }
+
     try {
       const key = this.getUserKey(userId);
       await this.client.del(key);

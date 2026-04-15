@@ -167,6 +167,18 @@ public class QrLoginService {
                 LoginMethod.QR_CODE
         );
 
+        userServiceClient.createSession(
+                userId,
+                qrCode.getDeviceId(),
+                null,
+                qrCode.getIpAddress(),
+                qrCode.getDeviceInfo(),
+                token,
+                refreshToken,
+                LoginMethod.QR_CODE.name(),
+                qrCode.getDeviceType() != null ? qrCode.getDeviceType().name() : "UNKNOWN"
+        );
+
         qrCode.setStatus(QrCodeStatus.CONFIRMED);
         qrCode.setConfirmedAt(LocalDateTime.now());
         qrCode = qrCodeRepository.save(qrCode);

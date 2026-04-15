@@ -23,7 +23,19 @@ const MessageSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["text", "link", "image", "video", "file", "audio", "system_add"],
+      enum: [
+        "text",
+        "link",
+        "image",
+        "video",
+        "file",
+        "audio",
+        "system_add",
+        "system_block",
+        "system_leave",
+        "system_pin",
+        "system_unpin",
+      ],
       default: "text",
     },
 
