@@ -49,6 +49,38 @@ module.exports = (io) => {
       }
     });
 
+    socket.on("nguoi_dung_dang_soan_tin_nhan", (data) => {
+      try {
+        const { conversationId, userId } = data || {};
+
+        if (!conversationId || !userId) return;
+
+        socket.to(conversationId).emit("nguoi_dung_dang_soan_tin_nhan", {
+          conversationId,
+          userId,
+          timestamp: Date.now(),
+        });
+      } catch (error) {
+        logger.error("Error broadcasting typing start:", error);
+      }
+    });
+
+    socket.on("nguoi_dung_ngung_soan_tin_nhan", (data) => {
+      try {
+        const { conversationId, userId } = data || {};
+
+        if (!conversationId || !userId) return;
+
+        socket.to(conversationId).emit("nguoi_dung_ngung_soan_tin_nhan", {
+          conversationId,
+          userId,
+          timestamp: Date.now(),
+        });
+      } catch (error) {
+        logger.error("Error broadcasting typing stop:", error);
+      }
+    });
+
     /**
      * Send new message
      */
