@@ -90,7 +90,11 @@ const sanitizeAvatarValue = (value) => {
 class MessageRepository {
   async hydrateSenderInfo(messages = []) {
     const senderIds = [
-      ...new Set(messages.map((message) => String(message?.sender_id || "")).filter(Boolean)),
+      ...new Set(
+        messages
+          .map((message) => String(message?.sender_id || ""))
+          .filter(Boolean),
+      ),
     ];
 
     if (!senderIds.length) {
@@ -109,7 +113,9 @@ class MessageRepository {
       return {
         ...message,
         sender_name: sender?.name || message.sender_name || "",
-        sender_avatar: sanitizeAvatarValue(sender?.avatar || message.sender_avatar || ""),
+        sender_avatar: sanitizeAvatarValue(
+          sender?.avatar || message.sender_avatar || "",
+        ),
       };
     });
   }
@@ -169,7 +175,7 @@ class MessageRepository {
     return !deletedFor.includes(userId);
   }
 
-  async hydrateReplyPreviews(conversationId, messages) {
+  async hydrateReplyPreviews(conversationId, messages, userId) {
     const replyIds = [
       ...new Set(
         messages
@@ -203,10 +209,25 @@ class MessageRepository {
     );
 
     const referencedMap = new Map(
-      referencedMessages.map((m) => [
-        m.msg_id,
-        buildReplyPreview(m, senderNameMap.get(m.sender_id) || ""),
-      ]),
+      referencedMessages.map((m) => {
+        const preview = buildReplyPreview(
+          m,
+          senderNameMap.get(m.sender_id) || "",
+        );
+
+        // Hide reply preview content when target message is deleted for this user.
+        if (!this.isVisibleToUser(m, userId)) {
+          return [
+            m.msg_id,
+            {
+              ...preview,
+              is_deleted: true,
+            },
+          ];
+        }
+
+        return [m.msg_id, preview];
+      }),
     );
 
     return messages.map((m) => ({
@@ -333,21 +354,17 @@ class MessageRepository {
             );
 
             if (!dbLatestId || cacheLatestId === dbLatestId) {
-// Gộp cả 3 bước: Reaction -> Người gửi -> Reply
-            const liveReactionMessages = await this.hydrateLiveReactions(
-              conversationId,
-              visibleMessages
-            );
-            const hydratedSenders = await this.hydrateSenderInfo(
-              liveReactionMessages
-            );
-            return await this.hydrateReplyPreviews(
-              conversationId,
-              hydratedSenders
-            );
+              const liveReactionMessages = await this.hydrateLiveReactions(
+                conversationId,
+                visibleMessages,
+              );
+              const hydratedSenders =
+                await this.hydrateSenderInfo(liveReactionMessages);
+
               return await this.hydrateReplyPreviews(
                 conversationId,
-                liveReactionMessages,
+                hydratedSenders,
+                userId,
               );
             }
 
@@ -387,6 +404,7 @@ class MessageRepository {
       const hydratedMessages = await this.hydrateReplyPreviews(
         conversationId,
         hydratedWithSender,
+        userId,
       );
 
       // Step 4: Cache the results
@@ -472,6 +490,7 @@ class MessageRepository {
       const hydratedMessages = await this.hydrateReplyPreviews(
         conversationId,
         orderedMessages,
+        userId,
       );
 
       return {
@@ -537,6 +556,7 @@ class MessageRepository {
       const hydratedMessages = await this.hydrateReplyPreviews(
         conversationId,
         orderedMessages,
+        userId,
       );
 
       logger.info(
@@ -589,7 +609,7 @@ class MessageRepository {
 
       logger.info(`✓ Loaded ${messages.length} newer messages from DB`);
 
-      return await this.hydrateReplyPreviews(conversationId, messages);
+      return await this.hydrateReplyPreviews(conversationId, messages, userId);
     } catch (error) {
       logger.error("Error getting newer messages:", error);
       throw error;
@@ -693,7 +713,7 @@ class MessageRepository {
         throw new Error("Message not found");
       }
 
-if (!Array.isArray(message.reactions)) {
+      if (!Array.isArray(message.reactions)) {
         message.reactions = [];
       }
 
@@ -710,7 +730,7 @@ if (!Array.isArray(message.reactions)) {
           ? String(message.reactions[currentReactionIndex]?.type || "")
           : "";
 
-if (currentReactionIndex >= 0) {
+      if (currentReactionIndex >= 0) {
         if (message.reactions[currentReactionIndex].type === normalizedEmoji) {
           // Tap same emoji again -> remove reaction.
           message.reactions.splice(currentReactionIndex, 1);

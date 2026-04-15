@@ -782,7 +782,7 @@ exports.getPinnedMessages = async (conversationId, userId) => {
     .lean();
 
   const visibleMessages = (Array.isArray(messages) ? messages : []).filter(
-    (message) => isVisibleToUser(message, userId),
+    (message) => !message.is_deleted,
   );
 
   const senderIds = [
