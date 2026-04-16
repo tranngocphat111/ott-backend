@@ -99,6 +99,12 @@ const endCallRoom = async (conversationId, endedBy = null) => {
     });
   } catch (error) {
     console.error("Loi khi lay participants de endCallRoom:", error);
+    // Fallback: dung memberIds tu cache neu DB loi
+    if (callState.memberIds) {
+      callState.memberIds.forEach((uid) => {
+        io.to(`user:${uid}`).emit("ket_thuc_phong_goi", payload);
+      });
+    }
   }
 
   io.in(`call:${conversationId}`).socketsLeave(`call:${conversationId}`);
@@ -552,12 +558,19 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", async () => {
     const userId = socket.data.userId;
-    if (!userId) return;
+    if (!userId) {
+      console.log("Socket disconnect: no userId");
+      return;
+    }
 
-    // Nếu đây là socket cuối cùng của user, dọn dẹp triệt để
+    // Kiểm tra xem user còn socket nào khác đang online không (ví dụ: tab CallPage hoặc tab chat khác)
     const activeSockets = await io.in(`user:${userId}`).fetchSockets();
+    
     if (activeSockets.length === 0) {
+      console.log(`User ${userId} da ngat ket noi hoan toan. Dang don dep cuoc goi...`);
       removeUserFromAllCalls(userId);
+    } else {
+      console.log(`User ${userId} ngat ket noi 1 socket, nhung van con ${activeSockets.length} socket khac hoat dong.`);
     }
   });
 });
