@@ -12,6 +12,8 @@ import mediaservice.utils.MediaUrlBuilder;
 import org.mapstruct.*;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.util.ArrayList;
+
 import java.util.List;
 
 @Mapper(componentModel = "spring")
@@ -19,6 +21,9 @@ public abstract class PostMapper {
 
     @Autowired
     protected MediaUrlBuilder mediaUrlBuilder;
+
+    @Autowired
+    protected ContentAccessControlMapper contentAccessControlMapper;
 
     @Mapping(target = "hashTags", ignore = true)
     @Mapping(target = "medias",   ignore = true)
@@ -34,6 +39,16 @@ public abstract class PostMapper {
     @Mapping(target = "totalComments",       ignore = true)
     @Mapping(target = "totalShares",         ignore = true)
     public abstract PostResponse toResponse(Post post);
+
+    @AfterMapping
+    protected void mapAccessControls(Post post, @MappingTarget PostResponse response) {
+        if (post.getAccessControls() == null || post.getAccessControls().isEmpty()) {
+            response.setAccessControls(new ArrayList<>());
+            return;
+        }
+        response.setAccessControls(
+                contentAccessControlMapper.toResponseList(new ArrayList<>(post.getAccessControls())));
+    }
 
     public abstract List<PostResponse> toResponseList(List<Post> posts);
 

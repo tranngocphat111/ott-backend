@@ -28,6 +28,10 @@ public interface PostService {
 
 
     PostResponse updatePost(String id, PostRequest request);
+    PostResponse updatePost(String id, String accountId, String caption, VisibilityType visibility,
+                            List<MultipartFile> files, List<String> captions,
+                            List<mediaservice.dtos.requests.AccessControlRequest> accessControls,
+                            List<mediaservice.dtos.requests.MediaRequest> existingMedias);
     void deletePost(String id);
     List<PostResponse> getPostsByUserId(String userId);
 }
