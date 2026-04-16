@@ -7,9 +7,8 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class MediaCompressionJob {
+public class MediaUploadJob {
     private String tempPath;
-    private String mediaType;
     private String s3Key;
     private String contentType;
     private String contentId;

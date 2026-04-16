@@ -6,10 +6,16 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.redis.repository.configuration.EnableRedisRepositories;
 import mediaservice.configs.MediaCompressionProperties;
+import mediaservice.configs.MediaDeleteProperties;
+import mediaservice.configs.MediaUploadProperties;
 
 @SpringBootApplication
 @EnableJpaRepositories(basePackages = "mediaservice.repositories")
-@EnableConfigurationProperties(MediaCompressionProperties.class)
+@EnableConfigurationProperties({
+    MediaCompressionProperties.class,
+    MediaDeleteProperties.class,
+    MediaUploadProperties.class
+})
 //@EnableRedisRepositories(basePackages = "mediaservice.repositories")
 public class MediaServiceSpringApplication {
     public static void main(String[] args) {

@@ -6,6 +6,8 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.GeneratePresignedUrlRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.transfer.TransferManager;
+import com.amazonaws.services.s3.transfer.Upload;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import mediaservice.services.S3Service;
@@ -25,6 +27,7 @@ import java.util.UUID;
 public class S3ServiceImpl implements S3Service {
 
     private final AmazonS3 amazonS3;
+    private final TransferManager transferManager;
 
     @Value("${aws.social.s3.bucket-name}")
     private String bucketName;
@@ -35,10 +38,9 @@ public class S3ServiceImpl implements S3Service {
             throw new IllegalArgumentException("File is empty");
         }
 
-        try {
+        try (InputStream inputStream = file.getInputStream()) {
             String originalFilename = file.getOriginalFilename();
             String contentType = file.getContentType();
-            InputStream inputStream = file.getInputStream();
             long fileSize = file.getSize();
 
             return uploadFile(inputStream, originalFilename, contentType, folder, fileSize, false);
@@ -54,9 +56,8 @@ public class S3ServiceImpl implements S3Service {
             throw new IllegalArgumentException("File is empty");
         }
 
-        try {
+        try (InputStream inputStream = file.getInputStream()) {
             String contentType = file.getContentType();
-            InputStream inputStream = file.getInputStream();
             long fileSize = file.getSize();
 
             return uploadFile(inputStream, fileName, contentType, folder, fileSize, true);
@@ -68,7 +69,7 @@ public class S3ServiceImpl implements S3Service {
 
     @Override
     public String uploadFile(InputStream inputStream, String fileName, String contentType, String folder) {
-        return uploadFile(inputStream, fileName, contentType, folder, -1, false);
+        return uploadFile(inputStream, fileName, contentType, folder, -1, true);
     }
 
     /**
@@ -92,9 +93,7 @@ public class S3ServiceImpl implements S3Service {
                 metadata.setContentLength(fileSize); // avoids SDK in-memory buffering
             }
 
-            // Upload to S3 – do NOT set PublicRead ACL; use bucket policy for access control
-            // Setting CannedAccessControlList.PublicRead will fail when bucket has
-            // "Block Public ACLs" enabled (AWS default since 2023).
+            // Multipart upload via TransferManager for faster throughput.
             PutObjectRequest putObjectRequest = new PutObjectRequest(
                     bucketName,
                     fileKey,
@@ -102,12 +101,16 @@ public class S3ServiceImpl implements S3Service {
                     metadata
             );
 
-            amazonS3.putObject(putObjectRequest);
+            Upload upload = transferManager.upload(putObjectRequest);
+            upload.waitForCompletion();
 
             log.info("File uploaded successfully: {}", fileKey);
             return fileKey;  // Return relative key; PostMapper converts to full URL
 
         } catch (AmazonServiceException e) {
+            log.error("Error uploading file to S3: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to upload file to S3", e);
+        } catch (Exception e) {
             log.error("Error uploading file to S3: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to upload file to S3", e);
         }

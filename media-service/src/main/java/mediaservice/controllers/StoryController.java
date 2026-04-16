@@ -6,8 +6,9 @@ import mediaservice.dtos.responses.StoryUploadResponse;
 import mediaservice.dtos.responses.StoryReelResponse;
 import mediaservice.dtos.responses.StoryResponse;
 import mediaservice.dtos.messages.MediaCompressionJob;
+import mediaservice.dtos.messages.MediaUploadJob;
 import mediaservice.services.MediaCompressionJobPublisher;
-import mediaservice.services.S3Service;
+import mediaservice.services.MediaUploadJobPublisher;
 import mediaservice.services.StoryService;
 import mediaservice.utils.MediaTempFileStore;
 import org.springframework.http.MediaType;
@@ -24,8 +25,8 @@ import java.util.UUID;
 public class StoryController {
 
     private final StoryService storyService;
-    private final S3Service s3Service;
     private final MediaCompressionJobPublisher mediaCompressionJobPublisher;
+    private final MediaUploadJobPublisher mediaUploadJobPublisher;
 
     /** POST /stories - tao story moi */
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -47,35 +48,52 @@ public class StoryController {
         String shortToken = Long.toString(System.currentTimeMillis(), 36)
                 + "-" + UUID.randomUUID().toString().substring(0, 6);
         String fileName = shortToken + extension;
-        String fileKey = s3Service.uploadFile(file, "stories", fileName);
+        String fileKey = "stories/" + fileName;
 
-        enqueueCompressionIfNeeded(file, fileKey);
+        enqueueAsyncMediaProcessing(file, fileKey, storyItemId);
 
         return ResponseEntity.ok(new StoryUploadResponse(null, fileKey));
     }
 
-    private void enqueueCompressionIfNeeded(MultipartFile file, String s3Key) {
+    private void enqueueAsyncMediaProcessing(MultipartFile file, String s3Key, String storyItemId) {
         String contentType = file.getContentType() != null ? file.getContentType() : "";
         boolean isVideo = contentType.startsWith("video/");
         boolean isAudio = contentType.startsWith("audio/");
 
-        if (!isVideo && !isAudio) {
-            return;
-        }
-
         try {
-            String mediaType = isAudio ? "AUDIO" : "VIDEO";
-            String outputContentType = isAudio ? "audio/mp4" : "video/mp4";
-            String prefix = isAudio ? "audio-" : "video-";
+            if (isVideo || isAudio) {
+                String mediaType = isAudio ? "AUDIO" : "VIDEO";
+                String outputContentType = isAudio ? "audio/mp4" : "video/mp4";
+                String prefix = isAudio ? "audio-" : "video-";
 
-            java.nio.file.Path tempPath = MediaTempFileStore.saveToTemp(file, prefix);
-            MediaCompressionJob job = new MediaCompressionJob(
+                java.nio.file.Path tempPath = MediaTempFileStore.saveToTemp(file, prefix);
+                MediaCompressionJob job = new MediaCompressionJob(
                     tempPath.toString(),
                     mediaType,
                     s3Key,
-                    outputContentType
+                    outputContentType,
+                    null,
+                    "STORY",
+                    "UPLOAD",
+                    storyItemId,
+                    null
+                );
+                mediaCompressionJobPublisher.publish(job);
+                return;
+            }
+
+            java.nio.file.Path tempPath = MediaTempFileStore.saveToTemp(file, "image-");
+            MediaUploadJob job = new MediaUploadJob(
+                    tempPath.toString(),
+                    s3Key,
+                    contentType,
+                    null,
+                    "STORY",
+                    "UPLOAD",
+                    storyItemId,
+                    null
             );
-            mediaCompressionJobPublisher.publish(job);
+            mediaUploadJobPublisher.publish(job);
         } catch (Exception ex) {
             // Ignore enqueue failures to keep upload flow stable.
         }

@@ -20,9 +20,14 @@ import mediaservice.repositories.PostRepository;
 import mediaservice.repositories.ReactionRepository;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.dtos.messages.MediaCompressionJob;
+import mediaservice.dtos.messages.MediaDeleteJob;
+import mediaservice.dtos.messages.MediaUploadJob;
+import mediaservice.realtime.MediaRealtimePublisher;
+import mediaservice.realtime.MediaRealtimeUpdate;
 import mediaservice.services.PostService;
 import mediaservice.services.MediaCompressionJobPublisher;
-import mediaservice.services.S3Service;
+import mediaservice.services.MediaDeleteJobPublisher;
+import mediaservice.services.MediaUploadJobPublisher;
 import mediaservice.dtos.requests.AccessControlRequest;
 import mediaservice.dtos.requests.MediaRequest;
 import mediaservice.models.enums.MediaType;
@@ -34,15 +39,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import jakarta.annotation.PreDestroy;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -55,44 +58,15 @@ public class PostServiceImpl implements PostService {
     private final CommentRepository commentRepository;
     private final UserAccountRepository userAccountRepository;
     private final MediaRepository mediaRepository;
-    private final S3Service s3Service;
     private final ContentAccessControlRepository contentAccessControlRepository;
     private final MediaUrlBuilder mediaUrlBuilder;
     private final MediaCompressionJobPublisher mediaCompressionJobPublisher;
+    private final MediaDeleteJobPublisher mediaDeleteJobPublisher;
+    private final MediaUploadJobPublisher mediaUploadJobPublisher;
+    private final MediaRealtimePublisher mediaRealtimePublisher;
 
     @PersistenceContext
     private EntityManager entityManager;
-
-    private final ExecutorService uploadExecutor = Executors.newFixedThreadPool(
-        Math.max(2, Math.min(8, Runtime.getRuntime().availableProcessors()))
-    );
-
-    private static class UploadResult {
-        private final int orderIndex;
-        private final String fileName;
-        private final boolean isVideo;
-        private final String caption;
-
-        private UploadResult(int orderIndex, String fileName, boolean isVideo, String caption) {
-            this.orderIndex = orderIndex;
-            this.fileName = fileName;
-            this.isVideo = isVideo;
-            this.caption = caption;
-        }
-    }
-
-    @PreDestroy
-    void shutdownUploadExecutor() {
-        uploadExecutor.shutdown();
-        try {
-            if (!uploadExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-                uploadExecutor.shutdownNow();
-            }
-        } catch (InterruptedException ex) {
-            uploadExecutor.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
-    }
 
     /* ─── helper: fill totalReactions / totalComments from DB ─ */
     private PostResponse enrichCounts(PostResponse response, String postId) {
@@ -161,55 +135,41 @@ public class PostServiceImpl implements PostService {
             }
         }
 
-        // 3. Upload each media file → S3 → save Media row (với caption per-file)
+        // 3. Save media rows first, then enqueue async upload/compress jobs.
+        boolean hasAsyncJobs = false;
         if (files != null) {
-            List<CompletableFuture<UploadResult>> futures = new ArrayList<>();
             for (int i = 0; i < files.size(); i++) {
-                final int index = i;
                 MultipartFile file = files.get(i);
                 if (file == null || file.isEmpty()) continue;
-                String mediaCaption = (captions != null && index < captions.size())
-                        ? (captions.get(index).isBlank() ? null : captions.get(index)) : null;
 
-                futures.add(CompletableFuture.supplyAsync(() -> {
-                    try {
-                        String contentType = file.getContentType() != null ? file.getContentType() : "";
-                        boolean isVideo = contentType.startsWith("video/");
-                        String folder = isVideo ? "social/videos" : "social/posts";
-                        String s3Key = s3Service.uploadFile(file, folder);
-                        String fileName = s3Key.substring(s3Key.lastIndexOf('/') + 1);
-                        log.info("[createPost] Uploaded media #{} -> {} (stored as: {})",
-                                index, s3Key, fileName);
-                        enqueueCompressionIfNeeded(file, s3Key);
-                        return new UploadResult(index, fileName, isVideo, mediaCaption);
-                    } catch (Exception e) {
-                        log.error("[createPost] S3 upload FAILED for file '{}': {}",
-                                file.getOriginalFilename(), e.getMessage(), e);
-                        throw new RuntimeException("Failed to upload media: " + file.getOriginalFilename(), e);
-                    }
-                }, uploadExecutor));
-            }
+                String mediaCaption = (captions != null && i < captions.size())
+                        ? (captions.get(i).isBlank() ? null : captions.get(i)) : null;
+                int orderIndex = i;
 
-            List<UploadResult> results = futures.stream()
-                    .map(CompletableFuture::join)
-                    .sorted(java.util.Comparator.comparingInt(r -> r.orderIndex))
-                    .toList();
+                String contentType = file.getContentType() != null ? file.getContentType() : "";
+                boolean isVideo = contentType.startsWith("video/");
+                String folder = isVideo ? "social/videos" : "social/posts";
+                String s3Key = buildS3Key(folder, file.getOriginalFilename());
+                String fileName = s3Key.substring(s3Key.lastIndexOf('/') + 1);
 
-            for (UploadResult result : results) {
-                if (result.isVideo) {
+                if (isVideo) {
                     VideoMedia media = new VideoMedia();
-                    media.setUrl(result.fileName);
-                    media.setOrderIndex(result.orderIndex);
-                    media.setCaption(result.caption);
+                    media.setUrl(fileName);
+                    media.setOrderIndex(orderIndex);
+                    media.setCaption(mediaCaption);
                     media.setContent(savedPost);
                     mediaRepository.save(media);
+                    enqueueAsyncMediaProcessing(file, s3Key, savedPost.getId(), "POST", "CREATE", media.getId(), orderIndex);
+                    hasAsyncJobs = true;
                 } else {
                     ImageMedia media = new ImageMedia();
-                    media.setUrl(result.fileName);
-                    media.setOrderIndex(result.orderIndex);
-                    media.setCaption(result.caption);
+                    media.setUrl(fileName);
+                    media.setOrderIndex(orderIndex);
+                    media.setCaption(mediaCaption);
                     media.setContent(savedPost);
                     mediaRepository.save(media);
+                    enqueueAsyncMediaProcessing(file, s3Key, savedPost.getId(), "POST", "CREATE", media.getId(), orderIndex);
+                    hasAsyncJobs = true;
                 }
             }
         }
@@ -218,6 +178,10 @@ public class PostServiceImpl implements PostService {
         //    (tránh trả về Hibernate cache cũ không có media)
         entityManager.flush();
         entityManager.refresh(savedPost);
+
+        if (!hasAsyncJobs) {
+            publishAfterCommit(savedPost.getId(), "POST", "CREATE");
+        }
 
         return enrichCounts(postMapper.toResponse(savedPost), savedPost.getId());
     }
@@ -290,6 +254,9 @@ public class PostServiceImpl implements PostService {
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Post not found with id: " + id));
 
+        List<String> previousKeys = collectPostMediaKeys(post);
+        List<String> keepKeys = new ArrayList<>();
+
         String ownerId = accountId != null ? accountId :
             (post.getAccount() != null ? post.getAccount().getId() : null);
 
@@ -344,6 +311,11 @@ public class PostServiceImpl implements PostService {
                 int idx = req.getOrderIndex();
                 orderIndex = Math.max(orderIndex, idx + 1);
 
+            String defaultFolder = req.getType() == MediaType.VIDEO_MEDIA
+                ? "social/videos" : "social/posts";
+            addKey(keepKeys, resolveKey(req.getUrl(), defaultFolder));
+            addKey(keepKeys, resolveKey(req.getThumbnailUrl(), "social/videos"));
+
                 if (req.getType() == MediaType.VIDEO_MEDIA) {
                     VideoMedia media = new VideoMedia();
                     media.setUrl(fileName);
@@ -362,56 +334,43 @@ public class PostServiceImpl implements PostService {
             }
         }
 
+        boolean hasUpdateAsyncJobs = false;
         if (files != null) {
-            List<CompletableFuture<UploadResult>> futures = new ArrayList<>();
             for (int i = 0; i < files.size(); i++) {
-                final int index = i;
-                MultipartFile file = files.get(index);
+                MultipartFile file = files.get(i);
                 if (file == null || file.isEmpty()) continue;
-                String mediaCaption = (captions != null && index < captions.size())
-                        ? (captions.get(index).isBlank() ? null : captions.get(index)) : null;
-                int targetOrderIndex = orderIndex + index;
+                String mediaCaption = (captions != null && i < captions.size())
+                        ? (captions.get(i).isBlank() ? null : captions.get(i)) : null;
+                int targetOrderIndex = orderIndex + i;
 
-                futures.add(CompletableFuture.supplyAsync(() -> {
-                    try {
-                        String contentType = file.getContentType() != null ? file.getContentType() : "";
-                        boolean isVideo = contentType.startsWith("video/");
-                        String folder = isVideo ? "social/videos" : "social/posts";
+                String contentType = file.getContentType() != null ? file.getContentType() : "";
+                boolean isVideo = contentType.startsWith("video/");
+                String folder = isVideo ? "social/videos" : "social/posts";
 
-                        String s3Key = s3Service.uploadFile(file, folder);
-                        String fileName = s3Key.substring(s3Key.lastIndexOf('/') + 1);
-                        log.info("[updatePost] Uploaded media #{} -> {} (stored as: {})",
-                                targetOrderIndex, s3Key, fileName);
-                        enqueueCompressionIfNeeded(file, s3Key);
-                        return new UploadResult(targetOrderIndex, fileName, isVideo, mediaCaption);
-                    } catch (Exception e) {
-                        log.error("[updatePost] S3 upload FAILED for file '{}': {}",
-                                file.getOriginalFilename(), e.getMessage(), e);
-                        throw new RuntimeException("Failed to upload media: " + file.getOriginalFilename(), e);
-                    }
-                }, uploadExecutor));
-            }
+                String s3Key = buildS3Key(folder, file.getOriginalFilename());
+                String fileName = s3Key.substring(s3Key.lastIndexOf('/') + 1);
+                log.info("[updatePost] Queued media #{} -> {} (stored as: {})",
+                        targetOrderIndex, s3Key, fileName);
+                addKey(keepKeys, s3Key);
 
-            List<UploadResult> results = futures.stream()
-                    .map(CompletableFuture::join)
-                    .sorted(java.util.Comparator.comparingInt(r -> r.orderIndex))
-                    .toList();
-
-            for (UploadResult result : results) {
-                if (result.isVideo) {
+                if (isVideo) {
                     VideoMedia media = new VideoMedia();
-                    media.setUrl(result.fileName);
-                    media.setOrderIndex(result.orderIndex);
-                    media.setCaption(result.caption);
+                    media.setUrl(fileName);
+                    media.setOrderIndex(targetOrderIndex);
+                    media.setCaption(mediaCaption);
                     media.setContent(post);
                     mediaRepository.save(media);
+                    enqueueAsyncMediaProcessing(file, s3Key, post.getId(), "POST", "UPDATE", media.getId(), targetOrderIndex);
+                    hasUpdateAsyncJobs = true;
                 } else {
                     ImageMedia media = new ImageMedia();
-                    media.setUrl(result.fileName);
-                    media.setOrderIndex(result.orderIndex);
-                    media.setCaption(result.caption);
+                    media.setUrl(fileName);
+                    media.setOrderIndex(targetOrderIndex);
+                    media.setCaption(mediaCaption);
                     media.setContent(post);
                     mediaRepository.save(media);
+                    enqueueAsyncMediaProcessing(file, s3Key, post.getId(), "POST", "UPDATE", media.getId(), targetOrderIndex);
+                    hasUpdateAsyncJobs = true;
                 }
             }
         }
@@ -420,33 +379,70 @@ public class PostServiceImpl implements PostService {
         entityManager.flush();
         entityManager.refresh(updatedPost);
 
+        List<String> deleteKeys = new ArrayList<>();
+        for (String key : previousKeys) {
+            if (!keepKeys.contains(key)) {
+                deleteKeys.add(key);
+            }
+        }
+        boolean hasDeleteJobs = !deleteKeys.isEmpty();
+        enqueueDeleteJob(deleteKeys, post.getId(), "POST", "UPDATE");
+
+        if (!hasUpdateAsyncJobs && !hasDeleteJobs) {
+            publishAfterCommit(post.getId(), "POST", "UPDATE");
+        }
+
         return enrichCounts(postMapper.toResponse(updatedPost), updatedPost.getId());
     }
 
-    private void enqueueCompressionIfNeeded(MultipartFile file, String s3Key) {
+    private void enqueueAsyncMediaProcessing(
+            MultipartFile file,
+            String s3Key,
+            String contentId,
+            String contentTargetType,
+            String operation,
+            String mediaId,
+            int orderIndex) {
         String contentType = file.getContentType() != null ? file.getContentType() : "";
         boolean isVideo = contentType.startsWith("video/");
         boolean isAudio = contentType.startsWith("audio/");
 
-        if (!isVideo && !isAudio) {
-            return;
-        }
-
         try {
-            String mediaType = isAudio ? "AUDIO" : "VIDEO";
-            String outputContentType = isAudio ? "audio/mp4" : "video/mp4";
-            String prefix = isAudio ? "audio-" : "video-";
+            if (isVideo || isAudio) {
+                String mediaType = isAudio ? "AUDIO" : "VIDEO";
+                String outputContentType = isAudio ? "audio/mp4" : "video/mp4";
+                String prefix = isAudio ? "audio-" : "video-";
 
-            java.nio.file.Path tempPath = MediaTempFileStore.saveToTemp(file, prefix);
-            MediaCompressionJob job = new MediaCompressionJob(
+                java.nio.file.Path tempPath = MediaTempFileStore.saveToTemp(file, prefix);
+                    MediaCompressionJob job = new MediaCompressionJob(
+                        tempPath.toString(),
+                        mediaType,
+                        s3Key,
+                        outputContentType,
+                        contentId,
+                        contentTargetType,
+                        operation,
+                        mediaId,
+                        orderIndex
+                );
+                mediaCompressionJobPublisher.publish(job);
+                return;
+            }
+
+            java.nio.file.Path tempPath = MediaTempFileStore.saveToTemp(file, "image-");
+                MediaUploadJob job = new MediaUploadJob(
                     tempPath.toString(),
-                    mediaType,
                     s3Key,
-                    outputContentType
+                    contentType,
+                    contentId,
+                    contentTargetType,
+                    operation,
+                    mediaId,
+                    orderIndex
             );
-            mediaCompressionJobPublisher.publish(job);
+            mediaUploadJobPublisher.publish(job);
         } catch (Exception ex) {
-            log.warn("[MediaCompression] Failed to enqueue job for {}: {}",
+            log.warn("[MediaUpload] Failed to enqueue job for {}: {}",
                     file.getOriginalFilename(), ex.getMessage());
         }
     }
@@ -455,10 +451,105 @@ public class PostServiceImpl implements PostService {
     @Transactional
     @CacheEvict(value = {"posts", "allPosts", "userPosts"}, allEntries = true)
     public void deletePost(String id) {
-        if (!postRepository.existsById(id)) {
-            throw new RuntimeException("Post not found with id: " + id);
+        Post post = postRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Post not found with id: " + id));
+
+        List<String> deleteKeys = collectPostMediaKeys(post);
+        postRepository.delete(post);
+
+        if (deleteKeys.isEmpty()) {
+            publishAfterCommit(post.getId(), "POST", "DELETE");
+        } else {
+            enqueueDeleteJob(deleteKeys, post.getId(), "POST", "DELETE");
         }
-        postRepository.deleteById(id);
+    }
+
+    private List<String> collectPostMediaKeys(Post post) {
+        if (post.getMedias() == null || post.getMedias().isEmpty()) {
+            return List.of();
+        }
+
+        List<String> keys = new ArrayList<>();
+        for (mediaservice.models.Media media : post.getMedias()) {
+            String defaultFolder = media instanceof VideoMedia ? "social/videos" : "social/posts";
+            addKey(keys, resolveKey(media.getUrl(), defaultFolder));
+
+            if (media instanceof VideoMedia video && video.getThumbnailUrl() != null) {
+                addKey(keys, resolveKey(video.getThumbnailUrl(), "social/videos"));
+            }
+        }
+
+        return keys;
+    }
+
+    private void enqueueDeleteJob(List<String> keys, String contentId, String contentTargetType, String operation) {
+        if (keys == null || keys.isEmpty()) {
+            return;
+        }
+
+        try {
+            mediaDeleteJobPublisher.publish(new MediaDeleteJob(keys, contentId, contentTargetType, operation));
+        } catch (Exception ex) {
+            log.warn("[MediaDelete] Failed to enqueue delete job: {}", ex.getMessage());
+        }
+    }
+
+    private void publishAfterCommit(String contentId, String contentTargetType, String operation) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            mediaRealtimePublisher.publish(contentTargetType, contentId, operation, List.of(), List.of());
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                mediaRealtimePublisher.publish(contentTargetType, contentId, operation, List.of(), List.of());
+            }
+        });
+    }
+
+    private void addKey(List<String> keys, String key) {
+        if (key == null || key.isBlank()) {
+            return;
+        }
+        keys.add(key);
+    }
+
+    private String resolveKey(String raw, String defaultFolder) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+
+        String normalized = mediaUrlBuilder.isFullUrl(raw)
+                ? mediaUrlBuilder.extractRelativePath(raw)
+                : raw.trim();
+
+        if (normalized == null || normalized.isBlank()) {
+            return null;
+        }
+
+        if (normalized.contains("/")) {
+            return normalized;
+        }
+
+        return defaultFolder + "/" + normalized;
+    }
+
+    private String buildS3Key(String folder, String originalName) {
+        String extension = extractExtension(originalName);
+        String fileName = UUID.randomUUID() + extension;
+        return folder + "/" + fileName;
+    }
+
+    private String extractExtension(String fileName) {
+        if (fileName == null || fileName.isBlank()) {
+            return "";
+        }
+        int lastDot = fileName.lastIndexOf('.');
+        if (lastDot > -1 && lastDot < fileName.length() - 1) {
+            return fileName.substring(lastDot);
+        }
+        return "";
     }
 
     @Override

@@ -2,15 +2,21 @@ package mediaservice.services.impl;
 
 import lombok.RequiredArgsConstructor;
 import mediaservice.dtos.requests.StoryRequest;
+import mediaservice.dtos.requests.StoryItemRequest;
 import mediaservice.dtos.responses.StoryGroupResponse;
 import mediaservice.dtos.responses.StoryReelItemResponse;
 import mediaservice.dtos.responses.StoryReelResponse;
 import mediaservice.dtos.responses.StoryResponse;
 import mediaservice.mappers.StoryMapper;
 import mediaservice.mappers.UserAccountMapper;
+import mediaservice.dtos.messages.MediaDeleteJob;
+import mediaservice.realtime.MediaRealtimePublisher;
+import mediaservice.realtime.MediaRealtimeUpdate;
+import mediaservice.models.ImageItem;
 import mediaservice.models.StoryItem;
 import mediaservice.models.Story;
 import mediaservice.models.UserAccount;
+import mediaservice.models.VideoItem;
 import mediaservice.models.enums.ContentStatusType;
 import mediaservice.models.enums.RelationshipStatusType;
 import mediaservice.models.enums.RuleType;
@@ -19,7 +25,9 @@ import mediaservice.models.enums.VisibilityType;
 import mediaservice.repositories.StoryItemRepository;
 import mediaservice.repositories.StoryRepository;
 import mediaservice.repositories.UserAccountRepository;
+import mediaservice.services.MediaDeleteJobPublisher;
 import mediaservice.services.StoryService;
+import mediaservice.utils.MediaUrlBuilder;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Page;
@@ -27,6 +35,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
@@ -48,6 +58,9 @@ public class StoryServiceImpl implements StoryService {
     private final StoryMapper storyMapper;
     private final UserAccountRepository userAccountRepository;
     private final UserAccountMapper userAccountMapper;
+    private final MediaDeleteJobPublisher mediaDeleteJobPublisher;
+    private final MediaUrlBuilder mediaUrlBuilder;
+    private final MediaRealtimePublisher mediaRealtimePublisher;
 
     @Override
     @Transactional
@@ -84,6 +97,13 @@ public class StoryServiceImpl implements StoryService {
             pendingItems.forEach(item -> item.setStory(savedStory));
             List<StoryItem> persistedItems = storyItemRepository.saveAll(pendingItems);
             savedStory.setStoryItems(new HashSet<>(persistedItems));
+        }
+
+        boolean hasMedia = story.getStoryItems() != null && story.getStoryItems().stream().anyMatch(item ->
+            item instanceof ImageItem || item instanceof VideoItem
+        );
+        if (!hasMedia) {
+            publishAfterCommit(savedStory.getId(), "STORY", "CREATE");
         }
 
         return storyMapper.toResponse(savedStory);
@@ -139,6 +159,8 @@ public class StoryServiceImpl implements StoryService {
     public StoryResponse updateStory(String id, StoryRequest request) {
         Story story = storyRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Story not found with id: " + id));
+
+        List<String> previousKeys = collectStoryMediaKeys(story);
         storyMapper.updateEntity(request, story);
 
         if (request.getUserId() != null && !request.getUserId().isBlank()) {
@@ -148,6 +170,24 @@ public class StoryServiceImpl implements StoryService {
         }
 
         Story updatedStory = storyRepository.save(story);
+
+        if (request.getStoryItems() != null) {
+            List<String> keepKeys = collectStoryRequestMediaKeys(request.getStoryItems());
+            List<String> deleteKeys = new ArrayList<>();
+            for (String key : previousKeys) {
+                if (!keepKeys.contains(key)) {
+                    deleteKeys.add(key);
+                }
+            }
+            if (deleteKeys.isEmpty()) {
+                publishAfterCommit(story.getId(), "STORY", "UPDATE");
+            } else {
+                enqueueDeleteJob(deleteKeys, story.getId(), "STORY", "UPDATE");
+            }
+        } else {
+            publishAfterCommit(story.getId(), "STORY", "UPDATE");
+        }
+
         return storyMapper.toResponse(updatedStory);
     }
 
@@ -155,10 +195,119 @@ public class StoryServiceImpl implements StoryService {
     @Transactional
     @CacheEvict(value = {"stories", "allStories", "storyReel"}, allEntries = true)
     public void deleteStory(String id) {
-        if (!storyRepository.existsById(id)) {
-            throw new RuntimeException("Story not found with id: " + id);
+        Story story = storyRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Story not found with id: " + id));
+
+        List<String> deleteKeys = collectStoryMediaKeys(story);
+        storyRepository.delete(story);
+
+        if (deleteKeys.isEmpty()) {
+            publishAfterCommit(story.getId(), "STORY", "DELETE");
+        } else {
+            enqueueDeleteJob(deleteKeys, story.getId(), "STORY", "DELETE");
         }
-        storyRepository.deleteById(id);
+    }
+
+    private List<String> collectStoryMediaKeys(Story story) {
+        if (story.getStoryItems() == null || story.getStoryItems().isEmpty()) {
+            return List.of();
+        }
+
+        List<String> keys = new ArrayList<>();
+        for (StoryItem item : story.getStoryItems()) {
+            if (item instanceof ImageItem imageItem) {
+                addKey(keys, resolveKey(imageItem.getUrl(), "stories"));
+            } else if (item instanceof VideoItem videoItem) {
+                addKey(keys, resolveKey(videoItem.getUrl(), "stories"));
+                addKey(keys, resolveKey(videoItem.getThumbnailUrl(), "stories"));
+            }
+        }
+
+        return keys;
+    }
+
+    private void enqueueDeleteJob(List<String> keys, String contentId, String contentTargetType, String operation) {
+        if (keys == null || keys.isEmpty()) {
+            return;
+        }
+
+        try {
+            mediaDeleteJobPublisher.publish(new MediaDeleteJob(keys, contentId, contentTargetType, operation));
+        } catch (Exception ex) {
+            // Ignore delete job failures to keep delete flow responsive.
+        }
+    }
+
+    private void publishAfterCommit(String contentId, String contentTargetType, String operation) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            mediaRealtimePublisher.publish(contentTargetType, contentId, operation, List.of(), List.of());
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                mediaRealtimePublisher.publish(contentTargetType, contentId, operation, List.of(), List.of());
+            }
+        });
+    }
+
+    private void addKey(List<String> keys, String key) {
+        if (key == null || key.isBlank()) {
+            return;
+        }
+        keys.add(key);
+    }
+
+    private List<String> collectStoryRequestMediaKeys(List<StoryItemRequest> items) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> keys = new ArrayList<>();
+        for (StoryItemRequest item : items) {
+            if (item == null || item.getType() == null) {
+                continue;
+            }
+            switch (item.getType()) {
+                case IMAGE_ITEM -> {
+                    if (item.getImageItem() != null) {
+                        addKey(keys, resolveKey(item.getImageItem().getUrl(), "stories"));
+                    }
+                }
+                case VIDEO_ITEM -> {
+                    if (item.getVideoItem() != null) {
+                        addKey(keys, resolveKey(item.getVideoItem().getUrl(), "stories"));
+                        addKey(keys, resolveKey(item.getVideoItem().getThumbnailUrl(), "stories"));
+                    }
+                }
+                case TEXT_ITEM -> {
+                    // No media to keep.
+                }
+            }
+        }
+
+        return keys;
+    }
+
+    private String resolveKey(String raw, String defaultFolder) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+
+        String normalized = mediaUrlBuilder.isFullUrl(raw)
+                ? mediaUrlBuilder.extractRelativePath(raw)
+                : raw.trim();
+
+        if (normalized == null || normalized.isBlank()) {
+            return null;
+        }
+
+        if (normalized.contains("/")) {
+            return normalized;
+        }
+
+        return defaultFolder + "/" + normalized;
     }
 
     @Override
