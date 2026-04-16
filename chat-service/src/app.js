@@ -66,7 +66,7 @@ const isUserBusyInAnotherCall = (userId, conversationId) => {
   return false;
 };
 
-const endCallRoom = (conversationId, endedBy = null) => {
+const endCallRoom = async (conversationId, endedBy = null) => {
   const callState = activeCalls.get(conversationId);
   if (!callState) return;
 
@@ -82,8 +82,16 @@ const endCallRoom = (conversationId, endedBy = null) => {
 
   io.to(`call:${conversationId}`).emit("ket_thuc_phong_goi", payload);
 
-  for (const participantId of callState.participants) {
-    io.to(`user:${participantId}`).emit("ket_thuc_phong_goi", payload);
+  try {
+    const participants = await ParticipantService.getParticipants(conversationId);
+    participants.forEach((participant) => {
+      io.to(`user:${participant.user_id}`).emit("ket_thuc_phong_goi", payload);
+    });
+  } catch (error) {
+    console.error("Loi khi lay participants dde endCallRoom:", error);
+    for (const participantId of callState.participants) {
+      io.to(`user:${participantId}`).emit("ket_thuc_phong_goi", payload);
+    }
   }
 
   io.in(`call:${conversationId}`).socketsLeave(`call:${conversationId}`);
@@ -444,12 +452,15 @@ io.on("connection", (socket) => {
     });
 
     const callState = activeCalls.get(conversationId);
-    await emitCallOutcomeMessage({
-      conversationId,
-      senderId: callState?.initiatorId || callerId,
-      callType: callState?.callType || "video",
-      outcome: "missed",
-    });
+    if (callState && !callState.isOutcomeEmitted) {
+      callState.isOutcomeEmitted = true;
+      await emitCallOutcomeMessage({
+        conversationId,
+        senderId: callState.initiatorId || callerId,
+        callType: callState.callType || "video",
+        outcome: "missed",
+      });
+    }
 
     endCallRoom(conversationId, userId);
   });
@@ -460,17 +471,29 @@ io.on("connection", (socket) => {
     const callState = activeCalls.get(conversationId);
     if (!callState) return;
 
-    const outcome = callState.answeredAt ? "completed" : "missed";
-    await emitCallOutcomeMessage({
-      conversationId,
-      senderId: callState.initiatorId || userId || "",
-      callType: callState.callType,
-      outcome,
-      answeredAt: callState.answeredAt,
-    });
+    if (!callState.isOutcomeEmitted) {
+      callState.isOutcomeEmitted = true;
+      const outcome = callState.answeredAt ? "completed" : "missed";
+      await emitCallOutcomeMessage({
+        conversationId,
+        senderId: callState.initiatorId || userId || "",
+        callType: callState.callType,
+        outcome,
+        answeredAt: callState.answeredAt,
+      });
+    }
 
     endCallRoom(conversationId, userId || null);
     console.log(`Cuoc goi ket thuc tai phong ${conversationId}`);
+  });
+
+  socket.on("trang_thai_camera", ({ conversationId, userId, isCameraOff }) => {
+    if (!conversationId || !userId) return;
+    io.to(`call:${conversationId}`).emit("thay_doi_trang_thai_camera", {
+      conversationId,
+      userId,
+      isCameraOff,
+    });
   });
 
   socket.on("disconnect", () => {

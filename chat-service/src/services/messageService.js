@@ -8,6 +8,7 @@ const {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  CopyObjectCommand,
 } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { s3Client, bucketName } = require("../config/s3");
@@ -110,6 +111,30 @@ const uploadFileToS3 = async (key, filePath, contentType) => {
       ContentType: contentType,
     }),
   );
+};
+
+const copyS3Object = async (sourceKey) => {
+  if (!sourceKey) return sourceKey;
+
+  const rawName = sourceKey.split('/').pop() || 'File';
+  const match = rawName.match(/^[a-f0-9]+_(.+)$/i);
+  const originalFileName = match ? match[1] : rawName;
+  const uniqueId = crypto.randomBytes(8).toString('hex');
+  const pathParts = sourceKey.split('/');
+  pathParts.pop(); // Remove the old file name
+  const basePath = pathParts.join('/');
+  
+  const newKey = basePath ? `${basePath}/${uniqueId}_${originalFileName}` : `${uniqueId}_${originalFileName}`;
+
+  await s3Client.send(
+    new CopyObjectCommand({
+      Bucket: bucketName,
+      CopySource: `${bucketName}/${sourceKey}`,
+      Key: newKey,
+    })
+  );
+
+  return newKey;
 };
 
 const maybeTranscodeVoiceKey = async (key) => {
@@ -360,6 +385,77 @@ exports.sendMessage = async ({
   return enrichedMessage;
 };
 
+exports.forwardMessage = async ({
+  originalMsgId,
+  conversationId,
+  targetConversationIds,
+  senderId,
+}) => {
+  const originalMessage = await Message.findOne({
+    msg_id: originalMsgId,
+    conversation_id: conversationId,
+  }).lean();
+
+  if (!originalMessage) {
+    throw new Error("Tin nhắn gốc không tồn tại");
+  }
+
+  if (originalMessage.is_deleted || originalMessage.is_revoked) {
+    throw new Error("Không thể chuyển tiếp tin nhắn đã bị xóa hoặc thu hồi");
+  }
+
+  const { type, content, size } = originalMessage;
+  
+  if (!["text", "link", "image", "video", "file", "audio"].includes(type)) {
+    throw new Error("Loại tin nhắn này chưa hỗ trợ chuyển tiếp");
+  }
+
+  // Tiền xử lý nội dung để tạo bản sao độc lập nếu là file
+  const originalContentArray = Array.isArray(content) ? content : [content];
+  let forwardedContent = [...originalContentArray];
+
+  // Nếu là file/media, cần copy S3 object để tin chuyển tiếp không phụ thuộc tin gốc
+  if (["image", "video", "file", "audio"].includes(type)) {
+    try {
+      forwardedContent = await Promise.all(
+        originalContentArray.map(async (key) => {
+          if (!key) return key;
+          // Loại trừ trường hợp url bên ngoài hoặc dữ liệu dạng base64/không phải key s3
+          if (/^(https?:\/\/|www\.|data:)/i.test(key)) {
+             return key;
+          }
+          return await copyS3Object(key);
+        })
+      );
+    } catch (err) {
+      console.error("Lỗi khi copy S3 object cho chuyển tiếp:", err);
+      // Fallback: nếu lỗi copy, xài lại key gốc (dù đây là behavior cũ không mong muốn, nhưng giúp app ko crash)
+      forwardedContent = [...originalContentArray];
+    }
+  }
+
+  const results = [];
+  
+  // Gửi tin nhắn đến từng conversation đích
+  for (const targetConversationId of targetConversationIds) {
+    try {
+      const savedMessage = await exports.sendMessage({
+        conversationId: targetConversationId,
+        senderId,
+        content: forwardedContent,
+        type,
+        size: size || 0,
+        replyToMsgId: null, // Tin chuyển tiếp không giữ reply context
+      });
+      results.push(savedMessage);
+    } catch (error) {
+      console.error(`Lỗi chuyển tiếp tin nhằn đến nhóm ${targetConversationId}:`, error);
+    }
+  }
+  
+  return results;
+};
+
 exports.getMessageHistory = async (
   conversationId,
   deletedMsgId = "0",
@@ -485,6 +581,21 @@ exports.revokeMessage = async ({ conversationId, msgId, userId }) => {
   }
 
   const wasPinned = Boolean(message.is_pinned);
+
+  const oldContent = message.content || [];
+  const msgType = message.type;
+
+  if (['image', 'video', 'audio', 'file'].includes(msgType)) {
+    const keysToDelete = Array.isArray(oldContent) ? oldContent : [oldContent];
+    for (const key of keysToDelete) {
+      if (!key || /^(https?:\/\/|www\.|data:)/i.test(key)) continue;
+      try {
+        await s3Client.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }));
+      } catch(err) {
+        console.error("Lỗi xóa file S3 khi thu hồi:", err);
+      }
+    }
+  }
 
   message.is_revoked = true;
   message.content = [REVOKED_PLACEHOLDER];
