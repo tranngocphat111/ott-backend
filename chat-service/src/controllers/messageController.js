@@ -44,6 +44,47 @@ exports.sendMessage = async (req, res) => {
   }
 };
 
+exports.forwardMessage = async (req, res) => {
+  try {
+    const { originalMsgId, conversationId, targetConversationIds, senderId } = req.body;
+
+    if (!originalMsgId || !conversationId || !targetConversationIds || !targetConversationIds.length || !senderId) {
+      return res.status(400).json({ error: "Thiếu thông tin bắt buộc để chuyển tiếp" });
+    }
+
+    const forwardedMessages = await MessageService.forwardMessage({
+      originalMsgId,
+      conversationId,
+      targetConversationIds,
+      senderId,
+    });
+
+    // Emit đến user room riêng của từng participant trong mỗi conversation được forward tới
+    for (let i = 0; i < targetConversationIds.length; i++) {
+      const targetConversationId = targetConversationIds[i];
+      const savedMessage = forwardedMessages[i];
+      
+      if (savedMessage) {
+        const participants = await ParticipantService.getParticipants(targetConversationId);
+        participants.forEach((p) => {
+          req.io.to(`user:${p.user_id}`).emit("tin_nhan", savedMessage);
+        });
+      }
+    }
+
+    res.status(200).json({ results: forwardedMessages });
+  } catch (error) {
+    if (
+      error.message === "Tin nhắn gốc không tồn tại" ||
+      error.message === "Không thể chuyển tiếp tin nhắn đã bị xóa hoặc thu hồi" ||
+      error.message === "Loại tin nhắn này chưa hỗ trợ chuyển tiếp"
+    ) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: error.message });
+  }
+};
+
 exports.getMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
