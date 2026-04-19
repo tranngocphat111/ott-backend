@@ -427,7 +427,7 @@ exports.transferOwnership = async (conversationId, currentOwnerId, newOwnerId) =
   });
   
   if (prevOwner) {
-    prevOwner.roles = "admin";
+    prevOwner.roles = "user";
     await prevOwner.save();
   }
 
