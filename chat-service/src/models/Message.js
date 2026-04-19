@@ -42,6 +42,7 @@ const MessageSchema = new mongoose.Schema(
         "call_cancel",
         "call_no_answer",
         "poll",
+        "system_poll",
       ],
       default: "text",
     },

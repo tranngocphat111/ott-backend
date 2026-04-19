@@ -47,6 +47,24 @@ exports.sendMessage = async (req, res) => {
       req.io.to(`user:${p.user_id}`).emit("tin_nhan", savedMessage);
     });
 
+    // Nếu là poll, tự động tạo thêm 1 tin system thông báo
+    if (type === "poll" && pollQuestion) {
+      try {
+        const sysMsg = await MessageService.sendMessage({
+          conversationId,
+          senderId,
+          content: `tạo cuộc bình chọn: ${pollQuestion}`,
+          type: "system_poll",
+          size: 0,
+        });
+        participants.forEach((p) => {
+          req.io.to(`user:${p.user_id}`).emit("tin_nhan", sysMsg);
+        });
+      } catch (sysErr) {
+        console.warn("Không thể tạo thông báo poll:", sysErr.message);
+      }
+    }
+
     res.status(201).json(savedMessage);
   } catch (error) {
     if (error.message === "Tin nhắn trả lời không hợp lệ") {
