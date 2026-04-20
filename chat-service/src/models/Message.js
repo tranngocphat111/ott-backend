@@ -43,6 +43,8 @@ const MessageSchema = new mongoose.Schema(
         "call_no_answer",
         "poll",
         "system_poll",
+        "system_transfer_owner",
+        "system_role_change",
       ],
       default: "text",
     },

@@ -344,7 +344,11 @@ exports.leaveGroup = async (conversationId, userId) => {
 
 // Update member role (owner or admin)
 exports.updateMemberRole = async (conversationId, userId, newRole, adminId) => {
-  const { conversation } = await assertGroupManager(conversationId, adminId);
+  const { conversation, isOwner } = await assertGroupManager(conversationId, adminId);
+
+  if (!isOwner) {
+    throw new Error("Chỉ trưởng nhóm mới có quyền phân quyền");
+  }
 
   if (!["admin", "user"].includes(String(newRole))) {
     throw new Error("Vai trò không hợp lệ");
@@ -377,7 +381,7 @@ exports.updateMemberRole = async (conversationId, userId, newRole, adminId) => {
 
 // Remove member from group (owner or admin)
 exports.removeMember = async (conversationId, userId, adminId) => {
-  const { conversation } = await assertGroupManager(conversationId, adminId);
+  const { conversation, isOwner } = await assertGroupManager(conversationId, adminId);
 
   const participant = await Participant.findOne({
     conversation_id: conversationId,
@@ -386,6 +390,11 @@ exports.removeMember = async (conversationId, userId, adminId) => {
 
   if (!participant) {
     throw new Error("Người dùng không phải là thành viên của nhóm này");
+  }
+
+  // Admin (deputy) cannot remove other admins
+  if (!isOwner && participant.roles === "admin") {
+    throw new Error("Phó nhóm không thể xóa phó nhóm khác");
   }
 
   // Cannot remove owner

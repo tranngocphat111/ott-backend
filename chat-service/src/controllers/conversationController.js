@@ -106,7 +106,10 @@ exports.addMember = async (req, res) => {
     }
 
     if (conversation.type === "group") {
-      await ParticipantService.assertGroupManager(conversationId, addedBy);
+      const isMember = await ParticipantService.getParticipant(conversationId, addedBy);
+      if (!isMember) {
+        return res.status(403).json({ error: "Bạn không phải thành viên của nhóm" });
+      }
     }
 
     const lastMsgId = conversation.last_message?.msg_id || "0";
