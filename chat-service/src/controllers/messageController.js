@@ -53,7 +53,7 @@ exports.sendMessage = async (req, res) => {
         const sysMsg = await MessageService.sendMessage({
           conversationId,
           senderId,
-          content: `${savedMessage.sender_name}: đã tạo cuộc bình chọn: ${pollQuestion}`,
+          content: `${savedMessage.sender_name} đã tạo cuộc bình chọn: ${pollQuestion}`,
           type: "system_poll",
           size: 0,
         });

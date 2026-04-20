@@ -210,6 +210,17 @@ exports.updateLastRead = async (req, res) => {
       userId,
       msgId,
     );
+
+    // Emit real-time read notification to others in the conversation
+    if (req.io && conversationId) {
+      req.io.to(conversationId).emit("tin_nhan_doc", {
+        conversationId,
+        userId,
+        msgId,
+        readAt: new Date(),
+      });
+    }
+
     res.status(200).json(participant);
   } catch (error) {
     res.status(500).json({ error: error.message });
