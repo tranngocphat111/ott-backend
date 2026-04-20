@@ -59,7 +59,9 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
 
 
             "/actuator/**",
-            "/riff/api/actuator/**"
+            "/riff/api/actuator/**",
+            "/socket.io/**",
+            "/riff/api/chat/socket.io/**"   
     );
 
     private static final List<String> BLOCKED_EXTERNAL = Arrays.asList(
