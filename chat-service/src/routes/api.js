@@ -6,9 +6,13 @@ const ConversationController = require("../controllers/conversationController");
 const MessageController = require("../controllers/messageController");
 const ParticipantController = require("../controllers/participantController");
 const UserCategoryController = require("../controllers/userCategoryController");
+const relationshipRoutes = require("./relationshipRoutes");
+
+router.use("/relationships", relationshipRoutes);
 
 router.post("/users/sync", UserController.syncUser);
 router.get("/users/:userId", UserController.getUser);
+router.get("/users/phone/:phone", UserController.getUserByPhone);
 router.get("/users", UserController.getAllUsers);
 
 router.post("/conversations", ConversationController.createConversation);

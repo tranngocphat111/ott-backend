@@ -26,8 +26,11 @@ const handleUserCreated = async (channel, msg) => {
     channel.ack(msg);
   } catch (err) {
     console.error(" [!] UserConsumer: Error processing message:", err.message);
-    // Ack to avoid infinite loop on bad messages, but in production might want a DLQ
-    channel.ack(msg);
+    
+    // Nack and requeue to retry later if it's a temporary issue (like DB down)
+    // If it's a permanent error (poison pill), in production we'd use a Dead Letter Queue (DLQ)
+    // For now, we follow the user's request to keep it on the queue.
+    channel.nack(msg, false, true);
   }
 };
 

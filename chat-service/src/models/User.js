@@ -12,10 +12,7 @@ const UserSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    username: {
-      type: String,
-      default: "",
-    },
+
 
     avatar: {
       type: String,
@@ -45,6 +42,7 @@ const UserSchema = new mongoose.Schema(
   }
 );
 
+UserSchema.index({ phone: 1 });
 UserSchema.index({ is_online: 1 });
 UserSchema.index({ last_active_at: -1 });
 

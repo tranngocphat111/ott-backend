@@ -97,6 +97,23 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    public TopicExchange relationshipEventsExchange() {
+        return new TopicExchange("relationship.events", true, false);
+    }
+
+    @Bean
+    public Queue relationshipMediaQueue() {
+        return new Queue("media_service_relationship_updates", true);
+    }
+
+    @Bean
+    public Binding relationshipMediaBinding(Queue relationshipMediaQueue, TopicExchange relationshipEventsExchange) {
+        return BindingBuilder.bind(relationshipMediaQueue)
+                .to(relationshipEventsExchange)
+                .with("relationship.#");
+    }
+
+    @Bean
     public Jackson2JsonMessageConverter jackson2JsonMessageConverter() {
         return new Jackson2JsonMessageConverter();
     }

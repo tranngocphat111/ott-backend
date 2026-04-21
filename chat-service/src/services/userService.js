@@ -91,3 +91,7 @@ exports.updateUserStatus = async (user_id, isOnline) => {
 exports.getAllUsers = async () => {
   return await User.find();
 };
+
+exports.getUserByPhone = async (phone) => {
+  return await User.findOne({ phone: phone });
+};

@@ -23,6 +23,46 @@ exports.createConversation = async ({
   return await newConversation.save();
 };
 
+exports.findOrCreatePrivateConversation = async (user1Id, user2Id) => {
+  const Participant = require("../models/Participant");
+  
+  // Tìm các participant của user1
+  const p1 = await Participant.find({ user_id: user1Id }).lean();
+  const conv1Ids = p1.map(p => String(p.conversation_id));
+  
+  // Tìm các participant của user2 mà thuộc các conversation của user1
+  const commonParticipant = await Participant.findOne({
+    user_id: user2Id,
+    conversation_id: { $in: conv1Ids }
+  }).populate("conversation_id").lean();
+
+  // Kiểm tra xem có conversation nào là type 'private' không
+  if (commonParticipant && commonParticipant.conversation_id && commonParticipant.conversation_id.type === "private" && !commonParticipant.conversation_id.is_self_conversation) {
+    return commonParticipant.conversation_id;
+  }
+
+  // Nếu không thấy, tạo mới
+  const conversation = await exports.createConversation({
+    creatorId: user1Id,
+    type: "private",
+    memberCount: 2
+  });
+
+  const ParticipantService = require("./participantService");
+  await ParticipantService.addParticipant({
+    conversationId: conversation._id,
+    userId: user1Id,
+    role: "user"
+  });
+  await ParticipantService.addParticipant({
+    conversationId: conversation._id,
+    userId: user2Id,
+    role: "user"
+  });
+
+  return conversation;
+};
+
 exports.getAllConversations = async () => {
   return await Conversation.find().sort({ updatedAt: -1 });
 };

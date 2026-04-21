@@ -2,6 +2,7 @@ package mediaservice.realtime;
 
 import com.corundumstudio.socketio.SocketIOServer;
 import mediaservice.models.Relationship;
+import mediaservice.services.RelationshipEventPublisher;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -19,9 +20,13 @@ public class RelationshipRealtimePublisher {
     private static final String EVENT_NAME = "cap_nhat_quan_he";
 
     private final ObjectProvider<RelationshipSocketServer> socketServerProvider;
+    private final RelationshipEventPublisher eventPublisher;
 
-    public RelationshipRealtimePublisher(ObjectProvider<RelationshipSocketServer> socketServerProvider) {
+    public RelationshipRealtimePublisher(
+            ObjectProvider<RelationshipSocketServer> socketServerProvider,
+            RelationshipEventPublisher eventPublisher) {
         this.socketServerProvider = socketServerProvider;
+        this.eventPublisher = eventPublisher;
     }
 
     public void publish(String type, Relationship relationship, String actorId) {
@@ -56,6 +61,9 @@ public class RelationshipRealtimePublisher {
         if (server != null) {
             server.getBroadcastOperations().sendEvent(EVENT_NAME, payload);
         }
+
+        // Publish to RabbitMQ for cross-service sync
+        eventPublisher.publish(type, relationship);
     }
 
     public void publishAfterCommit(String type, Relationship relationship, String actorId) {
