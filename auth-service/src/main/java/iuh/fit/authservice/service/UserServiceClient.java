@@ -28,7 +28,6 @@ import java.util.Map;
 public class UserServiceClient {
 
     private final RestTemplate restTemplate;
-    private final UserEventPublisher userEventPublisher;
 
     @Value("${internal.user-service-url}")
     private String userServiceUrl;
