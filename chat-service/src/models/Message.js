@@ -45,6 +45,7 @@ const MessageSchema = new mongoose.Schema(
         "system_poll",
         "system_transfer_owner",
         "system_role_change",
+        "system_friend_request",
       ],
       default: "text",
     },

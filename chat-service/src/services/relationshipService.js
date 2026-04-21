@@ -1,0 +1,116 @@
+const Relationship = require("../models/Relationship");
+const { publishRelationshipEvent } = require("../events/relationshipEvents");
+
+exports.getRelationshipBetween = async (userId1, userId2) => {
+  return await Relationship.findOne({
+    $or: [
+      { requester_id: userId1, receiver_id: userId2 },
+      { requester_id: userId2, receiver_id: userId1 },
+    ],
+  });
+};
+
+exports.sendFriendRequest = async (requesterId, receiverId) => {
+  if (requesterId === receiverId) {
+    throw new Error("Không thể tự kết bạn với chính mình.");
+  }
+
+  let relationship = await exports.getRelationshipBetween(requesterId, receiverId);
+
+  if (relationship) {
+    if (relationship.status === "ACCEPTED") {
+      throw new Error("Hai người đã là bạn bè.");
+    }
+    if (relationship.status === "PENDING") {
+      throw new Error("Đã tồn tại lời mời kết bạn.");
+    }
+    // If it was REMOVED or BLOCKED, we update it
+    relationship.requester_id = requesterId;
+    relationship.receiver_id = receiverId;
+    relationship.status = "PENDING";
+  } else {
+    relationship = new Relationship({
+      requester_id: requesterId,
+      receiver_id: receiverId,
+      status: "PENDING",
+    });
+  }
+
+  await relationship.save();
+  await publishRelationshipEvent("REQUEST_SENT", relationship);
+
+  // --- NEW: Create/Find Conversation and send message ---
+  const ConversationService = require("./conversationService");
+  const MessageService = require("./messageService");
+  
+  const conversation = await ConversationService.findOrCreatePrivateConversation(requesterId, receiverId);
+  
+  const message = await MessageService.sendMessage({
+    conversationId: conversation._id,
+    senderId: requesterId,
+    content: "Đã gửi lời mời kết bạn",
+    type: "system_friend_request"
+  });
+
+  return { relationship, conversation, message };
+};
+
+exports.acceptFriendRequest = async (relationshipId) => {
+  const relationship = await Relationship.findById(relationshipId);
+  if (!relationship) throw new Error("Không tìm thấy quan hệ.");
+
+  relationship.status = "ACCEPTED";
+  await relationship.save();
+
+  await publishRelationshipEvent("REQUEST_ACCEPTED", relationship);
+
+  // --- NEW: Send system message ---
+  const ConversationService = require("./conversationService");
+  const MessageService = require("./messageService");
+  
+  console.log("Creating/finding conversation for:", relationship.requester_id, relationship.receiver_id);
+  const conversation = await ConversationService.findOrCreatePrivateConversation(relationship.requester_id, relationship.receiver_id);
+  
+  console.log("Sending system message for acceptance...");
+  const message = await MessageService.sendMessage({
+    conversationId: conversation._id,
+    senderId: relationship.receiver_id, // Receiver accepts, so they are the "sender" of the event
+    content: "Hai bạn đã trở thành bạn bè. Hãy bắt đầu trò chuyện!",
+    type: "system_add" // Or a new type if preferred
+  });
+
+  return { relationship, message };
+};
+
+exports.updateRelationshipFromEvent = async (payload) => {
+  const { requesterId, receiverId, status, relationshipId } = payload;
+
+  const relationship = await Relationship.findOneAndUpdate(
+    {
+      $or: [
+        { requester_id: requesterId, receiver_id: receiverId },
+        { requester_id: receiverId, receiver_id: requesterId },
+      ],
+    },
+    {
+      requester_id: requesterId,
+      receiver_id: receiverId,
+      status: status,
+      relationship_id: relationshipId,
+    },
+    { upsert: true, new: true }
+  );
+
+  return relationship;
+};
+
+exports.rejectFriendRequest = async (relationshipId) => {
+  const relationship = await Relationship.findById(relationshipId);
+  if (!relationship) throw new Error("Không tìm thấy quan hệ.");
+
+  relationship.status = "REMOVED";
+  await relationship.save();
+
+  await publishRelationshipEvent("REQUEST_REJECTED", relationship);
+  return relationship;
+};

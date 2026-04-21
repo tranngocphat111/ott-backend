@@ -1,6 +1,7 @@
 package mediaservice.services.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import mediaservice.dtos.requests.RelationshipRequest;
 import mediaservice.dtos.responses.RelationshipResponse;
 import mediaservice.mappers.RelationshipMapper;
@@ -21,6 +22,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RelationshipServiceImpl implements RelationshipService {
@@ -216,7 +218,38 @@ public class RelationshipServiceImpl implements RelationshipService {
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
     }
 
-    /** Dùng cho createRelationship CRUD thông thường (request có requesterId/receiverId). */
+    @Override
+    @Transactional
+    public void syncRelationshipFromEvent(String requesterId, String receiverId, String status) {
+        log.info("[RelationshipSync] Syncing relationship: {} -> {} status={}", requesterId, receiverId, status);
+        
+        Optional<Relationship> existing = relationshipRepository.findBetweenUsers(requesterId, receiverId);
+        
+        if (status.equals("REMOVED")) {
+            existing.ifPresent(relationshipRepository::delete);
+            return;
+        }
+
+        Relationship rel = existing.orElse(new Relationship());
+        
+        UserAccount requester = userAccountRepository.findById(requesterId).orElse(null);
+        UserAccount receiver = userAccountRepository.findById(receiverId).orElse(null);
+        
+        if (requester == null || receiver == null) {
+            log.warn("[RelationshipSync] Missing users for sync: requester={}, receiver={}", requesterId, receiverId);
+            return;
+        }
+
+        rel.setRequester(requester);
+        rel.setReceiver(receiver);
+        rel.setStatus(RelationshipStatusType.valueOf(status));
+        rel.setType(RelationshipType.FRIEND);
+        
+        relationshipRepository.save(rel);
+        // Do NOT call realtimePublisher.publish here as it might cause loops if both sides emit
+        // However, we might want to emit to Socket.IO only
+    }
+
     private Relationship buildRelationshipFromRequest(RelationshipRequest request) {
         Relationship rel = new Relationship();
         rel.setRequester(findUserOrThrow(request.getRequesterId()));

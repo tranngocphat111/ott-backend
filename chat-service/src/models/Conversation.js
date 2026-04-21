@@ -48,6 +48,7 @@ const ConversationSchema = new mongoose.Schema(
           "call_no_answer",
           "poll",
           "system_poll",
+          "system_friend_request",
         ],
         default: "text",
       },
