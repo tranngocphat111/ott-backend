@@ -45,10 +45,40 @@ exports.rejectRequest = async (req, res) => {
   }
 };
 
+exports.cancelRequest = async (req, res) => {
+  try {
+    const { relationshipId } = req.params;
+    const relationship = await relationshipService.cancelFriendRequest(relationshipId);
+    res.status(200).json(relationship);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 exports.getStatus = async (req, res) => {
   try {
     const { userId1, userId2 } = req.query;
     const relationship = await relationshipService.getRelationshipBetween(userId1, userId2);
+    res.status(200).json(relationship);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+exports.getFriends = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const friends = await relationshipService.getFriends(userId);
+    res.status(200).json(friends);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
+exports.unfriend = async (req, res) => {
+  try {
+    const { userId, friendId } = req.body;
+    const relationship = await relationshipService.unfriend(userId, friendId);
     res.status(200).json(relationship);
   } catch (error) {
     res.status(400).json({ error: error.message });

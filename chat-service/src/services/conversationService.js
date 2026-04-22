@@ -30,15 +30,21 @@ exports.findOrCreatePrivateConversation = async (user1Id, user2Id) => {
   const p1 = await Participant.find({ user_id: user1Id }).lean();
   const conv1Ids = p1.map(p => String(p.conversation_id));
   
-  // Tìm các participant của user2 mà thuộc các conversation của user1
-  const commonParticipant = await Participant.findOne({
+  // Tìm tất cả các participant của user2 mà thuộc các conversation của user1
+  const commonParticipants = await Participant.find({
     user_id: user2Id,
     conversation_id: { $in: conv1Ids }
   }).populate("conversation_id").lean();
 
-  // Kiểm tra xem có conversation nào là type 'private' không
-  if (commonParticipant && commonParticipant.conversation_id && commonParticipant.conversation_id.type === "private" && !commonParticipant.conversation_id.is_self_conversation) {
-    return commonParticipant.conversation_id;
+  // Tìm cuộc hội thoại type 'private' trong số các cuộc hội thoại chung
+  const privateParticipant = commonParticipants.find(p => 
+    p.conversation_id && 
+    p.conversation_id.type === "private" && 
+    !p.conversation_id.is_self_conversation
+  );
+
+  if (privateParticipant) {
+    return privateParticipant.conversation_id;
   }
 
   // Nếu không thấy, tạo mới
@@ -68,7 +74,7 @@ exports.getAllConversations = async () => {
 };
 exports.updateLastMessage = async (conversationId, message) => {
   const rawType = String(message?.type || "text");
-  const safeType = rawType.startsWith("system_") ? "text" : rawType;
+  const safeType = rawType; // Preserve system type for frontend
   let displayContent = "";
 
   switch (message.type) {
@@ -134,19 +140,15 @@ exports.updateConversation = async (conversationId, updateData) => {
   }
 
   if (updateData.requesterId) {
-    const isOwner =
-      String(conversation.created_by) === String(updateData.requesterId);
-    if (!isOwner) {
-      const participant = await Participant.findOne({
-        conversation_id: conversationId,
-        user_id: updateData.requesterId,
-      })
-        .select("roles")
-        .lean();
+    const participant = await Participant.findOne({
+      conversation_id: conversationId,
+      user_id: updateData.requesterId,
+    })
+      .select("roles")
+      .lean();
 
-      if (!participant || participant.roles !== "admin") {
-        throw new Error("Chỉ trưởng nhóm hoặc phó nhóm mới có quyền cập nhật nhóm");
-      }
+    if (!participant) {
+      throw new Error("Chỉ thành viên nhóm mới có quyền cập nhật nhóm");
     }
   }
 

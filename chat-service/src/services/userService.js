@@ -61,7 +61,10 @@ exports.getUser = async (user_id) => {
     return cached;
   }
 
-  const user = await User.findOne({ user_id: user_id });
+  let user = await User.findOne({ user_id: user_id });
+  if (!user) {
+    user = await User.findById(user_id);
+  }
   if (user) {
     await UserCacheService.setCachedUser(user_id, user);
   }

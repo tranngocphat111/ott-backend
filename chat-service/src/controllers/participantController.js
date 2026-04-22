@@ -2,6 +2,8 @@ const ParticipantService = require("../services/participantService");
 const ConversationService = require("../services/conversationService");
 const UserService = require("../services/userService");
 const Message = require("../models/Message");
+const Participant = require("../models/Participant");
+const Conversation = require("../models/Conversation");
 
 const buildConversationPreviewContent = (message) => {
   if (!message) return "";
@@ -110,11 +112,7 @@ exports.getConversationsByUserId = async (req, res) => {
                     String(visibleLastMessage.sender_id || ""),
                   ) || "",
                 content: buildConversationPreviewContent(visibleLastMessage),
-                type: String(visibleLastMessage.type || "").startsWith(
-                  "system_",
-                )
-                  ? "text"
-                  : visibleLastMessage.type,
+                type: visibleLastMessage.type,
                 createdAt:
                   visibleLastMessage.createdAt || new Date().toISOString(),
               }
@@ -149,6 +147,7 @@ exports.getConversationsByUserId = async (req, res) => {
               nickname: participant.nickname,
               joined_at: participant.joined_at,
               roles: participant.roles,
+              status: participant.status || "joined",
             },
           };
         }),
@@ -520,5 +519,51 @@ exports.transferOwnership = async (req, res) => {
       error.message.includes("Không thể chuyển quyền") ||
       error.message.includes("không phải là thành viên");
     res.status(isClientError ? 400 : 500).json({ error: error.message });
+  }
+};
+
+exports.acceptInvitation = async (req, res) => {
+  try {
+    const { conversationId, userId } = req.body;
+    const participant = await Participant.findOneAndUpdate(
+      { conversation_id: conversationId, user_id: userId },
+      { status: "joined", joined_at: new Date() },
+      { new: true }
+    );
+
+    if (!participant) {
+      return res.status(400).json({ error: "Không tìm thấy lời mời" });
+    }
+
+    // Update member count
+    await Conversation.findByIdAndUpdate(conversationId, {
+      $inc: { member_count: 1 },
+    });
+
+    // Notify other members
+    req.io.to(conversationId).emit("them_nguoi_moi", participant);
+    
+    res.status(200).json(participant);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.rejectInvitation = async (req, res) => {
+  try {
+    const { conversationId, userId } = req.body;
+    const participant = await Participant.findOneAndDelete({
+      conversation_id: conversationId,
+      user_id: userId,
+      status: "invited",
+    });
+
+    if (!participant) {
+      return res.status(400).json({ error: "Không tìm thấy lời mời" });
+    }
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };

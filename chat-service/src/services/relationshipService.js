@@ -114,3 +114,45 @@ exports.rejectFriendRequest = async (relationshipId) => {
   await publishRelationshipEvent("REQUEST_REJECTED", relationship);
   return relationship;
 };
+
+exports.cancelFriendRequest = async (relationshipId) => {
+  const relationship = await Relationship.findById(relationshipId);
+  if (!relationship) throw new Error("Không tìm thấy quan hệ.");
+
+  relationship.status = "REMOVED";
+  await relationship.save();
+
+  await publishRelationshipEvent("REQUEST_CANCELLED", relationship);
+  return relationship;
+};
+
+exports.getFriends = async (userId) => {
+  const relationships = await Relationship.find({
+    $or: [
+      { requester_id: userId, status: "ACCEPTED" },
+      { receiver_id: userId, status: "ACCEPTED" },
+    ],
+  }).lean();
+
+  const friendIds = relationships.map(rel => 
+    rel.requester_id === userId ? rel.receiver_id : rel.requester_id
+  );
+
+  const User = require("../models/User");
+  return await User.find({ user_id: { $in: friendIds } }).lean();
+};
+
+exports.unfriend = async (userId, friendId) => {
+  const relationship = await exports.getRelationshipBetween(userId, friendId);
+  if (!relationship) throw new Error("Không tìm thấy mối quan hệ bạn bè.");
+  
+  if (relationship.status !== "ACCEPTED") {
+    throw new Error("Hai người hiện không là bạn bè.");
+  }
+
+  relationship.status = "REMOVED";
+  await relationship.save();
+
+  await publishRelationshipEvent("UNFRIENDED", relationship);
+  return relationship;
+};

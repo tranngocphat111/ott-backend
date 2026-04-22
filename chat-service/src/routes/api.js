@@ -68,6 +68,8 @@ router.delete(
   "/participants/remove/:conversationId/:userId",
   ParticipantController.removeMember,
 );
+router.put("/participants/accept-invitation", ParticipantController.acceptInvitation);
+router.put("/participants/reject-invitation", ParticipantController.rejectInvitation);
 
 router.post("/messages/presigned-url", MessageController.generatePresignedUrl);
 router.post("/messages", MessageController.sendMessage);

@@ -6,6 +6,7 @@ exports.generatePresignedUrl = async (req, res) => {
     const { fileName, fileType } = req.body;
 
     const data = await MessageService.generatePresignedUrl(fileName, fileType);
+    console.log("Controller received data from service:", data);
 
     res.status(200).json(data);
   } catch (error) {
@@ -39,10 +40,9 @@ exports.sendMessage = async (req, res) => {
       pollOptions,
     });
 
-    // Emit đến user room riêng của từng participant thay vì conversation room
-    // → nhận được ngay cả khi chưa join conversation room, xử lý được conversation mới
+    // Emit đến user room riêng của từng participant đã joined (invited users không nhận tin nhắn)
     const participants =
-      await ParticipantService.getParticipants(conversationId);
+      await ParticipantService.getJoinedParticipants(conversationId);
     participants.forEach((p) => {
       req.io.to(`user:${p.user_id}`).emit("tin_nhan", savedMessage);
     });

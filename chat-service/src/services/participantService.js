@@ -84,7 +84,7 @@ exports.ensureSelfConversation = async (userId) => {
   return { selfConversation, participant };
 };
 
-exports.addParticipant = async ({ conversationId, userId, role, addedBy, lastMsgId = "0" }) => {
+exports.addParticipant = async ({ conversationId, userId, role, addedBy, lastMsgId = "0", status = "joined" }) => {
   const existing = await Participant.findOne({
     conversation_id: conversationId,
     user_id: userId,
@@ -94,16 +94,9 @@ exports.addParticipant = async ({ conversationId, userId, role, addedBy, lastMsg
     existing.roles = role || existing.roles;
     existing.added_by = addedBy || existing.added_by;
     existing.joined_at = new Date();
+    existing.status = status || existing.status;
     // Khi thêm lại thành viên đã bị xóa/đuổi, vẫn áp dụng logic ẩn tin nhắn cũ
     existing.deleted_msg_id = lastMsgId;
-    existing.settings = {
-      ...existing.settings,
-      removed_from_group_at: null,
-      removed_by: null,
-      group_dissolved_at: null,
-      group_dissolved_by: null,
-    };
-
     return await existing.save();
   }
 
@@ -113,6 +106,7 @@ exports.addParticipant = async ({ conversationId, userId, role, addedBy, lastMsg
     roles: role,
     added_by: addedBy,
     deleted_msg_id: lastMsgId,
+    status: status,
   });
 
   return await newMember.save();
@@ -152,6 +146,16 @@ exports.getConversationsByUserId = async (userId) => {
 exports.getParticipants = async (conversationId) => {
   return await Participant.find({
     conversation_id: conversationId,
+    status: { $in: ["joined", "invited"] },
+    "settings.removed_from_group_at": null,
+  });
+};
+
+// Only joined participants — used for message emission (invited users should NOT see messages)
+exports.getJoinedParticipants = async (conversationId) => {
+  return await Participant.find({
+    conversation_id: conversationId,
+    status: "joined",
     "settings.removed_from_group_at": null,
   });
 };
@@ -282,13 +286,18 @@ exports.getConversationMembers = async (conversationId) => {
   // Get user details for each participant
   const membersWithDetails = await Promise.all(
     participants.map(async (p) => {
-      const user = await User.findOne({ user_id: p.user_id }).lean();
+      // Try to find by UUID first, then by ObjectId
+      let user = await User.findOne({ user_id: p.user_id }).lean();
+      if (!user) {
+        user = await User.findById(p.user_id).lean();
+      }
       return {
         _id: p._id,
         user_id: p.user_id,
         roles: p.roles,
         joined_at: p.joined_at,
         added_by: p.added_by,
+        status: p.status,
         nickname: p.nickname,
         user: user ? {
           name: user.name,

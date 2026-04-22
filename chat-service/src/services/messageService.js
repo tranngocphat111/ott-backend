@@ -314,8 +314,12 @@ exports.generatePresignedUrl = async (fileName, fileType) => {
   });
 
   const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
+  const fileUrl = `https://${bucketName}.s3.${process.env.AWS_REGION || "ap-southeast-1"}.amazonaws.com/${key}`;
 
-  return { uploadUrl, fileCategory, key };
+  console.log("Generated Presigned URL for:", fileName);
+  console.log("Final response object:", { uploadUrl: "...", fileCategory, key, fileUrl });
+
+  return { uploadUrl, fileCategory, key, fileUrl };
 };
 
 exports.sendMessage = async ({
@@ -485,6 +489,18 @@ exports.getMessageHistory = async (
   deletedMsgId = "0",
   userId,
 ) => {
+  // If user is invited but not yet joined, they shouldn't see messages
+  if (userId) {
+    const participant = await Participant.findOne({
+      conversation_id: conversationId,
+      user_id: userId,
+    }).lean();
+    
+    if (participant && participant.status === "invited") {
+      return []; // Return empty history for invited users
+    }
+  }
+
   const messages = await Message.find({ conversation_id: conversationId }).sort(
     {
       msg_id: 1,

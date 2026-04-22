@@ -86,6 +86,12 @@ const ParticipantSchema = new mongoose.Schema(
       enum: ["admin", "user"],
       default: "user",
     },
+    
+    status: {
+      type: String,
+      enum: ["invited", "joined"],
+      default: "joined",
+    },
   },
   {
     timestamps: true,
