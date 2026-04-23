@@ -37,6 +37,7 @@ public class QrLoginService {
     private final JwtService jwtService;
     private final QrCodeMapper qrCodeMapper;
     private final UserServiceClient userServiceClient;
+    private final NotificationPublisher notificationPublisher;
 
     @Transactional
     public QrCodeResponse generateLoginQrCode(QrGenerateRequest request) {
@@ -189,6 +190,7 @@ public class QrLoginService {
         qrLoginSessionRepository.save(loginSession);
 
         userServiceClient.updateLastLogin(userId);
+        notificationPublisher.publishUserLoginEvent(userId, LoginMethod.QR_CODE.name().toLowerCase());
 
         log.info("QR login confirmed successfully - qrId: {}, userId: {}", qrCode.getId(), userId);
 

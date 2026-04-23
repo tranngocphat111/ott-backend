@@ -1,5 +1,15 @@
 package mediaservice.services.impl;
 
+import java.util.List;
+
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -11,14 +21,21 @@ import mediaservice.models.ImageMedia;
 import mediaservice.models.Post;
 import mediaservice.models.UserAccount;
 import mediaservice.models.VideoMedia;
-import mediaservice.models.ContentAccessControl;
-import mediaservice.models.enums.*;
+import mediaservice.models.enums.ContentStatusType;
+import mediaservice.models.enums.ReactionTargetType;
+import mediaservice.models.enums.RelationshipStatusType;
+import mediaservice.models.enums.RuleType;
+import mediaservice.models.enums.VisibilityType;
 import mediaservice.repositories.CommentRepository;
 import mediaservice.repositories.ContentAccessControlRepository;
 import mediaservice.repositories.MediaRepository;
 import mediaservice.repositories.PostRepository;
 import mediaservice.repositories.ReactionRepository;
 import mediaservice.repositories.UserAccountRepository;
+import mediaservice.services.AnalyticsEventPublisher;
+import mediaservice.services.PostService;
+import mediaservice.services.MediaCompressionJobPublisher;
+import mediaservice.services.S3Service;
 import mediaservice.dtos.messages.MediaCompressionJob;
 import mediaservice.dtos.messages.MediaDeleteJob;
 import mediaservice.dtos.messages.MediaUploadJob;
@@ -58,6 +75,8 @@ public class PostServiceImpl implements PostService {
     private final CommentRepository commentRepository;
     private final UserAccountRepository userAccountRepository;
     private final MediaRepository mediaRepository;
+    private final S3Service s3Service;
+    private final AnalyticsEventPublisher analyticsEventPublisher;
     private final ContentAccessControlRepository contentAccessControlRepository;
     private final MediaUrlBuilder mediaUrlBuilder;
     private final MediaCompressionJobPublisher mediaCompressionJobPublisher;
@@ -90,6 +109,8 @@ public class PostServiceImpl implements PostService {
         }
         
         Post savedPost = postRepository.save(post);
+        String userId = savedPost.getAccount() != null ? savedPost.getAccount().getId() : null;
+        analyticsEventPublisher.publishPostCreated(savedPost.getId(), userId);
         return enrichCounts(postMapper.toResponse(savedPost), savedPost.getId());
     }
 
@@ -179,6 +200,7 @@ public class PostServiceImpl implements PostService {
         entityManager.flush();
         entityManager.refresh(savedPost);
 
+        analyticsEventPublisher.publishPostCreated(savedPost.getId(), accountId);
         if (!hasAsyncJobs) {
             publishAfterCommit(savedPost.getId(), "POST", "CREATE");
         }

@@ -12,6 +12,7 @@ const {
 } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { s3Client, bucketName } = require("../config/s3");
+const { publishMessageSentEvent } = require("./analyticsPublisher");
 
 const fs = require("fs/promises");
 const path = require("path");
@@ -394,6 +395,20 @@ exports.sendMessage = async ({
     conversationId,
     savedMessage,
   );
+
+  try {
+    await publishMessageSentEvent({
+      messageId: savedMessage.msg_id,
+      userId: senderId,
+      messageType: type,
+    });
+  } catch (error) {
+    // Do not block chat delivery when analytics pipeline is unavailable
+    console.warn(
+      "[analytics] publish message.sent failed:",
+      error?.message || error,
+    );
+  }
 
   // Add message to Redis cache (last 20 messages)
   const sender = await User.findOne({ user_id: senderId })

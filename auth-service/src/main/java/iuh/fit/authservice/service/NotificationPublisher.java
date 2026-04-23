@@ -1,7 +1,6 @@
 package iuh.fit.authservice.service;
 
 import iuh.fit.authservice.dto.event.AlertEmailEvent;
-import iuh.fit.authservice.dto.event.OtpEmailEvent;
 import iuh.fit.authservice.dto.event.WelcomeEmailEvent;
 import iuh.fit.authservice.entity.enums.OtpType;
 import iuh.fit.authservice.exception.AppException;
@@ -10,17 +9,18 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +38,9 @@ public class NotificationPublisher {
 
     @Value("${internal.api-key}")
     private String internalApiKey;
+
+    @Value("${analytics.queue.user-login:analytics.user.login.queue}")
+    private String userLoginAnalyticsQueue;
 
     public String getNotificationServiceUrl() {
         return notificationServiceUrl;
@@ -124,6 +127,22 @@ public class NotificationPublisher {
             log.debug("Alert email event published successfully for userId: {}", userId);
         } catch (Exception e) {
             log.error("Failed to publish alert email event for userId: {} | AlertType: {}", userId, alertType, e);
+        }
+    }
+
+    public void publishUserLoginEvent(String userId, String loginMethod) {
+        try {
+            Map<String, Object> event = new HashMap<>();
+            event.put("event_id", UUID.randomUUID().toString());
+            event.put("user_id", userId);
+            event.put("login_method", loginMethod);
+            event.put("timestamp", Instant.now());
+
+            rabbitTemplate.convertAndSend(userLoginAnalyticsQueue, event);
+            log.info("User login analytics event published for userId={}, method={}", userId, loginMethod);
+        } catch (Exception e) {
+            // Do not break login flow if analytics is unavailable
+            log.warn("Failed to publish user.login analytics event for userId={}: {}", userId, e.getMessage());
         }
     }
 }
