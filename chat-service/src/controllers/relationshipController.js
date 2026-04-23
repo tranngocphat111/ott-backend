@@ -10,6 +10,8 @@ exports.sendRequest = async (req, res) => {
     req.io.to(`user:${receiverId}`).emit("tao_phong_moi", conversation);
     req.io.to(`user:${receiverId}`).emit("tin_nhan", message);
     req.io.to(`user:${requesterId}`).emit("tin_nhan", message);
+    req.io.to(`user:${receiverId}`).emit("cap_nhat_quan_he", relationship);
+    req.io.to(`user:${requesterId}`).emit("cap_nhat_quan_he", relationship);
 
     res.status(200).json(relationship);
   } catch (error) {
@@ -27,6 +29,8 @@ exports.acceptRequest = async (req, res) => {
       req.io.to(`user:${relationship.requester_id}`).emit("tin_nhan", message);
       req.io.to(`user:${relationship.receiver_id}`).emit("tin_nhan", message);
     }
+    req.io.to(`user:${relationship.requester_id}`).emit("cap_nhat_quan_he", relationship);
+    req.io.to(`user:${relationship.receiver_id}`).emit("cap_nhat_quan_he", relationship);
 
     res.status(200).json(relationship);
   } catch (error) {
@@ -39,6 +43,10 @@ exports.rejectRequest = async (req, res) => {
   try {
     const { relationshipId } = req.params;
     const relationship = await relationshipService.rejectFriendRequest(relationshipId);
+    
+    req.io.to(`user:${relationship.requester_id}`).emit("cap_nhat_quan_he", relationship);
+    req.io.to(`user:${relationship.receiver_id}`).emit("cap_nhat_quan_he", relationship);
+
     res.status(200).json(relationship);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -49,6 +57,10 @@ exports.cancelRequest = async (req, res) => {
   try {
     const { relationshipId } = req.params;
     const relationship = await relationshipService.cancelFriendRequest(relationshipId);
+
+    req.io.to(`user:${relationship.requester_id}`).emit("cap_nhat_quan_he", relationship);
+    req.io.to(`user:${relationship.receiver_id}`).emit("cap_nhat_quan_he", relationship);
+
     res.status(200).json(relationship);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -79,6 +91,10 @@ exports.unfriend = async (req, res) => {
   try {
     const { userId, friendId } = req.body;
     const relationship = await relationshipService.unfriend(userId, friendId);
+
+    req.io.to(`user:${userId}`).emit("cap_nhat_quan_he", relationship);
+    req.io.to(`user:${friendId}`).emit("cap_nhat_quan_he", relationship);
+
     res.status(200).json(relationship);
   } catch (error) {
     res.status(400).json({ error: error.message });
