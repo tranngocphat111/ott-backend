@@ -37,7 +37,11 @@ exports.sendFriendRequest = async (requesterId, receiverId) => {
   }
 
   await relationship.save();
-  await publishRelationshipEvent("REQUEST_SENT", relationship);
+  try {
+    await publishRelationshipEvent("REQUEST_SENT", relationship);
+  } catch (err) {
+    console.error(`[RelationshipService] Failed to publish REQUEST_SENT event: ${err.message}`);
+  }
 
   // --- NEW: Create/Find Conversation and send message ---
   const ConversationService = require("./conversationService");
@@ -62,7 +66,11 @@ exports.acceptFriendRequest = async (relationshipId) => {
   relationship.status = "ACCEPTED";
   await relationship.save();
 
-  await publishRelationshipEvent("REQUEST_ACCEPTED", relationship);
+  try {
+    await publishRelationshipEvent("REQUEST_ACCEPTED", relationship);
+  } catch (err) {
+    console.error(`[RelationshipService] Failed to publish REQUEST_ACCEPTED event: ${err.message}`);
+  }
 
   // --- NEW: Send system message ---
   const ConversationService = require("./conversationService");
@@ -111,7 +119,11 @@ exports.rejectFriendRequest = async (relationshipId) => {
   relationship.status = "REMOVED";
   await relationship.save();
 
-  await publishRelationshipEvent("REQUEST_REJECTED", relationship);
+  try {
+    await publishRelationshipEvent("REQUEST_REJECTED", relationship);
+  } catch (err) {
+    console.error(`[RelationshipService] Failed to publish REQUEST_REJECTED event: ${err.message}`);
+  }
   return relationship;
 };
 
@@ -122,7 +134,11 @@ exports.cancelFriendRequest = async (relationshipId) => {
   relationship.status = "REMOVED";
   await relationship.save();
 
-  await publishRelationshipEvent("REQUEST_CANCELLED", relationship);
+  try {
+    await publishRelationshipEvent("REQUEST_CANCELLED", relationship);
+  } catch (err) {
+    console.error(`[RelationshipService] Failed to publish REQUEST_CANCELLED event: ${err.message}`);
+  }
   return relationship;
 };
 
