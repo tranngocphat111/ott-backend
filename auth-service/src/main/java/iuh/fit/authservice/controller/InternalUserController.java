@@ -1,9 +1,7 @@
 package iuh.fit.authservice.controller;
 
-import iuh.fit.authservice.entity.User;
 import iuh.fit.authservice.exception.AppException;
 import iuh.fit.authservice.exception.ErrorCode;
-import iuh.fit.authservice.repository.UserRepository;
 import iuh.fit.authservice.service.UserServiceClient;
 import iuh.fit.authservice.service.UserSyncService;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +17,6 @@ import java.util.Map;
 @Slf4j
 public class InternalUserController {
 
-    private final UserRepository userRepository;
     private final UserSyncService userSyncService;
 
     @Value("${internal.api.key}")

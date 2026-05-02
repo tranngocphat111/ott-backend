@@ -6,8 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="1bb96e93-77b6-4b77-b543-9908f50ffd65" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/auth-service/pom.xml" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/pom.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/UserServiceClient.java" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/UserServiceClient.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -95,7 +93,7 @@
     &quot;Spring Boot.OttBackendApplication.executor&quot;: &quot;Run&quot;,
     &quot;Spring Boot.UserServiceApplication.executor&quot;: &quot;Run&quot;,
     &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;ChamBai10/04&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;develop&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
     &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
     &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
@@ -105,6 +103,9 @@
     &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
     &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
     &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;project.structure.last.edited&quot;: &quot;Modules&quot;,
+    &quot;project.structure.proportion&quot;: &quot;0.0&quot;,
+    &quot;project.structure.side.proportion&quot;: &quot;0.0&quot;,
     &quot;run.configurations.included.in.services&quot;: &quot;true&quot;,
     &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
     &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;,
@@ -308,6 +309,11 @@
       <workItem from="1775745997120" duration="22417000" />
       <workItem from="1775800627852" duration="3602000" />
       <workItem from="1775889553381" duration="1602000" />
+      <workItem from="1776069402586" duration="867000" />
+      <workItem from="1776071269112" duration="639000" />
+      <workItem from="1776800349795" duration="2225000" />
+      <workItem from="1776962077439" duration="2064000" />
+      <workItem from="1777040898814" duration="100000" />
     </task>
     <servers />
   </component>
