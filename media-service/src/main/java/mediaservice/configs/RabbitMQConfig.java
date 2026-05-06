@@ -97,20 +97,6 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public Queue userUpdatedQueue() {
-        return new Queue("media_service_user_updated", true);
-    }
-
-    @Bean
-    public Binding userUpdatedBinding(
-            Queue userUpdatedQueue,
-            TopicExchange userEventsExchange) {
-        return BindingBuilder.bind(userUpdatedQueue)
-                .to(userEventsExchange)
-                .with("user.updated");
-    }
-
-    @Bean
     public TopicExchange relationshipEventsExchange() {
         return new TopicExchange("relationship.events", true, false);
     }
