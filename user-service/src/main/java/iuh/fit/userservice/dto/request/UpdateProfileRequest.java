@@ -15,6 +15,9 @@ import java.time.LocalDate;
 public class UpdateProfileRequest {
     private String fullName;
     private String bio;
+    private String work;
+    private String location;
+    private String relationshipStatus;
     private LocalDate dateOfBirth;
     private Gender gender;
 }

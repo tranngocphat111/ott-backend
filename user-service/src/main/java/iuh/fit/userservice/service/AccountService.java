@@ -30,6 +30,7 @@ public class AccountService {
     private final ValidationUtils validationUtils;
     private final UserValidationUtil userValidationUtil;
     private final UserPhotoService userPhotoService;
+    private final UserEventPublisher userEventPublisher;
 
     @Transactional
     public void setPassword(String userId, SetPasswordRequest request) {
@@ -82,7 +83,8 @@ public class AccountService {
         userValidationUtil.userRepository.save(user);
 
         int revoked = sessionService.revokeAllUserSessions(user.getId(), "Password changed");
-        notificationPublisher.sendAlertEmailAsync(user, "PASSWORD_CHANGED", request.getIpAddress(), null, request.getDeviceInfo());
+        notificationPublisher.sendAlertEmailAsync(user, "PASSWORD_CHANGED", request.getIpAddress(), null,
+                request.getDeviceInfo());
 
         log.info("Password changed successfully for userId: {} | Sessions revoked: {}", userId, revoked);
 
@@ -99,17 +101,22 @@ public class AccountService {
 
         if (request.getPhone() == null || request.getEmail() == null)
             throw new AppException(ErrorCode.PHONE_AND_EMAIL_REQUIRED);
-        if (!validationUtils.isValidEmail(request.getEmail())) throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
-        if (!validationUtils.isValidPhone(request.getPhone())) throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
+        if (!validationUtils.isValidEmail(request.getEmail()))
+            throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
+        if (!validationUtils.isValidPhone(request.getPhone()))
+            throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
 
         User user = userValidationUtil.findUserByPhoneOrEmail(request.getPhone(), request.getEmail());
 
-        if (!user.getPhone().equals(request.getPhone())) throw new AppException(ErrorCode.PHONE_MISMATCH);
+        if (!user.getPhone().equals(request.getPhone()))
+            throw new AppException(ErrorCode.PHONE_MISMATCH);
         if (user.getEmail() == null || !user.getEmail().equalsIgnoreCase(request.getEmail()))
             throw new AppException(ErrorCode.EMAIL_MISMATCH);
 
-        OtpCode otpCode = otpService.generateOtp(user, request.getPhone(), user.getEmail(), OtpType.RESET_PASSWORD, request.getIpAddress());
-        notificationPublisher.sendOtpEmail(user.getEmail(), user.getFullName(), otpCode.getCode(), OtpType.RESET_PASSWORD, request.getIpAddress(), null, user.getId());
+        OtpCode otpCode = otpService.generateOtp(user, request.getPhone(), user.getEmail(), OtpType.RESET_PASSWORD,
+                request.getIpAddress());
+        notificationPublisher.sendOtpEmail(user.getEmail(), user.getFullName(), otpCode.getCode(),
+                OtpType.RESET_PASSWORD, request.getIpAddress(), null, user.getId());
 
         log.info("Password reset OTP sent successfully to email: {}", user.getEmail());
 
@@ -127,11 +134,14 @@ public class AccountService {
 
         if (request.getPhone() == null || request.getEmail() == null)
             throw new AppException(ErrorCode.PHONE_AND_EMAIL_REQUIRED);
-        if (!validationUtils.isValidEmail(request.getEmail())) throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
-        if (!validationUtils.isValidPhone(request.getPhone())) throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
+        if (!validationUtils.isValidEmail(request.getEmail()))
+            throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
+        if (!validationUtils.isValidPhone(request.getPhone()))
+            throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
 
         User user = userValidationUtil.findUserByPhoneOrEmail(request.getPhone(), request.getEmail());
-        if (!user.getPhone().equals(request.getPhone())) throw new AppException(ErrorCode.PHONE_MISMATCH);
+        if (!user.getPhone().equals(request.getPhone()))
+            throw new AppException(ErrorCode.PHONE_MISMATCH);
         if (user.getEmail() == null || !user.getEmail().equalsIgnoreCase(request.getEmail()))
             throw new AppException(ErrorCode.EMAIL_MISMATCH);
         if (!validationUtils.isValidPassword(request.getNewPassword()))
@@ -142,7 +152,8 @@ public class AccountService {
             throw new AppException(ErrorCode.NEW_PASSWORD_SAME_AS_OLD);
         }
 
-        OtpCode otpCode = otpService.validateOtp(request.getPhone(), request.getEmail(), request.getOtp(), OtpType.RESET_PASSWORD);
+        OtpCode otpCode = otpService.validateOtp(request.getPhone(), request.getEmail(), request.getOtp(),
+                OtpType.RESET_PASSWORD);
 
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         user.setPasswordChangedAt(LocalDateTime.now());
@@ -165,8 +176,10 @@ public class AccountService {
         if (userValidationUtil.userRepository.existsByEmailAndDeletedAtIsNull(request.getNewEmail()))
             throw new AppException(ErrorCode.EMAIL_ALREADY_EXISTS);
 
-        OtpCode otpCode = otpService.generateOtp(user, null, user.getEmail(), OtpType.CHANGE_EMAIL, request.getIpAddress());
-        notificationPublisher.sendOtpEmail(user.getEmail(), user.getFullName(), otpCode.getCode(), OtpType.CHANGE_EMAIL, request.getIpAddress(), null, userId);
+        OtpCode otpCode = otpService.generateOtp(user, null, user.getEmail(), OtpType.CHANGE_EMAIL,
+                request.getIpAddress());
+        notificationPublisher.sendOtpEmail(user.getEmail(), user.getFullName(), otpCode.getCode(), OtpType.CHANGE_EMAIL,
+                request.getIpAddress(), null, userId);
 
         log.info("Change email OTP sent successfully to: {}", user.getEmail());
 
@@ -203,6 +216,20 @@ public class AccountService {
         userValidationUtil.userRepository.save(user);
         otpService.markOtpAsUsed(otpCode);
 
+        userEventPublisher.publishUserUpdated(
+                iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
+                        .userId(user.getId())
+                        .fullName(user.getFullName())
+                        .avatarUrl(user.getAvatarUrl())
+                        .coverUrl(user.getCoverUrl())
+                        .bio(user.getBio())
+                        .work(user.getWork())
+                        .location(user.getLocation())
+                        .relationshipStatus(user.getRelationshipStatus())
+                        .email(user.getEmail())
+                        .phone(user.getPhone())
+                        .build());
+
         int revoked = sessionService.revokeAllUserSessions(user.getId(), "Email changed");
         notificationPublisher.sendAlertEmailAsync(user, "EMAIL_CHANGED", request.getIpAddress(), null, null);
 
@@ -226,12 +253,15 @@ public class AccountService {
         User user = userValidationUtil.getUserById(userId);
         if (!validationUtils.isValidPhone(normalizedNewPhone))
             throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
-        if (user.getPhone().equals(normalizedNewPhone)) throw new AppException(ErrorCode.SAME_PHONE);
+        if (user.getPhone().equals(normalizedNewPhone))
+            throw new AppException(ErrorCode.SAME_PHONE);
         if (userValidationUtil.userRepository.existsByPhoneAndDeletedAtIsNull(normalizedNewPhone))
             throw new AppException(ErrorCode.PHONE_ALREADY_EXISTS);
 
-        OtpCode otpCode = otpService.generateOtp(user, normalizedNewPhone, user.getEmail(), OtpType.CHANGE_PHONE, request.getIpAddress());
-        notificationPublisher.sendOtpEmail(user.getEmail(), user.getFullName(), otpCode.getCode(), OtpType.CHANGE_PHONE, request.getIpAddress(), null, userId);
+        OtpCode otpCode = otpService.generateOtp(user, normalizedNewPhone, user.getEmail(), OtpType.CHANGE_PHONE,
+                request.getIpAddress());
+        notificationPublisher.sendOtpEmail(user.getEmail(), user.getFullName(), otpCode.getCode(), OtpType.CHANGE_PHONE,
+                request.getIpAddress(), null, userId);
 
         log.info("Change phone OTP sent successfully to email of userId: {}", userId);
 
@@ -250,17 +280,32 @@ public class AccountService {
         User user = userValidationUtil.getUserById(userId);
         if (!validationUtils.isValidPhone(normalizedNewPhone))
             throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
-        if (user.getPhone().equals(normalizedNewPhone)) throw new AppException(ErrorCode.SAME_PHONE);
+        if (user.getPhone().equals(normalizedNewPhone))
+            throw new AppException(ErrorCode.SAME_PHONE);
         if (userValidationUtil.userRepository.existsByPhoneAndDeletedAtIsNull(normalizedNewPhone))
             throw new AppException(ErrorCode.PHONE_ALREADY_EXISTS);
 
-        OtpCode otpCode = otpService.validateOtp(normalizedNewPhone, user.getEmail(), request.getOtp(), OtpType.CHANGE_PHONE);
+        OtpCode otpCode = otpService.validateOtp(normalizedNewPhone, user.getEmail(), request.getOtp(),
+                OtpType.CHANGE_PHONE);
 
         user.setPhone(normalizedNewPhone);
         user.setPhoneChangedAt(LocalDateTime.now());
         userValidationUtil.userRepository.save(user);
         otpService.markOtpAsUsed(otpCode);
 
+        userEventPublisher.publishUserUpdated(
+                iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
+                        .userId(user.getId())
+                        .fullName(user.getFullName())
+                        .avatarUrl(user.getAvatarUrl())
+                        .coverUrl(user.getCoverUrl())
+                        .bio(user.getBio())
+                        .work(user.getWork())
+                        .location(user.getLocation())
+                        .relationshipStatus(user.getRelationshipStatus())
+                        .email(user.getEmail())
+                        .phone(user.getPhone())
+                        .build());
 
         int revoked = sessionService.revokeAllUserSessions(user.getId(), "Phone changed");
 
@@ -281,12 +326,15 @@ public class AccountService {
         User user = userValidationUtil.getUserById(userId);
 
         if (userValidationUtil.hasPassword(user)) {
-            if (request.getPassword() == null) throw new AppException(ErrorCode.PASSWORD_REQUIRED);
+            if (request.getPassword() == null)
+                throw new AppException(ErrorCode.PASSWORD_REQUIRED);
             if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash()))
                 throw new AppException(ErrorCode.INCORRECT_PASSWORD);
         }
-        OtpCode otpCode = otpService.generateOtp(user, user.getPhone(), user.getEmail(), OtpType.DELETE_ACCOUNT, request.getIpAddress());
-        notificationPublisher.sendOtpEmail(user.getEmail(), user.getFullName(), otpCode.getCode(), OtpType.DELETE_ACCOUNT, request.getIpAddress(), null, userId);
+        OtpCode otpCode = otpService.generateOtp(user, user.getPhone(), user.getEmail(), OtpType.DELETE_ACCOUNT,
+                request.getIpAddress());
+        notificationPublisher.sendOtpEmail(user.getEmail(), user.getFullName(), otpCode.getCode(),
+                OtpType.DELETE_ACCOUNT, request.getIpAddress(), null, userId);
 
         log.info("Account deletion OTP sent successfully to userId: {}", userId);
 
@@ -303,16 +351,18 @@ public class AccountService {
 
         User user = userValidationUtil.getUserById(userId);
 
-
-        OtpCode otpCode = otpService.validateOtp(user.getPhone(), user.getEmail(), request.getOtp(), OtpType.DELETE_ACCOUNT);
+        OtpCode otpCode = otpService.validateOtp(user.getPhone(), user.getEmail(), request.getOtp(),
+                OtpType.DELETE_ACCOUNT);
 
         userPhotoService.deleteAllUserPhotos(userId);
 
         LocalDateTime now = LocalDateTime.now();
         String suffix = "_deleted_" + now.toEpochSecond(ZoneOffset.UTC);
         user.setPhone(user.getPhone() + suffix);
-        if (user.getEmail() != null) user.setEmail(user.getEmail() + suffix);
-        if (user.getGoogleId() != null) user.setGoogleId(user.getGoogleId() + suffix);
+        if (user.getEmail() != null)
+            user.setEmail(user.getEmail() + suffix);
+        if (user.getGoogleId() != null)
+            user.setGoogleId(user.getGoogleId() + suffix);
         user.setDeletedAt(now);
         user.setIsActive(false);
         userValidationUtil.userRepository.save(user);
@@ -330,11 +380,14 @@ public class AccountService {
     }
 
     public void verifyForgotPasswordOtp(VerifyForgotOtpRequest request) {
-        if (!validationUtils.isValidEmail(request.getEmail())) throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
-        if (!validationUtils.isValidPhone(request.getPhone())) throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
+        if (!validationUtils.isValidEmail(request.getEmail()))
+            throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
+        if (!validationUtils.isValidPhone(request.getPhone()))
+            throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
 
         User user = userValidationUtil.findUserByPhoneOrEmail(request.getPhone(), request.getEmail());
-        if (!user.getPhone().equals(request.getPhone())) throw new AppException(ErrorCode.PHONE_MISMATCH);
+        if (!user.getPhone().equals(request.getPhone()))
+            throw new AppException(ErrorCode.PHONE_MISMATCH);
         if (user.getEmail() == null || !user.getEmail().equalsIgnoreCase(request.getEmail()))
             throw new AppException(ErrorCode.EMAIL_MISMATCH);
 

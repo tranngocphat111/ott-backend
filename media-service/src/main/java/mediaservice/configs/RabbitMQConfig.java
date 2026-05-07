@@ -97,6 +97,21 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    public Queue userUpdatedQueue(@Value("${user.updated.queue}") String queue) {
+        return new Queue(queue);
+    }
+
+    @Bean
+    public Binding userUpdatedBinding(
+            Queue userUpdatedQueue,
+            TopicExchange userEventsExchange,
+            @Value("${user.updated.routing-key}") String routingKey) {
+        return BindingBuilder.bind(userUpdatedQueue)
+                .to(userEventsExchange)
+                .with(routingKey);
+    }
+
+    @Bean
     public TopicExchange relationshipEventsExchange() {
         return new TopicExchange("relationship.events", true, false);
     }

@@ -55,25 +55,35 @@ const handleUserUpdated = async (channel, msg, io) => {
 
     // Broadcast to the user's personal room so their clients update info
     if (io) {
-        io.to(`user:${userId}`).emit("cap_nhat_thong_tin_ca_nhan", {
-            userId: content.userId,
-            fullName: content.fullName,
-            avatarUrl: content.avatarUrl,
-            coverUrl: content.coverUrl,
-            bio: content.bio
-        });
-        
-        // Broadcast to all active users so they can see the new avatar/name in realtime
-        // Since chat-service holds the socket, we emit to a global event or to their conversations.
-        // For simplicity, broadcast to everyone or let the frontend re-fetch when needed.
-        // Emitting globally allows anyone who is currently viewing the user to update:
-        io.emit("cap_nhat_thong_tin_ca_nhan", {
-            userId: content.userId,
-            fullName: content.fullName,
-            avatarUrl: content.avatarUrl,
-            coverUrl: content.coverUrl,
-            bio: content.bio
-        });
+      io.to(`user:${userId}`).emit("cap_nhat_thong_tin_ca_nhan", {
+        userId: content.userId,
+        fullName: content.fullName,
+        avatarUrl: content.avatarUrl,
+        coverUrl: content.coverUrl,
+        bio: content.bio,
+        work: content.work,
+        location: content.location,
+        relationshipStatus: content.relationshipStatus,
+        email: content.email,
+        phone: content.phone
+      });
+
+      // Broadcast to all active users so they can see the new avatar/name in realtime
+      // Since chat-service holds the socket, we emit to a global event or to their conversations.
+      // For simplicity, broadcast to everyone or let the frontend re-fetch when needed.
+      // Emitting globally allows anyone who is currently viewing the user to update:
+      io.emit("cap_nhat_thong_tin_ca_nhan", {
+        userId: content.userId,
+        fullName: content.fullName,
+        avatarUrl: content.avatarUrl,
+        coverUrl: content.coverUrl,
+        bio: content.bio,
+        work: content.work,
+        location: content.location,
+        relationshipStatus: content.relationshipStatus,
+        email: content.email,
+        phone: content.phone
+      });
     }
 
     channel.ack(msg);
@@ -119,7 +129,7 @@ const initUserConsumer = async (channel, io) => {
   try {
     // Assert exchange
     await channel.assertExchange(EXCHANGE_NAME, "topic", { durable: true });
-    
+
     // Assert queue for created
     const qCreated = await channel.assertQueue(QUEUE_CREATED, { durable: true });
     await channel.bindQueue(qCreated.queue, EXCHANGE_NAME, ROUTING_KEY_CREATED);
@@ -137,7 +147,7 @@ const initUserConsumer = async (channel, io) => {
     await channel.bindQueue(qLogout.queue, EXCHANGE_NAME, ROUTING_KEY_LOGOUT);
     console.log(` [*] UserConsumer: Listening for events on queue: ${qLogout.queue}`);
     channel.consume(qLogout.queue, (msg) => handleUserLogout(channel, msg, io), { noAck: false });
-    
+
   } catch (error) {
     console.error(" [!] UserConsumer: Failed to initialize:", error.message);
     throw error;

@@ -25,7 +25,6 @@ public class ProfileService {
     private final ValidationUtils validationUtils;
     private final UserEventPublisher userEventPublisher;
 
-
     public UserProfileResponse getUserProfile(String userId) {
         log.debug("Fetching profile for userId: {}", userId);
 
@@ -87,6 +86,24 @@ public class ProfileService {
             hasChanges = true;
         }
 
+        if (request.getWork() != null) {
+            String work = validationUtils.sanitizeString(request.getWork());
+            user.setWork(work);
+            hasChanges = true;
+        }
+
+        if (request.getLocation() != null) {
+            String location = validationUtils.sanitizeString(request.getLocation());
+            user.setLocation(location);
+            hasChanges = true;
+        }
+
+        if (request.getRelationshipStatus() != null) {
+            String status = validationUtils.sanitizeString(request.getRelationshipStatus());
+            user.setRelationshipStatus(status);
+            hasChanges = true;
+        }
+
         if (request.getDateOfBirth() != null) {
             if (request.getDateOfBirth().isAfter(java.time.LocalDate.now())) {
                 log.warn("Invalid date of birth (future date) for userId: {}", userId);
@@ -101,11 +118,10 @@ public class ProfileService {
             hasChanges = true;
         }
 
-
         if (hasChanges) {
             user = userRepository.save(user);
             log.info("Profile updated successfully for userId: {}", userId);
-            
+
             userEventPublisher.publishUserUpdated(
                     iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
                             .userId(user.getId())
@@ -113,8 +129,12 @@ public class ProfileService {
                             .avatarUrl(user.getAvatarUrl())
                             .coverUrl(user.getCoverUrl())
                             .bio(user.getBio())
-                            .build()
-            );
+                            .work(user.getWork())
+                            .location(user.getLocation())
+                            .relationshipStatus(user.getRelationshipStatus())
+                            .email(user.getEmail())
+                            .phone(user.getPhone())
+                            .build());
         } else {
             log.debug("No changes in profile update request for userId: {}", userId);
         }
@@ -145,7 +165,8 @@ public class ProfileService {
     }
 
     private boolean isValidUrl(String url) {
-        if (url == null || url.trim().isEmpty()) return false;
+        if (url == null || url.trim().isEmpty())
+            return false;
         return url.matches("^(https?://)?([a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}(/.*)?$");
     }
 

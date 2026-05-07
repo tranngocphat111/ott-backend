@@ -40,6 +40,12 @@ public class UserCreatedEventConsumer {
         user.setDisplayName(displayName);
         user.setEmail(event.getEmail());
         user.setAvatarUrl(event.getAvatar());
+        if (event.getCoverUrl() != null && !event.getCoverUrl().isBlank()) {
+            user.setCoverUrl(event.getCoverUrl());
+        }
+        if (event.getBio() != null) {
+            user.setBio(event.getBio());
+        }
 
         userAccountRepository.save(user);
         log.info("[UserCreated] Created user account for userId={}", event.getUserId());
