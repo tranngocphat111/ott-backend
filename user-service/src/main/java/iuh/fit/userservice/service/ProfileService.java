@@ -120,6 +120,16 @@ public class ProfileService {
 
         if (hasChanges) {
             user = userRepository.save(user);
+
+            // Broadcast update
+            userEventPublisher.publishUserUpdated(iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
+                    .userId(userId)
+                    .avatar(user.getAvatarUrl())
+                    .coverUrl(user.getCoverUrl())
+                    .displayName(user.getFullName())
+                    .bio(user.getBio())
+                    .build());
+
             log.info("Profile updated successfully for userId: {}", userId);
 
             userEventPublisher.publishUserUpdated(

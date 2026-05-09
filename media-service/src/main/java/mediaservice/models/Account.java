@@ -29,6 +29,7 @@ public abstract class Account {
     private String displayName;
 
     private String email;
+    private String phoneNumber;
 
     private String avatarUrl;
     private String coverUrl;

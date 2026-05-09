@@ -19,6 +19,8 @@ public interface CommentMapper {
     @Mapping(target = "edited",              source = "edited")
     @Mapping(target = "deleted",             source = "deleted")
     @Mapping(target = "totalReactions",      ignore = true)
+    @Mapping(target = "createdAt", source = "createdAt", dateFormat = "yyyy-MM-dd'T'HH:mm:ss")
+    @Mapping(target = "updatedAt", source = "updatedAt", dateFormat = "yyyy-MM-dd'T'HH:mm:ss")
     CommentResponse toResponse(Comment comment);
 
     List<CommentResponse> toResponseList(List<Comment> comments);

@@ -28,6 +28,7 @@ public class ReactionServiceImpl implements ReactionService {
     private final ReactionRepository reactionRepository;
     private final ReactionMapper reactionMapper;
     private final AccountRepository accountRepository;
+    private final mediaservice.realtime.PostActivityPublisher postActivityPublisher;
 
     @Override
     @Transactional
@@ -41,7 +42,11 @@ public class ReactionServiceImpl implements ReactionService {
         reaction.setTargetType(request.getTargetType());
         reaction.setReactionType(request.getReactionType() != null ? request.getReactionType() : ReactionType.LIKE);
         Reaction savedReaction = reactionRepository.save(reaction);
-        return reactionMapper.toResponse(savedReaction);
+        ReactionResponse response = reactionMapper.toResponse(savedReaction);
+        if (ReactionTargetType.POST.equals(savedReaction.getTargetType())) {
+            postActivityPublisher.publish(savedReaction.getTargetId(), "REACTION", "CREATE", response);
+        }
+        return response;
     }
 
     @Override
@@ -70,10 +75,12 @@ public class ReactionServiceImpl implements ReactionService {
     @Transactional
     @CacheEvict(value = {"posts", "allPosts"}, allEntries = true)
     public void deleteReaction(String id) {
-        if (!reactionRepository.existsById(id)) {
-            throw new RuntimeException("Reaction not found with id: " + id);
-        }
+        Reaction reaction = reactionRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Reaction not found with id: " + id));
         reactionRepository.deleteById(id);
+        if (ReactionTargetType.POST.equals(reaction.getTargetType())) {
+            postActivityPublisher.publish(reaction.getTargetId(), "REACTION", "DELETE", reactionMapper.toResponse(reaction));
+        }
     }
 
     @Override
@@ -106,18 +113,59 @@ public class ReactionServiceImpl implements ReactionService {
                                            ReactionTargetType targetType, ReactionType reactionType) {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new RuntimeException("Account not found: " + accountId));
-        Optional<Reaction> existing = reactionRepository
+        List<Reaction> existing = reactionRepository
                 .findByAccountAndTargetIdAndTargetType(account, targetId, targetType);
-        if (existing.isPresent()) {
-            reactionRepository.delete(existing.get());
-            return null; // unliked
+        
+        ReactionType targetReactionType = reactionType != null ? reactionType : ReactionType.LIKE;
+
+        if (!existing.isEmpty()) {
+            Reaction firstExisting = existing.get(0);
+            
+            if (firstExisting.getReactionType() == targetReactionType) {
+                // Same reaction -> Unlike
+                for (Reaction oldReaction : existing) {
+                    ReactionResponse response = reactionMapper.toResponse(oldReaction);
+                    if (ReactionTargetType.POST.equals(targetType)) {
+                        postActivityPublisher.publish(targetId, "REACTION", "DELETE", response);
+                    }
+                }
+                reactionRepository.deleteAll(existing);
+                return null;
+            } else {
+                // Different reaction -> Switch
+                for (Reaction oldReaction : existing) {
+                    ReactionResponse response = reactionMapper.toResponse(oldReaction);
+                    if (ReactionTargetType.POST.equals(targetType)) {
+                        postActivityPublisher.publish(targetId, "REACTION", "DELETE", response);
+                    }
+                }
+                reactionRepository.deleteAll(existing);
+                
+                Reaction newReaction = new Reaction();
+                newReaction.setAccount(account);
+                newReaction.setTargetId(targetId);
+                newReaction.setTargetType(targetType);
+                newReaction.setReactionType(targetReactionType);
+                Reaction savedReaction = reactionRepository.save(newReaction);
+                ReactionResponse response = reactionMapper.toResponse(savedReaction);
+                if (ReactionTargetType.POST.equals(targetType)) {
+                    postActivityPublisher.publish(targetId, "REACTION", "CREATE", response);
+                }
+                return response;
+            }
         }
+        
         Reaction reaction = new Reaction();
         reaction.setAccount(account);
         reaction.setTargetId(targetId);
         reaction.setTargetType(targetType);
-        reaction.setReactionType(reactionType != null ? reactionType : ReactionType.LIKE);
-        return reactionMapper.toResponse(reactionRepository.save(reaction));
+        reaction.setReactionType(targetReactionType);
+        Reaction savedReaction = reactionRepository.save(reaction);
+        ReactionResponse response = reactionMapper.toResponse(savedReaction);
+        if (ReactionTargetType.POST.equals(targetType)) {
+            postActivityPublisher.publish(targetId, "REACTION", "CREATE", response);
+        }
+        return response;
     }
 }
 

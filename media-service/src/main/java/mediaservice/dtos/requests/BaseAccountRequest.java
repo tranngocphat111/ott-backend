@@ -15,6 +15,7 @@ public abstract class BaseAccountRequest {
     private String email;
     private String avatarUrl;
     private String coverUrl;
+    private String phoneNumber;
     private String bio;
 }
 

@@ -28,6 +28,7 @@ public class CommentServiceImpl implements CommentService {
     private final CommentMapper commentMapper;
     private final AccountRepository accountRepository;
     private final ContentRepository contentRepository;
+    private final mediaservice.realtime.PostActivityPublisher postActivityPublisher;
 
     @Override
     @Transactional
@@ -50,7 +51,11 @@ public class CommentServiceImpl implements CommentService {
             comment.setParentComment(parent);
         }
         Comment savedComment = commentRepository.save(comment);
-        return commentMapper.toResponse(savedComment);
+        CommentResponse response = commentMapper.toResponse(savedComment);
+        if (savedComment.getContent() != null) {
+            postActivityPublisher.publish(savedComment.getContent().getId(), "COMMENT", "CREATE", response);
+        }
+        return response;
     }
 
     @Override
@@ -86,7 +91,11 @@ public class CommentServiceImpl implements CommentService {
             comment.setEdited(true);
         }
         Comment updatedComment = commentRepository.save(comment);
-        return commentMapper.toResponse(updatedComment);
+        CommentResponse response = commentMapper.toResponse(updatedComment);
+        if (updatedComment.getContent() != null) {
+            postActivityPublisher.publish(updatedComment.getContent().getId(), "COMMENT", "UPDATE", response);
+        }
+        return response;
     }
 
     @Override
@@ -97,6 +106,9 @@ public class CommentServiceImpl implements CommentService {
                 .orElseThrow(() -> new RuntimeException("Comment not found with id: " + id));
         comment.setDeleted(true);
         commentRepository.save(comment);
+        if (comment.getContent() != null) {
+            postActivityPublisher.publish(comment.getContent().getId(), "COMMENT", "DELETE", commentMapper.toResponse(comment));
+        }
     }
 
     @Override

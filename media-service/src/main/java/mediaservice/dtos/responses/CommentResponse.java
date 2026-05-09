@@ -4,7 +4,6 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
 
 @Data
 @AllArgsConstructor
@@ -22,7 +21,7 @@ public class CommentResponse {
     private int depth;
     private int totalReplies;
     private int totalReactions;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private String createdAt;
+    private String updatedAt;
 }
 

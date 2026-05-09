@@ -3,11 +3,13 @@ package mediaservice.services;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import mediaservice.dtos.events.UserCreatedEvent;
+import mediaservice.dtos.events.UserUpdatedEvent;
 import mediaservice.models.UserAccount;
 import mediaservice.repositories.AccountRepository;
 import mediaservice.repositories.UserAccountRepository;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
@@ -39,6 +41,7 @@ public class UserCreatedEventConsumer {
         user.setUsername(username);
         user.setDisplayName(displayName);
         user.setEmail(event.getEmail());
+        user.setPhoneNumber(event.getPhone());
         user.setAvatarUrl(event.getAvatar());
         if (event.getCoverUrl() != null && !event.getCoverUrl().isBlank()) {
             user.setCoverUrl(event.getCoverUrl());
@@ -49,6 +52,22 @@ public class UserCreatedEventConsumer {
 
         userAccountRepository.save(user);
         log.info("[UserCreated] Created user account for userId={}", event.getUserId());
+    }
+
+    @RabbitListener(queues = "${user.updated.queue}")
+    @Transactional
+    public void handleUserUpdated(UserUpdatedEvent event) {
+        if (event == null || event.getUserId() == null) return;
+
+        log.info("[UserUpdated] Received update for userId={}", event.getUserId());
+        userAccountRepository.findById(event.getUserId()).ifPresent(user -> {
+            if (event.getAvatar() != null) user.setAvatarUrl(event.getAvatar());
+            if (event.getCoverUrl() != null) user.setCoverUrl(event.getCoverUrl());
+            if (event.getDisplayName() != null) user.setDisplayName(event.getDisplayName());
+            if (event.getBio() != null) user.setBio(event.getBio());
+            userAccountRepository.save(user);
+            log.info("[UserUpdated] Successfully updated account for userId={}", event.getUserId());
+        });
     }
 
     private String resolveUsername(UserCreatedEvent event) {

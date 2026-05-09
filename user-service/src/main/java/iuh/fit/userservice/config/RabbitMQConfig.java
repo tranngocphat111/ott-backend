@@ -47,4 +47,14 @@ public class RabbitMQConfig {
     public org.springframework.amqp.core.TopicExchange userEventsExchange() {
         return new org.springframework.amqp.core.TopicExchange(userEventsExchange, true, false);
     }
+
+    @Bean
+    public org.springframework.amqp.core.Queue userUpdatedQueue() {
+        return new org.springframework.amqp.core.Queue(userUpdatedQueue, true);
+    }
+
+    @Bean
+    public org.springframework.amqp.core.Binding userUpdatedBinding(org.springframework.amqp.core.Queue userUpdatedQueue, org.springframework.amqp.core.TopicExchange userEventsExchange) {
+        return org.springframework.amqp.core.BindingBuilder.bind(userUpdatedQueue).to(userEventsExchange).with(userUpdatedRoutingKey);
+    }
 }

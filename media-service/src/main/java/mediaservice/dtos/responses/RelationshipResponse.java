@@ -15,9 +15,11 @@ public class RelationshipResponse {
     private String id;
     private String requesterId;
     private String requesterUsername;
+    private String requesterDisplayName;
     private String requesterAvatarUrl;
     private String receiverId;
     private String receiverUsername;
+    private String receiverDisplayName;
     private String receiverAvatarUrl;
     private RelationshipStatusType status;
     private RelationshipType type;

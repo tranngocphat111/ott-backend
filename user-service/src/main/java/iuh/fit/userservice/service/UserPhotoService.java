@@ -105,6 +105,7 @@ public class UserPhotoService {
         }
         userValidationUtil.userRepository.save(user);
 
+
         userEventPublisher.publishUserUpdated(
                 iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
                         .userId(user.getId())

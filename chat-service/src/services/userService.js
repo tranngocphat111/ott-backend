@@ -3,18 +3,15 @@ const UserCacheService = require("./userCacheService");
 
 const extractAvatarPath = (avatarUrl) => {
   if (!avatarUrl) return "";
+  const str = String(avatarUrl).trim();
+  if (str.startsWith("http")) return str;
+  if (str.startsWith("/")) return str;
+  
   try {
-    // If it's already a full URL, keep it!
-    if (avatarUrl.startsWith("http")) return avatarUrl;
 
-    // If it's already a path, return it
-    if (avatarUrl.startsWith("/")) return avatarUrl;
-
-    // For other cases, try to extract path if it looks like a URL
-    const url = new URL(avatarUrl);
     return url.pathname;
   } catch (e) {
-    return avatarUrl;
+    return str;
   }
 };
 
@@ -79,6 +76,24 @@ exports.syncUser = async ({ user_id, name }) => {
 
   await UserCacheService.setCachedUser(user_id, user);
   return user;
+};
+
+exports.updateUser = async (userData) => {
+  const { userId, avatar, displayName } = userData;
+  const updateData = {};
+  if (avatar !== undefined) updateData.avatar = extractAvatarPath(avatar);
+  if (displayName !== undefined) updateData.name = displayName;
+  
+  const updatedUser = await User.findOneAndUpdate(
+    { user_id: userId },
+    { $set: updateData },
+    { new: true }
+  );
+
+  if (updatedUser) {
+    await UserCacheService.setCachedUser(userId, updatedUser);
+  }
+  return updatedUser;
 };
 
 exports.getUser = async (user_id) => {

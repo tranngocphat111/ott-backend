@@ -37,3 +37,4 @@ media-service/src/main/resources/application-seed.properties
 
 .env
 *.md
+*.mermaid
