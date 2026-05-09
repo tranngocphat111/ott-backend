@@ -15,4 +15,9 @@ public class UserUpdatedEvent {
     private String avatarUrl;
     private String coverUrl;
     private String bio;
+    private String work;
+    private String location;
+    private String relationshipStatus;
+    private String email;
+    private String phone;
 }

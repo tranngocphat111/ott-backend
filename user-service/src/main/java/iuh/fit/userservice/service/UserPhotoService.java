@@ -37,7 +37,6 @@ public class UserPhotoService {
     private final UserRepository userRepository;
     private final UserEventPublisher userEventPublisher;
 
-
     public PhotoListResponse getAllPhotos(String userId) {
         List<UserPhotoResponse> avatars = toResponseList(
                 photoRepository.findByUserIdAndPhotoTypeOrderByCreatedAtDesc(
@@ -54,7 +53,6 @@ public class UserPhotoService {
                 .activeCoverUrl(user.getCoverUrl())
                 .build();
     }
-
 
     @Transactional
     public UserPhotoResponse addPhoto(String userId, AddPhotoRequest request) {
@@ -114,8 +112,12 @@ public class UserPhotoService {
                         .avatarUrl(user.getAvatarUrl())
                         .coverUrl(user.getCoverUrl())
                         .bio(user.getBio())
-                        .build()
-        );
+                        .work(user.getWork())
+                        .location(user.getLocation())
+                        .relationshipStatus(user.getRelationshipStatus())
+                        .email(user.getEmail())
+                        .phone(user.getPhone())
+                        .build());
 
         log.info("Active photo set | userId: {} | type: {} | photoId: {}", userId, type, photoId);
         return toResponse(photo);
@@ -161,21 +163,25 @@ public class UserPhotoService {
                     : props.getDefaultCoverPhoto();
 
             if (remaining.isEmpty()) {
-                if (type == PhotoType.AVATAR) user.setAvatarUrl(defaultUrl);
-                else user.setCoverUrl(defaultUrl);
+                if (type == PhotoType.AVATAR)
+                    user.setAvatarUrl(defaultUrl);
+                else
+                    user.setCoverUrl(defaultUrl);
                 log.info("No photos left, reset to default | userId: {} | type: {}", userId, type);
             } else {
                 UserPhoto next = remaining.get(0);
                 next.setIsActive(true);
                 photoRepository.save(next);
 
-                if (type == PhotoType.AVATAR) user.setAvatarUrl(next.getUrl());
-                else user.setCoverUrl(next.getUrl());
+                if (type == PhotoType.AVATAR)
+                    user.setAvatarUrl(next.getUrl());
+                else
+                    user.setCoverUrl(next.getUrl());
                 log.info("Auto-activated next photo | userId: {} | photoId: {}", userId, next.getId());
             }
 
             userRepository.save(user);
-            
+
             userEventPublisher.publishUserUpdated(
                     iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
                             .userId(user.getId())
@@ -183,8 +189,12 @@ public class UserPhotoService {
                             .avatarUrl(user.getAvatarUrl())
                             .coverUrl(user.getCoverUrl())
                             .bio(user.getBio())
-                            .build()
-            );
+                            .work(user.getWork())
+                            .location(user.getLocation())
+                            .relationshipStatus(user.getRelationshipStatus())
+                            .email(user.getEmail())
+                            .phone(user.getPhone())
+                            .build());
         }
     }
 
@@ -206,7 +216,6 @@ public class UserPhotoService {
                 .orElseThrow(() -> new AppException(ErrorCode.PHOTO_NOT_FOUND));
     }
 
-
     @Transactional
     public UserPhotoResponse addAndSetActive(String userId, AddPhotoRequest request) {
         UserPhotoResponse added = addPhoto(userId, request);
@@ -216,7 +225,8 @@ public class UserPhotoService {
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private void deleteFromS3(String s3Key) {
-        if (s3Key == null || s3Key.isBlank()) return;
+        if (s3Key == null || s3Key.isBlank())
+            return;
         try {
             s3Client.deleteObject(DeleteObjectRequest.builder()
                     .bucket(props.getBucket())

@@ -6,13 +6,24 @@
   <component name="ChangeListManager">
     <list default="true" id="1bb96e93-77b6-4b77-b543-9908f50ffd65" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/NotificationPublisher.java" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/NotificationPublisher.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/SessionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/auth-service/src/main/java/iuh/fit/authservice/service/SessionService.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/chat-service/src/consumers/userConsumer.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/consumers/userConsumer.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/chat-service/src/models/User.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/models/User.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/chat-service/src/services/userService.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/services/userService.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/configs/RabbitMQConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/configs/RabbitMQConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/config/RabbitMQConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/config/RabbitMQConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/SessionService.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/SessionService.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/UserEventPublisher.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/UserEventPublisher.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/dtos/events/UserCreatedEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/dtos/events/UserCreatedEvent.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/UserCreatedEventConsumer.java" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/UserCreatedEventConsumer.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/media-service/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/resources/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/notification-service/target/classes/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/target/classes/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/event/UserCreatedEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/event/UserCreatedEvent.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/event/UserUpdatedEvent.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/event/UserUpdatedEvent.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/UpdateProfileRequest.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/request/UpdateProfileRequest.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/UserProfileResponse.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/dto/response/UserProfileResponse.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/User.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/entity/User.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/mapper/UserMapper.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/mapper/UserMapper.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/AccountService.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/AccountService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/ProfileService.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/ProfileService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/UserPhotoService.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/UserPhotoService.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/UserService.java" beforeDir="false" afterPath="$PROJECT_DIR$/user-service/src/main/java/iuh/fit/userservice/service/UserService.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -324,7 +335,7 @@
       <workItem from="1777746323768" duration="3329000" />
       <workItem from="1777965002833" duration="1648000" />
       <workItem from="1777999745346" duration="76000" />
-      <workItem from="1778078000607" duration="12306000" />
+      <workItem from="1778078000607" duration="15963000" />
     </task>
     <servers />
   </component>

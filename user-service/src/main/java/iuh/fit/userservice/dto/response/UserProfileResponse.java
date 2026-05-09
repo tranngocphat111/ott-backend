@@ -19,6 +19,9 @@ public class UserProfileResponse {
     private String avatarUrl;
     private String coverUrl;
     private String bio;
+    private String work;
+    private String location;
+    private String relationshipStatus;
     private String dateOfBirth;
     private Gender gender;
     private AccountType accountType;
