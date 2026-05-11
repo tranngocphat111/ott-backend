@@ -208,14 +208,6 @@ const emitCallOutcomeMessage = async ({
   });
 };
 
-const maybeCloseCallWhenOnlyOneLeft = (conversationId, endedBy = null) => {
-  const callState = activeCalls.get(conversationId);
-  if (!callState) return;
-
-  if (callState.hadMultipleParticipants && callState.participants.size <= 1) {
-    endCallRoom(conversationId, endedBy);
-  }
-};
 
 const ensureCallState = (conversationId, callType, memberIds = []) => {
   if (!activeCalls.has(conversationId)) {
@@ -227,6 +219,7 @@ const ensureCallState = (conversationId, callType, memberIds = []) => {
       startedAt: new Date().toISOString(),
       answeredAt: null,
       isOutcomeEmitted: false,
+      isGroup: false,
       hadMultipleParticipants: false,
       noAnswerTimer: null,
     });
@@ -359,6 +352,7 @@ io.on("connection", (socket) => {
       let livekitToken = null;
       if (isGroup) {
         livekitToken = await livekitService.generateToken(conversationId, callerId);
+        callState.isGroup = true;
       }
 
       io.to(`call:${conversationId}`).emit("nguoi_dung_tham_gia_goi", {
@@ -369,6 +363,14 @@ io.on("connection", (socket) => {
         isGroup,
         livekitToken,
       });
+
+      if (isGroup) {
+        io.to(`conversation:${conversationId}`).emit("cap_nhat_trang_thai_goi_nhom", {
+          conversationId,
+          isCalling: true,
+          participantCount: callState.participants.size,
+        });
+      }
 
       // Lọc bỏ người gọi khỏi danh sách nhận thông báo
       const targetUserIds = memberIds.filter((userId) => userId && userId !== callerId);
@@ -447,6 +449,7 @@ io.on("connection", (socket) => {
       let livekitToken = null;
       if (isGroup) {
         livekitToken = await livekitService.generateToken(conversationId, userId);
+        callState.isGroup = true;
       }
 
       io.to(`call:${conversationId}`).emit("nguoi_dung_tham_gia_goi", {
@@ -457,6 +460,14 @@ io.on("connection", (socket) => {
         isGroup,
         livekitToken,
       });
+
+      if (isGroup) {
+        io.to(`conversation:${conversationId}`).emit("cap_nhat_trang_thai_goi_nhom", {
+          conversationId,
+          isCalling: true,
+          participantCount: callState.participants.size,
+        });
+      }
     },
   );
 
@@ -515,6 +526,14 @@ io.on("connection", (socket) => {
       participants: Array.from(callState.participants),
     });
 
+    if (callState.isGroup) {
+      io.to(`conversation:${conversationId}`).emit("cap_nhat_trang_thai_goi_nhom", {
+        conversationId,
+        isCalling: callState.participants.size > 0,
+        participantCount: callState.participants.size,
+      });
+    }
+
     if (callState.participants.size === 0) {
       activeCalls.delete(conversationId);
       return;
@@ -566,6 +585,32 @@ io.on("connection", (socket) => {
     endCallRoom(conversationId, userId || null);
     console.log(`Cuoc goi ket thuc tai phong ${conversationId}`);
   });
+
+const maybeCloseCallWhenOnlyOneLeft = (conversationId, endedBy = null) => {
+  const callState = activeCalls.get(conversationId);
+  if (!callState) return;
+
+  // Đối với cuộc gọi nhóm: Chỉ kết thúc khi không còn ai (size === 0)
+  // Đối với cuộc gọi 1-1: Kết thúc khi chỉ còn 1 người (size === 1)
+  const shouldClose = callState.isGroup 
+    ? callState.participants.size === 0 
+    : callState.participants.size === 1;
+
+  if (shouldClose) {
+    const outcome = callState.answeredAt ? "completed" : "missed";
+    if (!callState.isOutcomeEmitted) {
+      callState.isOutcomeEmitted = true;
+      emitCallOutcomeMessage({
+        conversationId,
+        senderId: callState.initiatorId || endedBy || "",
+        callType: callState.callType,
+        outcome,
+        answeredAt: callState.answeredAt,
+      });
+    }
+    endCallRoom(conversationId, endedBy);
+  }
+};
 
   socket.on("trang_thai_camera", ({ conversationId, userId, isCameraOff }) => {
     if (!conversationId || !userId) return;
