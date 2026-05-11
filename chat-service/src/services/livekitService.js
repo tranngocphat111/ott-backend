@@ -1,7 +1,8 @@
 const { AccessToken } = require("livekit-server-sdk");
 const dotenv = require("dotenv");
 
-dotenv.config();
+const path = require("path");
+dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || "devkey";
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || "secret";

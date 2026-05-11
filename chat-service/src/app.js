@@ -4,7 +4,8 @@ const { Server } = require("socket.io");
 const dotenv = require("dotenv");
 const cors = require("cors");
 
-dotenv.config();
+const path = require("path");
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 const connectDB = require("./config/db");
 const apiRoutes = require("./routes/api");
