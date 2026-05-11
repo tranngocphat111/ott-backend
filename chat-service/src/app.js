@@ -12,6 +12,7 @@ const MessageService = require("./services/messageService");
 const { initAllConsumers } = require("./consumers");
 const Conversation = require("./models/Conversation");
 const livekitService = require("./services/livekitService");
+const { activeCalls } = require("./services/callStateService");
 connectDB();
 const app = express();
 const server = http.createServer(app);
@@ -36,7 +37,6 @@ messageEventsHandler(io);
 
 // In-memory call state by conversationId.
 // Note: This is suitable for single-node deployments.
-const activeCalls = new Map();
 const NO_ANSWER_TIMEOUT_MS = 30000;
 
 const normalizeCallType = (callType) => {
@@ -367,6 +367,8 @@ io.on("connection", (socket) => {
       const isGroup = conversation && conversation.type === "group";
 
       const callState = ensureCallState(conversationId, callType, memberIdsFromDb);
+      callState.isGroup = !!isGroup;
+
       if (!callState.initiatorId) {
         callState.initiatorId = callerId;
       }
@@ -461,7 +463,11 @@ io.on("connection", (socket) => {
 
       if (callState.participants.size >= 2) {
         callState.hadMultipleParticipants = true;
-        if (callState.noAnswerTimer) {
+        // Chỉ xóa timer nếu không phải gọi nhóm, hoặc nếu gọi nhóm mà tất cả thành viên đã vào đủ
+        const shouldClearTimer = !callState.isGroup || 
+          (callState.memberIds && callState.participants.size >= callState.memberIds.size);
+          
+        if (shouldClearTimer && callState.noAnswerTimer) {
           clearTimeout(callState.noAnswerTimer);
           callState.noAnswerTimer = null;
         }

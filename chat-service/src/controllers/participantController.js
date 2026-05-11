@@ -4,6 +4,7 @@ const UserService = require("../services/userService");
 const Message = require("../models/Message");
 const Participant = require("../models/Participant");
 const Conversation = require("../models/Conversation");
+const { getActiveCall } = require("../services/callStateService");
 
 const buildConversationPreviewContent = (message) => {
   if (!message) return "";
@@ -119,6 +120,14 @@ exports.getConversationsByUserId = async (req, res) => {
             : undefined;
 
           const conversationData = conversation.toObject();
+          
+          // Thêm thông tin cuộc gọi đang diễn ra (nếu có)
+          const activeCall = getActiveCall(String(conversation._id));
+          if (activeCall && activeCall.isGroup) {
+            conversationData.is_calling = true;
+            conversationData.call_participant_count = activeCall.participants.size;
+          }
+
           conversationData.last_message = resolvedLastMessage;
           conversationData.participants = memberDetails.map((member) => ({
             _id: member.user_id,
