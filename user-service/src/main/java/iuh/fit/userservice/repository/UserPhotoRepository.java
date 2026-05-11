@@ -15,6 +15,7 @@ import java.util.Optional;
 public interface UserPhotoRepository extends JpaRepository<UserPhoto, String> {
 
     List<UserPhoto> findByUserIdAndPhotoTypeOrderByCreatedAtDesc(String userId, PhotoType type);
+    List<UserPhoto> findByUserIdAndPhotoTypeOrderByCreatedAtAsc(String userId, PhotoType type);
 
     long countByUserIdAndPhotoType(String userId, PhotoType type);
 

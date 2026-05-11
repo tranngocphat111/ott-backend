@@ -51,8 +51,8 @@ public class PostController {
             try {
                 accessControls = objectMapper.readValue(
                         accessControlsJson,
-                        new TypeReference<List<AccessControlRequest>>() {}
-                );
+                        new TypeReference<List<AccessControlRequest>>() {
+                        });
             } catch (Exception ignored) {
                 accessControls = List.of();
             }
@@ -60,13 +60,13 @@ public class PostController {
         return ResponseEntity.ok(postService.createPost(accountId, caption, vis, files, captions, accessControls));
     }
 
-    /** GET /posts  – tất cả bài post */
+    /** GET /posts – tất cả bài post */
     @GetMapping
     public ResponseEntity<List<PostResponse>> getAllPosts() {
         return ResponseEntity.ok(postService.getAllPosts());
     }
 
-    /** GET /posts/page  – có phân trang */
+    /** GET /posts/page – có phân trang */
     @GetMapping("/page")
     public ResponseEntity<Page<PostResponse>> getPostsPaged(
             @PageableDefault(size = 5, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
@@ -81,14 +81,11 @@ public class PostController {
         return ResponseEntity.ok(postService.findAllPostsWithAuthorized(pageable, userId));
     }
 
-
     /** GET /posts/{id} */
     @GetMapping("/{id}")
     public ResponseEntity<PostResponse> getPostById(@PathVariable String id) {
         return ResponseEntity.ok(postService.getPostById(id));
     }
-
-
 
     /** GET /posts/user/{userId} */
     @GetMapping("/user/{userId}")
@@ -113,8 +110,8 @@ public class PostController {
             try {
                 accessControls = objectMapper.readValue(
                         accessControlsJson,
-                        new TypeReference<List<AccessControlRequest>>() {}
-                );
+                        new TypeReference<List<AccessControlRequest>>() {
+                        });
             } catch (Exception ignored) {
                 accessControls = List.of();
             }
@@ -125,16 +122,15 @@ public class PostController {
             try {
                 existingMedias = objectMapper.readValue(
                         existingMediasJson,
-                        new TypeReference<List<mediaservice.dtos.requests.MediaRequest>>() {}
-                );
+                        new TypeReference<List<mediaservice.dtos.requests.MediaRequest>>() {
+                        });
             } catch (Exception ignored) {
                 existingMedias = List.of();
             }
         }
 
         return ResponseEntity.ok(
-                postService.updatePost(id, accountId, caption, vis, files, captions, accessControls, existingMedias)
-        );
+                postService.updatePost(id, accountId, caption, vis, files, captions, accessControls, existingMedias));
     }
 
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -170,8 +166,7 @@ public class PostController {
         return ResponseEntity.ok(Map.of(
                 "liked", liked,
                 "totalReactions", total,
-                "reaction", liked ? reaction : Map.of()
-        ));
+                "reaction", liked ? reaction : Map.of()));
     }
 
     /** GET /posts/{postId}/reactions – lấy tất cả reactions của bài post */
@@ -180,7 +175,10 @@ public class PostController {
         return ResponseEntity.ok(reactionService.getReactionsByTargetId(postId));
     }
 
-    /** GET /posts/reactions/by-account?accountId=xxx – toàn bộ reactions của một user */
+    /**
+     * GET /posts/reactions/by-account?accountId=xxx – toàn bộ reactions của một
+     * user
+     */
     @GetMapping("/reactions/by-account")
     public ResponseEntity<List<ReactionResponse>> getReactionsByAccount(
             @RequestParam String accountId) {

@@ -9,6 +9,7 @@ import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.S3Service;
 import mediaservice.services.UserAccountService;
 import mediaservice.services.UserEventPublisher;
+import mediaservice.services.UserSyncService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
@@ -20,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
+
 @Service
 @RequiredArgsConstructor
 public class UserAccountServiceImpl implements UserAccountService {
@@ -28,6 +30,7 @@ public class UserAccountServiceImpl implements UserAccountService {
     private final UserAccountMapper userAccountMapper;
     private final S3Service s3Service;
     private final UserEventPublisher userEventPublisher;
+    private final UserSyncService userSyncService;
 
     @Override
     @Transactional
@@ -42,9 +45,18 @@ public class UserAccountServiceImpl implements UserAccountService {
     @Transactional(readOnly = true)
     @Cacheable(value = "users", key = "#id", unless = "#result == null")
     public UserAccountResponse getUserAccountById(String id) {
-        UserAccount userAccount = userAccountRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User account not found with id: " + id));
-        return userAccountMapper.toResponse(userAccount);
+        UserAccount user = userAccountRepository.findById(id).orElse(null);
+        
+        // Nếu không có user hoặc user chưa có thông tin (displayName null), thử sync
+        if (user == null || user.getDisplayName() == null) {
+            user = userSyncService.syncUser(id).orElse(user);
+        }
+
+        if (user == null) {
+            throw new RuntimeException("User account not found with id: " + id);
+        }
+        
+        return userAccountMapper.toResponse(user);
     }
 
     @Override

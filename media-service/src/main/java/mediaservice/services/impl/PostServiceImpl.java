@@ -77,8 +77,17 @@ public class PostServiceImpl implements PostService {
     private final MediaUploadJobPublisher mediaUploadJobPublisher;
     private final MediaRealtimePublisher mediaRealtimePublisher;
 
+    private final mediaservice.services.UserSyncService userSyncService;
+    private final mediaservice.mappers.ContentAccessControlMapper contentAccessControlMapper;
+
     @PersistenceContext
     private EntityManager entityManager;
+
+    /* ─── helper: ensure author info is fresh ─ */
+    private UserAccount ensureUserSynced(String userId) {
+        return userSyncService.syncUser(userId)
+                .orElseGet(() -> userAccountRepository.findById(userId).orElse(null));
+    }
 
     /* ─── helper: fill totalReactions / totalComments from DB ─ */
     private PostResponse enrichCounts(PostResponse response, String postId) {
@@ -116,8 +125,10 @@ public class PostServiceImpl implements PostService {
                                    List<String> captions,
                                    List<AccessControlRequest> accessControls) {
         // 1. Resolve author
-        UserAccount account = userAccountRepository.findById(accountId)
-                .orElseThrow(() -> new RuntimeException("User not found: " + accountId));
+        UserAccount account = ensureUserSynced(accountId);
+        if (account == null) {
+            throw new RuntimeException("User not found or sync failed for id: " + accountId);
+        }
 
         // 2. Persist the Post
         Post post = new Post();
@@ -135,7 +146,7 @@ public class PostServiceImpl implements PostService {
             for (AccessControlRequest req : accessControls) {
                 if (req == null || req.getAccountId() == null || req.getRuleType() == null) continue;
                 if (req.getAccountId().equals(accountId)) continue;
-                UserAccount target = userAccountRepository.findById(req.getAccountId()).orElse(null);
+                UserAccount target = ensureUserSynced(req.getAccountId());
                 if (target == null) continue;
                 ContentAccessControl control = new ContentAccessControl();
                 control.setAccount(target);
@@ -297,7 +308,7 @@ public class PostServiceImpl implements PostService {
             for (AccessControlRequest req : accessControls) {
                 if (req == null || req.getAccountId() == null || req.getRuleType() == null) continue;
                 if (ownerId != null && req.getAccountId().equals(ownerId)) continue;
-                UserAccount target = userAccountRepository.findById(req.getAccountId()).orElse(null);
+                UserAccount target = ensureUserSynced(req.getAccountId());
                 if (target == null) continue;
                 ContentAccessControl control = new ContentAccessControl();
                 control.setAccount(target);

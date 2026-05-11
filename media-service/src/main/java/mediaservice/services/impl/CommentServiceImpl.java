@@ -29,6 +29,7 @@ public class CommentServiceImpl implements CommentService {
     private final AccountRepository accountRepository;
     private final ContentRepository contentRepository;
     private final mediaservice.realtime.PostActivityPublisher postActivityPublisher;
+    private final mediaservice.services.UserSyncService userSyncService;
 
     @Override
     @Transactional
@@ -39,7 +40,8 @@ public class CommentServiceImpl implements CommentService {
         comment.setDepth(request.getParentCommentId() == null ? 0 : 1);
 
         if (request.getAccountId() != null) {
-            Account account = accountRepository.findById(request.getAccountId()).orElse(null);
+            // Đảm bảo user đã được sync thông tin (displayName, avatar...)
+            mediaservice.models.UserAccount account = userSyncService.syncUser(request.getAccountId()).orElse(null);
             comment.setAccount(account);
         }
         if (request.getContentId() != null) {

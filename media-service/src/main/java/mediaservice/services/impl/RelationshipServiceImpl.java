@@ -31,6 +31,12 @@ public class RelationshipServiceImpl implements RelationshipService {
     private final RelationshipMapper relationshipMapper;
     private final UserAccountRepository userAccountRepository;
     private final RelationshipRealtimePublisher relationshipRealtimePublisher;
+    private final mediaservice.services.UserSyncService userSyncService;
+
+    private UserAccount ensureUserSynced(String userId) {
+        return userSyncService.syncUser(userId)
+                .orElseGet(() -> userAccountRepository.findById(userId).orElse(null));
+    }
 
     // ── CRUD cơ bản ────────────────────────────────────────────────────────
 
@@ -225,8 +231,11 @@ public class RelationshipServiceImpl implements RelationshipService {
     }
 
     private UserAccount findUserOrThrow(String userId) {
-        return userAccountRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
+        UserAccount user = ensureUserSynced(userId);
+        if (user == null) {
+            throw new RuntimeException("User not found or sync failed for id: " + userId);
+        }
+        return user;
     }
 
     @Override
@@ -247,8 +256,8 @@ public class RelationshipServiceImpl implements RelationshipService {
 
         Relationship rel = existing.orElse(new Relationship());
         
-        UserAccount requester = userAccountRepository.findById(requesterId).orElse(null);
-        UserAccount receiver = userAccountRepository.findById(receiverId).orElse(null);
+        UserAccount requester = ensureUserSynced(requesterId);
+        UserAccount receiver = ensureUserSynced(receiverId);
         
         if (requester == null || receiver == null) {
             log.warn("[RelationshipSync] Missing users for sync: requester={}, receiver={}", requesterId, receiverId);
