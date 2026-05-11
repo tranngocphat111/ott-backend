@@ -518,6 +518,29 @@ io.on("connection", (socket) => {
         livekitToken,
       });
 
+      // Quan trọng: Gửi token cho chính người vừa tham gia để họ mở màn hình gọi
+      if (isGroup) {
+        io.to(`user:${userId}`).emit("bat_dau_goi_thanh_cong", {
+          conversationId,
+          userId,
+          callType: callState.callType,
+          participants: Array.from(callState.participants),
+          isGroup: true,
+          livekitToken,
+        });
+
+        // Cập nhật số lượng người tham gia cho tất cả thành viên trong nhóm
+        if (callState.memberIds) {
+          callState.memberIds.forEach(uid => {
+            io.to(`user:${uid}`).emit("cap_nhat_trang_thai_goi_nhom", {
+              conversationId,
+              isCalling: true,
+              participantCount: callState.participants.size,
+            });
+          });
+        }
+      }
+
       if (isGroup) {
         io.to(`conversation:${conversationId}`).emit("cap_nhat_trang_thai_goi_nhom", {
           conversationId,
@@ -589,6 +612,17 @@ io.on("connection", (socket) => {
         isCalling: callState.participants.size > 0,
         participantCount: callState.participants.size,
       });
+
+      // Cập nhật cho tất cả thành viên
+      if (callState.memberIds) {
+        callState.memberIds.forEach(uid => {
+          io.to(`user:${uid}`).emit("cap_nhat_trang_thai_goi_nhom", {
+            conversationId,
+            isCalling: callState.participants.size > 0,
+            participantCount: callState.participants.size,
+          });
+        });
+      }
     }
 
     if (callState.participants.size === 0) {
@@ -650,6 +684,17 @@ io.on("connection", (socket) => {
         isCalling: callState.participants.size > 0,
         participantCount: callState.participants.size,
       });
+
+      // Cập nhật cho tất cả thành viên để đồng bộ Sidebar
+      if (callState.memberIds) {
+        callState.memberIds.forEach(uid => {
+          io.to(`user:${uid}`).emit("cap_nhat_trang_thai_goi_nhom", {
+            conversationId,
+            isCalling: callState.participants.size > 0,
+            participantCount: callState.participants.size,
+          });
+        });
+      }
 
       maybeCloseCallWhenOnlyOneLeft(conversationId, userId);
       return;
