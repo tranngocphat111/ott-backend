@@ -110,6 +110,20 @@ const endCallRoom = async (conversationId, endedBy = null) => {
   }
 
   io.in(`call:${conversationId}`).socketsLeave(`call:${conversationId}`);
+  if (callState.isGroup) {
+    const updatePayload = {
+      conversationId: String(conversationId),
+      isCalling: false,
+      participantCount: 0,
+    };
+    io.to(`conversation:${conversationId}`).emit("cap_nhat_trang_thai_goi_nhom", updatePayload);
+    if (callState.memberIds) {
+      callState.memberIds.forEach((uid) => {
+        io.to(`user:${uid}`).emit("cap_nhat_trang_thai_goi_nhom", updatePayload);
+      });
+    }
+  }
+
   activeCalls.delete(conversationId);
 };
 
@@ -167,10 +181,10 @@ const scheduleNoAnswerTimeout = ({ conversationId, callerId, callType }) => {
       currentCallState.memberIds.forEach(uid => {
         if (!currentCallState.participants.has(uid)) {
           // Gửi tín hiệu để client tự động đóng modal/dừng đổ chuông
-          io.to(`user:${uid}`).emit("ket_thuc_phong_goi", { 
-            conversationId, 
+          io.to(`user:${uid}`).emit("ket_thuc_phong_goi", {
+            conversationId,
             reason: "timeout",
-            message: "Cuộc gọi đã kết thúc do không trả lời" 
+            message: "Cuộc gọi đã kết thúc do không trả lời"
           });
           console.log(`[CALL] Auto-rejecting for user ${uid} (timeout)`);
         }
@@ -392,11 +406,23 @@ io.on("connection", (socket) => {
       });
 
       if (isGroup) {
+        // Emit to the conversation room for those already inside the chat
         io.to(`conversation:${conversationId}`).emit("cap_nhat_trang_thai_goi_nhom", {
           conversationId,
           isCalling: true,
           participantCount: callState.participants.size,
         });
+
+        // Also emit to each member's individual room to update their sidebars
+        if (callState.memberIds) {
+          callState.memberIds.forEach(uid => {
+            io.to(`user:${uid}`).emit("cap_nhat_trang_thai_goi_nhom", {
+              conversationId,
+              isCalling: true,
+              participantCount: callState.participants.size,
+            });
+          });
+        }
       }
 
       // Lọc bỏ người gọi khỏi danh sách nhận thông báo
@@ -464,9 +490,9 @@ io.on("connection", (socket) => {
       if (callState.participants.size >= 2) {
         callState.hadMultipleParticipants = true;
         // Chỉ xóa timer nếu không phải gọi nhóm, hoặc nếu gọi nhóm mà tất cả thành viên đã vào đủ
-        const shouldClearTimer = !callState.isGroup || 
+        const shouldClearTimer = !callState.isGroup ||
           (callState.memberIds && callState.participants.size >= callState.memberIds.size);
-          
+
         if (shouldClearTimer && callState.noAnswerTimer) {
           clearTimeout(callState.noAnswerTimer);
           callState.noAnswerTimer = null;
@@ -582,7 +608,7 @@ io.on("connection", (socket) => {
     });
 
     const callState = activeCalls.get(conversationId);
-    
+
     // Nếu là nhóm, chỉ đóng modal của người từ chối, không đóng cả phòng
     if (callState && callState.isGroup) {
       io.to(`user:${userId}`).emit("ket_thuc_phong_goi", { conversationId, endedBy: userId });
