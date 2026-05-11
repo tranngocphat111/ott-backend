@@ -19,6 +19,7 @@ router.post("/conversations", ConversationController.createConversation);
 router.post("/conversations/add-member", ConversationController.addMember);
 // Join by invite link – must be BEFORE /:conversationId to avoid route conflict
 router.post("/conversations/join-by-link", ConversationController.joinByLink);
+router.get("/conversations/invite-link/:token", ConversationController.getInviteLinkInfo);
 router.post(
   "/conversations/:conversationId/invite-link",
   ConversationController.getInviteLink,
