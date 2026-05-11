@@ -65,7 +65,8 @@ public class UserService {
             throw new AppException(ErrorCode.FULL_NAME_REQUIRED);
 
         String sanitizedName = validationUtils.sanitizeString(request.getFullName());
-        if (sanitizedName.length() > 100) throw new AppException(ErrorCode.INVALID_FULL_NAME);
+        if (sanitizedName.length() > 100)
+            throw new AppException(ErrorCode.INVALID_FULL_NAME);
 
         if (userRepository.existsByPhoneAndDeletedAtIsNull(request.getPhone()))
             throw new AppException(ErrorCode.PHONE_ALREADY_EXISTS);
@@ -99,7 +100,8 @@ public class UserService {
             throw new AppException(ErrorCode.FULL_NAME_REQUIRED);
 
         String sanitizedName = validationUtils.sanitizeString(request.getFullName());
-        if (sanitizedName.length() > 100) throw new AppException(ErrorCode.INVALID_FULL_NAME);
+        if (sanitizedName.length() > 100)
+            throw new AppException(ErrorCode.INVALID_FULL_NAME);
 
         if (userRepository.existsByPhoneAndDeletedAtIsNull(request.getPhone()))
             throw new AppException(ErrorCode.PHONE_ALREADY_EXISTS);
@@ -153,6 +155,8 @@ public class UserService {
                 .userId(user.getId())
                 .username(user.getFullName())
                 .avatar(user.getAvatarUrl())
+                .coverUrl(user.getCoverUrl())
+                .bio(user.getBio())
                 .email(user.getEmail())
                 .phone(user.getPhone())
                 .build());
@@ -194,5 +198,19 @@ public class UserService {
             user.setEmailChangedAt(LocalDateTime.now());
         }
         userRepository.save(user);
+
+        userEventPublisher.publishUserUpdated(
+                iuh.fit.userservice.dto.event.UserUpdatedEvent.builder()
+                        .userId(user.getId())
+                        .fullName(user.getFullName())
+                        .avatarUrl(user.getAvatarUrl())
+                        .coverUrl(user.getCoverUrl())
+                        .bio(user.getBio())
+                        .work(user.getWork())
+                        .location(user.getLocation())
+                        .relationshipStatus(user.getRelationshipStatus())
+                        .email(user.getEmail())
+                        .phone(user.getPhone())
+                        .build());
     }
 }

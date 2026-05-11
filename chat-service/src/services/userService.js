@@ -3,18 +3,15 @@ const UserCacheService = require("./userCacheService");
 
 const extractAvatarPath = (avatarUrl) => {
   if (!avatarUrl) return "";
+  const str = String(avatarUrl).trim();
+  if (str.startsWith("http")) return str;
+  if (str.startsWith("/")) return str;
+  
   try {
-    // If it's already a full URL, keep it!
-    if (avatarUrl.startsWith("http")) return avatarUrl;
 
-    // If it's already a path, return it
-    if (avatarUrl.startsWith("/")) return avatarUrl;
-    
-    // For other cases, try to extract path if it looks like a URL
-    const url = new URL(avatarUrl);
     return url.pathname;
   } catch (e) {
-    return avatarUrl;
+    return str;
   }
 };
 
@@ -41,6 +38,30 @@ exports.createUser = async (userData) => {
   return newUser;
 };
 
+exports.updateUserInfo = async (userData) => {
+  const { userId, fullName, avatarUrl, coverUrl, bio, email, phone } = userData;
+
+  const updatePayload = {};
+  if (fullName !== undefined) updatePayload.name = fullName;
+  if (avatarUrl !== undefined) updatePayload.avatar = extractAvatarPath(avatarUrl);
+  if (coverUrl !== undefined) updatePayload.cover_url = extractAvatarPath(coverUrl);
+  if (bio !== undefined) updatePayload.bio = bio;
+  if (email !== undefined) updatePayload.email = email;
+  if (phone !== undefined) updatePayload.phone = phone;
+
+  const updatedUser = await User.findOneAndUpdate(
+    { user_id: userId },
+    updatePayload,
+    { new: true }
+  );
+
+  if (updatedUser) {
+    await UserCacheService.setCachedUser(userId, updatedUser);
+  }
+
+  return updatedUser;
+};
+
 exports.syncUser = async ({ user_id, name }) => {
   const user = await User.findOneAndUpdate(
     { user_id: user_id },
@@ -55,6 +76,24 @@ exports.syncUser = async ({ user_id, name }) => {
 
   await UserCacheService.setCachedUser(user_id, user);
   return user;
+};
+
+exports.updateUser = async (userData) => {
+  const { userId, avatar, displayName } = userData;
+  const updateData = {};
+  if (avatar !== undefined) updateData.avatar = extractAvatarPath(avatar);
+  if (displayName !== undefined) updateData.name = displayName;
+  
+  const updatedUser = await User.findOneAndUpdate(
+    { user_id: userId },
+    { $set: updateData },
+    { new: true }
+  );
+
+  if (updatedUser) {
+    await UserCacheService.setCachedUser(userId, updatedUser);
+  }
+  return updatedUser;
 };
 
 exports.getUser = async (user_id) => {
@@ -106,7 +145,7 @@ exports.getUserByPhone = async (phone) => {
     variants.push('0' + phone.substring(2));
   }
 
-  return await User.findOne({ 
-    phone: { $in: variants } 
+  return await User.findOne({
+    phone: { $in: variants }
   });
 };

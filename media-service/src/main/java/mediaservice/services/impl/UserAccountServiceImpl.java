@@ -8,6 +8,7 @@ import mediaservice.models.UserAccount;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.S3Service;
 import mediaservice.services.UserAccountService;
+import mediaservice.services.UserEventPublisher;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
@@ -26,6 +27,7 @@ public class UserAccountServiceImpl implements UserAccountService {
     private final UserAccountRepository userAccountRepository;
     private final UserAccountMapper userAccountMapper;
     private final S3Service s3Service;
+    private final UserEventPublisher userEventPublisher;
 
     @Override
     @Transactional
@@ -91,6 +93,16 @@ public class UserAccountServiceImpl implements UserAccountService {
         if (request.getRelationshipStatus() != null) userAccount.setRelationshipStatus(request.getRelationshipStatus());
 
         UserAccount updated = userAccountRepository.saveAndFlush(userAccount);
+
+        // Broadcast update
+        userEventPublisher.publishUserUpdated(mediaservice.dtos.events.UserUpdatedEvent.builder()
+                .userId(id)
+                .avatar(updated.getAvatarUrl())
+                .coverUrl(updated.getCoverUrl())
+                .displayName(updated.getDisplayName())
+                .bio(updated.getBio())
+                .build());
+
         return userAccountMapper.toResponse(updated);
     }
 
@@ -117,6 +129,16 @@ public class UserAccountServiceImpl implements UserAccountService {
         String avatarUrl = s3Service.getFullUrl(s3Key);
         userAccount.setAvatarUrl(avatarUrl);
         UserAccount updated = userAccountRepository.saveAndFlush(userAccount);
+
+        // Broadcast update
+        userEventPublisher.publishUserUpdated(mediaservice.dtos.events.UserUpdatedEvent.builder()
+                .userId(id)
+                .avatar(updated.getAvatarUrl())
+                .coverUrl(updated.getCoverUrl())
+                .displayName(updated.getDisplayName())
+                .bio(updated.getBio())
+                .build());
+
         return userAccountMapper.toResponse(updated);
     }
 
@@ -133,6 +155,16 @@ public class UserAccountServiceImpl implements UserAccountService {
         String coverUrl = s3Service.getFullUrl(s3Key);
         userAccount.setCoverUrl(coverUrl);
         UserAccount updated = userAccountRepository.saveAndFlush(userAccount);
+
+        // Broadcast update
+        userEventPublisher.publishUserUpdated(mediaservice.dtos.events.UserUpdatedEvent.builder()
+                .userId(id)
+                .avatar(updated.getAvatarUrl())
+                .coverUrl(updated.getCoverUrl())
+                .displayName(updated.getDisplayName())
+                .bio(updated.getBio())
+                .build());
+
         return userAccountMapper.toResponse(updated);
     }
 }

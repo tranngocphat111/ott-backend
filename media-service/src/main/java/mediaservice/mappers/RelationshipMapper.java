@@ -19,9 +19,11 @@ public interface RelationshipMapper {
 
     @Mapping(source = "requester.id",        target = "requesterId")
     @Mapping(source = "requester.username",   target = "requesterUsername")
+    @Mapping(source = "requester.displayName", target = "requesterDisplayName")
     @Mapping(source = "requester.avatarUrl",  target = "requesterAvatarUrl")
     @Mapping(source = "receiver.id",          target = "receiverId")
     @Mapping(source = "receiver.username",    target = "receiverUsername")
+    @Mapping(source = "receiver.displayName", target = "receiverDisplayName")
     @Mapping(source = "receiver.avatarUrl",   target = "receiverAvatarUrl")
     RelationshipResponse toResponse(Relationship relationship);
 

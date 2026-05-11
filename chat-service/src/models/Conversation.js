@@ -81,6 +81,13 @@ const ConversationSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    // Invite link support
+    invite_token: {
+      type: String,
+      default: null,
+      index: { sparse: true },
+    },
   },
   {
     timestamps: true,

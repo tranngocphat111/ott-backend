@@ -4,10 +4,11 @@ import mediaservice.dtos.requests.AccessControlRequest;
 import mediaservice.dtos.responses.ContentAccessControlResponse;
 import mediaservice.models.ContentAccessControl;
 import org.mapstruct.*;
+import org.mapstruct.ReportingPolicy;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface ContentAccessControlMapper {
 
     ContentAccessControl toEntity(AccessControlRequest request);

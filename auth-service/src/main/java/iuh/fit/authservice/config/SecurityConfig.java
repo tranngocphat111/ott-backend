@@ -59,6 +59,7 @@ public class SecurityConfig {
             "/auth/logout",
             "/auth/qr/generate",
             "/auth/qr/status/**",
+            "/auth/ws/qr/**"
     };
 
     private static final String[] INTERNAL_ENDPOINTS = {

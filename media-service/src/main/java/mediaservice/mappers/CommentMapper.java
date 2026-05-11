@@ -4,10 +4,11 @@ import mediaservice.dtos.requests.CommentRequest;
 import mediaservice.dtos.responses.CommentResponse;
 import mediaservice.models.Comment;
 import org.mapstruct.*;
+import org.mapstruct.ReportingPolicy;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface CommentMapper {
 
     @Mapping(target = "accountId",          source = "account.id")
@@ -19,6 +20,8 @@ public interface CommentMapper {
     @Mapping(target = "edited",              source = "edited")
     @Mapping(target = "deleted",             source = "deleted")
     @Mapping(target = "totalReactions",      ignore = true)
+    @Mapping(target = "createdAt", source = "createdAt", dateFormat = "yyyy-MM-dd'T'HH:mm:ss")
+    @Mapping(target = "updatedAt", source = "updatedAt", dateFormat = "yyyy-MM-dd'T'HH:mm:ss")
     CommentResponse toResponse(Comment comment);
 
     List<CommentResponse> toResponseList(List<Comment> comments);

@@ -4,10 +4,11 @@ import mediaservice.dtos.requests.TextItemRequest;
 import mediaservice.dtos.responses.TextItemResponse;
 import mediaservice.models.TextItem;
 import org.mapstruct.*;
+import org.mapstruct.ReportingPolicy;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface TextItemMapper {
 
     @Mapping(target = "id", ignore = true)

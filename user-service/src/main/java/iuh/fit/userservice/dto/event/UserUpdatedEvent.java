@@ -9,12 +9,18 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserCreatedEvent {
+public class UserUpdatedEvent {
     private String userId;
-    private String username;
+
+    private String fullName;
+    private String displayName;
+    private String avatarUrl;
     private String avatar;
     private String coverUrl;
     private String bio;
+    private String work;
+    private String location;
+    private String relationshipStatus;
     private String email;
     private String phone;
 }

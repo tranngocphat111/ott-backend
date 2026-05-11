@@ -148,4 +148,23 @@ public class NotificationPublisher {
             log.warn("Failed to publish user.login analytics event for userId={}: {}", userId, e.getMessage());
         }
     }
+
+    public void publishUserLogoutEvent(String userId, String sessionId, String deviceId, String action, java.util.List<String> revokedDeviceIds) {
+        try {
+            Map<String, Object> event = new HashMap<>();
+            event.put("userId", userId);
+            event.put("sessionId", sessionId);
+            event.put("deviceId", deviceId);
+            event.put("action", action);
+            if (revokedDeviceIds != null) {
+                event.put("revokedDeviceIds", revokedDeviceIds);
+            }
+
+            // Publish to user.events exchange with routing key user.logout
+            rabbitTemplate.convertAndSend("user.events", "user.logout", event);
+            log.info("User logout event published for userId={}, action={}", userId, action);
+        } catch (Exception e) {
+            log.warn("Failed to publish user.logout event for userId={}: {}", userId, e.getMessage());
+        }
+    }
 }

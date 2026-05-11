@@ -4,7 +4,8 @@ const { Server } = require("socket.io");
 const dotenv = require("dotenv");
 const cors = require("cors");
 
-dotenv.config();
+const path = require("path");
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 const connectDB = require("./config/db");
 const apiRoutes = require("./routes/api");
@@ -13,6 +14,8 @@ const messageEventsHandler = require("./events/messageEvents");
 const ParticipantService = require("./services/participantService");
 const MessageService = require("./services/messageService");
 const { initAllConsumers } = require("./consumers");
+const Conversation = require("./models/Conversation");
+const livekitService = require("./services/livekitService");
 connectDB();
 const app = express();
 const server = http.createServer(app);
@@ -254,12 +257,12 @@ const removeUserFromAllCalls = (userId) => {
     // Nếu không còn ai trong phòng và cuộc gọi chưa được trả lời -> Kết thúc hoàn toàn
     if (callState.participants.size === 0) {
       if (!callState.answeredAt && String(callState.initiatorId) === String(userId)) {
-         void emitCallOutcomeMessage({
-           conversationId,
-           senderId: userId,
-           callType: callState.callType,
-           outcome: "missed",
-         });
+        void emitCallOutcomeMessage({
+          conversationId,
+          senderId: userId,
+          callType: callState.callType,
+          outcome: "missed",
+        });
       }
       endCallRoom(conversationId, userId);
       continue;
@@ -331,7 +334,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("bat_dau_goi", async ({ conversationId, callerId, callType }) => {
+  socket.on("bat_dau_goi", async ({ conversationId, callerId, callType, invitedUserIds }) => {
     try {
       if (!conversationId || !callerId) return;
 
@@ -339,9 +342,17 @@ io.on("connection", (socket) => {
       socket.join(`user:${callerId}`);
 
       const participants = await ParticipantService.getParticipants(conversationId);
-      const memberIds = participants.map(p => p.user_id).filter(id => !!id);
+      const memberIdsFromDb = participants.map(p => p.user_id).filter(id => !!id);
+      
+      // Nếu có danh sách mời đích danh, dùng danh sách đó. Nếu không, dùng tất cả thành viên (trường hợp 1-1 hoặc gọi cả nhóm mặc định)
+      const memberIds = (invitedUserIds && Array.isArray(invitedUserIds) && invitedUserIds.length > 0)
+        ? invitedUserIds
+        : memberIdsFromDb;
 
-      const callState = ensureCallState(conversationId, callType, memberIds);
+      const conversation = await Conversation.findById(conversationId);
+      const isGroup = conversation && conversation.type === "group";
+
+      const callState = ensureCallState(conversationId, callType, memberIdsFromDb);
       if (!callState.initiatorId) {
         callState.initiatorId = callerId;
       }
@@ -349,13 +360,21 @@ io.on("connection", (socket) => {
 
       socket.join(`call:${conversationId}`);
 
+      let livekitToken = null;
+      if (isGroup) {
+        livekitToken = livekitService.generateToken(conversationId, callerId);
+      }
+
       io.to(`call:${conversationId}`).emit("nguoi_dung_tham_gia_goi", {
         conversationId,
         userId: callerId,
         callType: callState.callType,
         participants: Array.from(callState.participants),
+        isGroup,
+        livekitToken,
       });
 
+      // Lọc bỏ người gọi khỏi danh sách nhận thông báo
       const targetUserIds = memberIds.filter((userId) => userId && userId !== callerId);
 
       targetUserIds.forEach((userId) => {
@@ -372,12 +391,15 @@ io.on("connection", (socket) => {
           callerId,
           callType: callState.callType,
           startedAt: callState.startedAt,
+          isGroup,
         });
       });
 
       io.to(`user:${callerId}`).emit("bat_dau_goi_thanh_cong", {
         conversationId,
         callType: callState.callType,
+        isGroup,
+        livekitToken,
       });
 
       scheduleNoAnswerTimeout({
@@ -424,11 +446,20 @@ io.on("connection", (socket) => {
 
       socket.join(`call:${conversationId}`);
 
+      const conversation = await Conversation.findById(conversationId);
+      const isGroup = conversation && conversation.type === "group";
+      let livekitToken = null;
+      if (isGroup) {
+        livekitToken = livekitService.generateToken(conversationId, userId);
+      }
+
       io.to(`call:${conversationId}`).emit("nguoi_dung_tham_gia_goi", {
         conversationId,
         userId,
         callType: callState.callType,
         participants: Array.from(callState.participants),
+        isGroup,
+        livekitToken,
       });
     },
   );
@@ -557,7 +588,7 @@ io.on("connection", (socket) => {
     // Lưu ý: socket.rooms chứa phòng của chính socket đó và các phòng nó tham gia
     const rooms = Array.from(socket.rooms);
     const callRoomId = rooms.find(r => r.startsWith("call:"));
-    
+
     if (callRoomId) {
       console.log(`Socket cua user ${userId} trong phong ${callRoomId} dang ngat ket noi (disconnecting).`);
       removeUserFromAllCalls(userId);
@@ -573,7 +604,7 @@ io.on("connection", (socket) => {
 
     // Kiểm tra xem user còn socket nào khác đang online không (ví dụ: tab CallPage hoặc tab chat khác)
     const activeSockets = await io.in(`user:${userId}`).fetchSockets();
-    
+
     if (activeSockets.length === 0) {
       console.log(`User ${userId} da ngat ket noi hoan toan. Dang don dep cuoc goi...`);
       removeUserFromAllCalls(userId);

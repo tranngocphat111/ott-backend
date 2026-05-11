@@ -8,7 +8,7 @@ const initAllConsumers = async (io) => {
     const { channel } = await connectRabbitMQ();
     
     // Initialize all specific consumers here
-    await initUserConsumer(channel);
+    await initUserConsumer(channel, io);
     await initRelationshipConsumer(channel, io);
 
     // Initialize publishers

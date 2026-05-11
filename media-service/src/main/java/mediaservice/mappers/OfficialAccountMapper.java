@@ -5,11 +5,12 @@ import mediaservice.dtos.responses.OfficialAccountResponse;
 import mediaservice.models.OfficialAccount;
 import mediaservice.utils.MediaUrlBuilder;
 import org.mapstruct.*;
+import org.mapstruct.ReportingPolicy;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public abstract class OfficialAccountMapper {
 
     @Autowired

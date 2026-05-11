@@ -25,6 +25,7 @@ public class SessionService {
 
     private final UserSessionRepository userSessionRepository;
     private final AuthSessionClient authSessionClient;
+    private final UserEventPublisher userEventPublisher;
 
     @Value("${jwt.expiration:3600}")
     private long jwtExpiration;
@@ -103,6 +104,15 @@ public class SessionService {
 
         authSessionClient.revokeSession(session.getSessionToken(), userId);
 
+        userEventPublisher.publishUserLogout(
+                iuh.fit.userservice.dto.event.UserLogoutEvent.builder()
+                        .userId(userId)
+                        .sessionId(sessionId)
+                        .deviceId(session.getDeviceId())
+                        .action("SPECIFIC")
+                        .build()
+        );
+
         log.info("Session revoked successfully - sessionId: {}", sessionId);
     }
 
@@ -121,6 +131,13 @@ public class SessionService {
         userSessionRepository.saveAll(sessions);
 
         authSessionClient.revokeAllSessions(userId, reason);
+
+        userEventPublisher.publishUserLogout(
+                iuh.fit.userservice.dto.event.UserLogoutEvent.builder()
+                        .userId(userId)
+                        .action("ALL")
+                        .build()
+        );
 
         log.info("Successfully revoked {} sessions for userId: {}", sessions.size(), userId);
         return sessions.size();
@@ -142,6 +159,22 @@ public class SessionService {
 
         if (revokedCount > 0) {
             userSessionRepository.saveAll(sessions);
+
+            java.util.List<String> revokedDeviceIds = new java.util.ArrayList<>();
+            for (UserSession session : sessions) {
+                if (!session.getSessionToken().equals(currentToken)) {
+                    revokedDeviceIds.add(session.getDeviceId());
+                }
+            }
+
+            userEventPublisher.publishUserLogout(
+                    iuh.fit.userservice.dto.event.UserLogoutEvent.builder()
+                            .userId(userId)
+                            .action("OTHERS")
+                            .revokedDeviceIds(revokedDeviceIds)
+                            .build()
+            );
+
             log.info("Revoked {} other sessions for userId: {}", revokedCount, userId);
         } else {
             log.debug("No other sessions to revoke for userId: {}", userId);

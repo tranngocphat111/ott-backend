@@ -33,6 +33,7 @@ public class SessionService {
     private final QrLoginSessionRepository qrLoginSessionRepository;
     private final JwtService jwtService;
     private final EntityManager entityManager;
+    private final NotificationPublisher notificationPublisher;
 
     @Value("${jwt.expiration:3600}")
     private long jwtExpiration;
@@ -121,6 +122,8 @@ public class SessionService {
         userSessionRepository.save(session);
         invalidateSessionTokens(session);
 
+        notificationPublisher.publishUserLogoutEvent(userId, sessionId, session.getDeviceId(), "SPECIFIC", null);
+
         log.info("Session revoked successfully - sessionId: {}", sessionId);
     }
 
@@ -140,6 +143,9 @@ public class SessionService {
             entityManager.flush();
             userSessionRepository.delete(session);
             entityManager.flush();
+
+            notificationPublisher.publishUserLogoutEvent(userId, null, deviceId, "SPECIFIC", null);
+
             log.info("Session deleted by deviceId: {}, userId: {}", deviceId, userId);
         } else {
             log.debug("No active session found for deviceId: {}", deviceId);
@@ -153,16 +159,19 @@ public class SessionService {
         List<UserSession> sessions = userSessionRepository.findByUserIdAndIsActiveTrue(userId);
 
         int revokedCount = 0;
+        java.util.List<String> revokedDeviceIds = new java.util.ArrayList<>();
         for (UserSession session : sessions) {
             if (!session.getSessionToken().equals(currentSessionToken)) {
                 session.revoke("Revoked by user - all other sessions");
                 invalidateSessionTokens(session);
+                revokedDeviceIds.add(session.getDeviceId());
                 revokedCount++;
             }
         }
 
         if (revokedCount > 0) {
             userSessionRepository.saveAll(sessions);
+            notificationPublisher.publishUserLogoutEvent(userId, null, null, "OTHERS", revokedDeviceIds);
             log.info("Revoked {} other sessions for userId: {}", revokedCount, userId);
         } else {
             log.debug("No other sessions to revoke for userId: {}", userId);
@@ -170,8 +179,20 @@ public class SessionService {
     }
 
     public int revokeAllUserSessions(String userId, String reason) {
-        log.info("Internal revoke-all called for userId: {} - auth-service has no sessions to revoke", userId);
-        return 0;
+        log.info("Internal revoke-all called for userId: {} - auth-service will delete all active sessions", userId);
+        
+        List<UserSession> sessions = userSessionRepository.findByUserIdAndIsActiveTrue(userId);
+        if (sessions.isEmpty()) return 0;
+        
+        for (UserSession session : sessions) {
+            session.revoke(reason);
+            invalidateSessionTokens(session);
+        }
+        userSessionRepository.saveAll(sessions);
+        
+        notificationPublisher.publishUserLogoutEvent(userId, null, null, "ALL", null);
+        
+        return sessions.size();
     }
 
     @Transactional

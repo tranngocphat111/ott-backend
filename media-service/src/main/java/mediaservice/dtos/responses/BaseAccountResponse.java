@@ -16,6 +16,7 @@ public abstract class BaseAccountResponse {
     private String email;
     private String avatarUrl;
     private String coverUrl;
+    private String phoneNumber;
     private String bio;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

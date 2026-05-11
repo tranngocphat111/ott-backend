@@ -30,6 +30,34 @@ public class UserEventPublisher {
         }
     }
 
+    public void publishUserUpdated(iuh.fit.userservice.dto.event.UserUpdatedEvent event) {
+        try {
+            rabbitTemplate.convertAndSend(
+                    rabbitMQConfig.userEventsExchange,
+                    rabbitMQConfig.userUpdatedRoutingKey,
+                    event
+            );
+            log.info("Published user.updated event for userId={}", event.getUserId());
+        } catch (Exception e) {
+            log.error("Failed to publish user.updated event for userId={}: {}", 
+                    event.getUserId(), e.getMessage());
+        }
+    }
+
+    public void publishUserLogout(iuh.fit.userservice.dto.event.UserLogoutEvent event) {
+        try {
+            rabbitTemplate.convertAndSend(
+                    rabbitMQConfig.userEventsExchange,
+                    rabbitMQConfig.userLogoutRoutingKey,
+                    event
+            );
+            log.info("Published user.logout event for userId={}, action={}", event.getUserId(), event.getAction());
+        } catch (Exception e) {
+            log.error("Failed to publish user.logout event for userId={}: {}", 
+                    event.getUserId(), e.getMessage());
+        }
+    }
+
     public void publishUserStatusChanged(UserStatusChangedEvent event) {
         try {
             rabbitTemplate.convertAndSend(
