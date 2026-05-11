@@ -275,3 +275,78 @@ exports.dissolveGroup = async (conversationId, requesterId) => {
     finalNotice,
   };
 };
+
+// ─── Invite Link ─────────────────────────────────────────────────────────────
+
+/**
+ * Lấy (hoặc tạo mới) invite token cho nhóm.
+ * Chỉ admin/thành viên của nhóm mới được gọi.
+ */
+exports.getOrCreateInviteLink = async (conversationId, requesterId, baseUrl) => {
+  const conversation = await Conversation.findById(conversationId).lean();
+  if (!conversation) throw new Error("Cuộc hội thoại không tồn tại");
+  if (conversation.type !== "group") throw new Error("Chỉ nhóm chat mới có link mời");
+  if (conversation.is_dissolved) throw new Error("Nhóm đã bị giải tán");
+
+  // Kiểm tra requester có trong nhóm không
+  const participant = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: requesterId,
+    status: "joined",
+  }).lean();
+  if (!participant) throw new Error("Bạn không phải thành viên của nhóm");
+
+  // Nếu đã có token thì dùng luôn, ngược lại tạo mới
+  let token = conversation.invite_token;
+  if (!token) {
+    const crypto = require("crypto");
+    token = crypto.randomBytes(16).toString("hex");
+    await Conversation.findByIdAndUpdate(conversationId, { invite_token: token });
+  }
+
+  const inviteLink = `${baseUrl}/join?token=${token}`;
+  return { inviteLink, token };
+};
+
+/**
+ * Tham gia nhóm bằng invite token.
+ * Nếu đã là thành viên → trả về luôn. Nếu chưa → thêm vào.
+ */
+exports.joinByInviteToken = async (token, userId) => {
+  const conversation = await Conversation.findOne({ invite_token: token });
+  if (!conversation) throw new Error("Link mời không hợp lệ hoặc đã hết hạn");
+  if (conversation.is_dissolved) throw new Error("Nhóm đã bị giải tán");
+  if (conversation.status === "dissolved") throw new Error("Nhóm đã bị giải tán");
+
+  const conversationId = conversation._id.toString();
+
+  // Kiểm tra đã là thành viên chưa
+  const existing = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: userId,
+  }).lean();
+
+  if (existing) {
+    if (existing.status === "joined") {
+      // Đã tham gia rồi → trả về conversation
+      return conversation;
+    }
+    // Đang ở trạng thái invited → chuyển sang joined
+    await Participant.findByIdAndUpdate(existing._id, { status: "joined" });
+    await Conversation.findByIdAndUpdate(conversationId, { $inc: { member_count: 1 } });
+    return conversation;
+  }
+
+  // Chưa có → thêm mới
+  const ParticipantService = require("./participantService");
+  await ParticipantService.addParticipant({
+    conversationId,
+    userId,
+    role: "user",
+    status: "joined",
+  });
+
+  await Conversation.findByIdAndUpdate(conversationId, { $inc: { member_count: 1 } });
+
+  return await Conversation.findById(conversationId);
+};

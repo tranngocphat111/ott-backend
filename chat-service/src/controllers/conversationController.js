@@ -271,3 +271,44 @@ exports.updateConversation = async (req, res) => {
     res.status(isClientError ? 400 : 500).json({ error: error.message });
   }
 };
+
+// ─── Invite Link ─────────────────────────────────────────────────────────────
+
+/**
+ * POST /conversations/:conversationId/invite-link
+ */
+exports.getInviteLink = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { requesterId } = req.body;
+    if (!requesterId) return res.status(400).json({ error: "requesterId la bat buoc" });
+    const baseUrl = process.env.FRONTEND_URL || `${req.protocol}://${req.get("host")}`;
+    const result = await ConversationService.getOrCreateInviteLink(conversationId, requesterId, baseUrl);
+    res.status(200).json(result);
+  } catch (error) {
+    const isClient = error.message.includes("khong ton tai") || error.message.includes("giai tan") || error.message.includes("thanh vien");
+    res.status(isClient ? 400 : 500).json({ error: error.message });
+  }
+};
+
+/**
+ * POST /conversations/join-by-link
+ */
+exports.joinByLink = async (req, res) => {
+  try {
+    const { token, userId } = req.body;
+    if (!token || !userId) return res.status(400).json({ error: "token va userId la bat buoc" });
+    const conversation = await ConversationService.joinByInviteToken(token, userId);
+    const participants = await ParticipantService.getParticipants(conversation._id.toString());
+    participants.forEach((p) => {
+      if (String(p.user_id) !== String(userId)) {
+        req.io.to(`user:${p.user_id}`).emit("them_nguoi_moi", { user_id: userId, conversation_id: conversation._id, status: "joined" });
+      }
+    });
+    req.io.to(`user:${userId}`).emit("tao_phong_moi", conversation);
+    res.status(200).json(conversation);
+  } catch (error) {
+    const isClient = error.message.includes("hop le") || error.message.includes("giai tan");
+    res.status(isClient ? 400 : 500).json({ error: error.message });
+  }
+};
