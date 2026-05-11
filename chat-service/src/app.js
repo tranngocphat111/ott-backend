@@ -631,6 +631,50 @@ io.on("connection", (socket) => {
     },
   );
 
+    socket.on("moi_them_thanh_vien_goi", async ({ conversationId, targetUserIds, callerId }) => {
+      if (!conversationId || !targetUserIds || !Array.isArray(targetUserIds)) return;
+      const convIdStr = String(conversationId);
+      console.log(`[CALL] Moi them thanh vien: conv=${convIdStr}, targets=${targetUserIds}, caller=${callerId}`);
+
+      const callState = activeCalls.get(convIdStr);
+      if (!callState) return;
+
+      targetUserIds.forEach(userId => {
+        const userIdStr = String(userId);
+        // Không mời người đã có trong cuộc gọi
+        if (callState.participants.has(userIdStr)) return;
+
+        // Thêm vào memberIds nếu chưa có (để signaling cancel sau này)
+        if (callState.memberIds) {
+          callState.memberIds.add(userIdStr);
+        }
+
+        // Gửi thông báo cuộc gọi đến
+        io.to(`user:${userIdStr}`).emit("cuoc_goi_den", {
+          conversationId: convIdStr,
+          callerId: String(callState.initiatorId || callerId),
+          callType: callState.callType,
+          isGroup: true,
+          participants: Array.from(callState.participants),
+          startedAt: callState.startedAt,
+        });
+
+        // Cập nhật trạng thái gọi cho họ ngay trên sidebar
+        io.to(`user:${userIdStr}`).emit("cap_nhat_trang_thai_goi_nhom", {
+          conversationId: convIdStr,
+          isCalling: true,
+          participantCount: callState.participants.size,
+        });
+      });
+    });
+
+    socket.on("chap_nhan_goi", ({ conversationId, userId }) => {
+      if (!conversationId || !userId) return;
+
+      const callState = activeCalls.get(conversationId);
+      if (!callState) return;
+    });
+
   socket.on("roi_cuoc_goi", ({ conversationId, userId }) => {
     if (!conversationId || !userId) return;
 
