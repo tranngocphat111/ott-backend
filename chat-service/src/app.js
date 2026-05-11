@@ -248,7 +248,7 @@ const emitCallOutcomeMessage = async ({
 };
 
 
-const ensureCallState = (conversationId, callType, memberIds = []) => {
+const ensureCallState = (conversationId, callType, memberIds = [], isGroup = false) => {
   if (!activeCalls.has(conversationId)) {
     activeCalls.set(conversationId, {
       conversationId,
@@ -258,10 +258,13 @@ const ensureCallState = (conversationId, callType, memberIds = []) => {
       startedAt: new Date().toISOString(),
       answeredAt: null,
       isOutcomeEmitted: false,
-      isGroup: false,
+      isGroup: !!isGroup,
       hadMultipleParticipants: false,
       noAnswerTimer: null,
     });
+  } else if (isGroup) {
+    // Cập nhật trạng thái group nếu thông tin mới xác nhận là group
+    activeCalls.get(conversationId).isGroup = true;
   }
   return activeCalls.get(conversationId);
 };
@@ -493,7 +496,12 @@ io.on("connection", (socket) => {
       socket.data.userId = userId;
       socket.join(`user:${userId}`);
 
-      const callState = ensureCallState(conversationId, callType);
+      const participantsDb = await ParticipantService.getParticipants(conversationId);
+      const memberIdsFromDb = participantsDb.map(p => p.user_id).filter(id => !!id);
+      const conversation = await Conversation.findById(conversationId);
+      const isGroup = conversation && conversation.type === "group";
+
+      const callState = ensureCallState(conversationId, callType, memberIdsFromDb, isGroup);
       const participantCountBeforeJoin = callState.participants.size;
       callState.participants.add(userId);
 
@@ -515,12 +523,9 @@ io.on("connection", (socket) => {
 
       socket.join(`call:${conversationId}`);
 
-      const conversation = await Conversation.findById(conversationId);
-      const isGroup = conversation && conversation.type === "group";
       let livekitToken = null;
       if (isGroup) {
         livekitToken = await livekitService.generateToken(conversationId, userId);
-        callState.isGroup = true;
       }
 
       io.to(`call:${conversationId}`).emit("nguoi_dung_tham_gia_goi", {
@@ -734,11 +739,11 @@ io.on("connection", (socket) => {
     const callState = activeCalls.get(conversationId);
     if (!callState) return;
 
-    // Đối với cuộc gọi nhóm: Chỉ kết thúc khi không còn ai (size === 0)
-    // Đối với cuộc gọi 1-1: Kết thúc khi chỉ còn 1 người (size === 1)
+    // Đối với cuộc gọi nhóm: Chỉ thực sự kết thúc khi KHÔNG còn ai (size === 0)
+    // Đối với cuộc gọi 1-1: Kết thúc khi chỉ còn 1 người hoặc 0 người
     const shouldClose = callState.isGroup
       ? callState.participants.size === 0
-      : callState.participants.size === 1;
+      : callState.participants.size <= 1;
 
     if (shouldClose) {
       const outcome = callState.answeredAt ? "completed" : "missed";
