@@ -1,11 +1,4 @@
 const { AccessToken } = require("livekit-server-sdk");
-const dotenv = require("dotenv");
-
-const path = require("path");
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
-
-const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || "devkey";
-const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || "secret";
 
 /**
  * Generate a token for a user to join a LiveKit room.
@@ -13,18 +6,30 @@ const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || "secret";
  * @param {string} participantName - The user's name or ID.
  * @returns {string} The generated token.
  */
-exports.generateToken = (roomName, participantName) => {
-  const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
-    identity: participantName,
+exports.generateToken = async (roomName, participantName) => {
+  const apiKey = process.env.LIVEKIT_API_KEY?.trim();
+  const apiSecret = process.env.LIVEKIT_API_SECRET?.trim();
+
+  if (!apiKey || !apiSecret) {
+    console.error("ERROR: Missing LiveKit API Key or Secret in process.env");
+    return null;
+  }
+
+  // Log để kiểm tra (chỉ hiện 4 ký tự đầu để bảo mật)
+  console.log(`[LiveKit] Generating token for Room: ${roomName}, Participant: ${participantName}`);
+  console.log(`[LiveKit] Using Key: ${apiKey.substring(0, 4)}..., Secret: ${apiSecret.substring(0, 4)}...`);
+
+  const at = new AccessToken(apiKey, apiSecret, {
+    identity: String(participantName),
   });
 
   at.addGrant({
     roomJoin: true,
-    room: roomName,
+    room: String(roomName),
     canPublish: true,
     canSubscribe: true,
     canPublishData: true,
   });
 
-  return at.toJwt();
+  return await at.toJwt();
 };

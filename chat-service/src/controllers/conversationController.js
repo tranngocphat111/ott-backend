@@ -73,11 +73,11 @@ exports.createConversation = async (req, res) => {
         const creatorName = creatorUser ? creatorUser.name : "Trưởng nhóm";
         const memberNamesJoined = memberDisplayNames.join(", ");
         
-        // Gửi thông báo cho nhóm: "A, B được C thêm vào nhóm"
+        // Gửi thông báo cho nhóm
         const notificationMessage = await MessageService.sendMessage({
           conversationId: conversation._id,
           senderId: creatorId,
-          content: `${memberNamesJoined} được ${creatorName} thêm vào nhóm`,
+          content: `${creatorName} đã thêm ${memberNamesJoined} vào nhóm`,
           type: "system_add",
         });
 
@@ -166,7 +166,7 @@ exports.addMember = async (req, res) => {
       const notificationMessage = await MessageService.sendMessage({
         conversationId: conversation._id,
         senderId: addedBy,
-        content: `${memberNamesStr} được ${adderName} thêm vào nhóm`,
+        content: `${adderName} đã thêm ${memberNamesStr} vào nhóm`,
         type: "system_add",
       });
 
@@ -298,15 +298,54 @@ exports.joinByLink = async (req, res) => {
   try {
     const { token, userId } = req.body;
     if (!token || !userId) return res.status(400).json({ error: "token va userId la bat buoc" });
-    const conversation = await ConversationService.joinByInviteToken(token, userId);
+    const result = await ConversationService.joinByInviteToken(token, userId);
+    const conversation = result.conversation;
+    const isNewJoin = result.isNewJoin;
+
     const participants = await ParticipantService.getParticipants(conversation._id.toString());
+    
+    let responseMessage = null;
+    if (isNewJoin) {
+      const user = await UserService.getUser(userId);
+      const userName = user ? user.name : "Người dùng";
+      
+      const notificationMessage = await MessageService.sendMessage({
+        conversationId: conversation._id,
+        senderId: userId,
+        content: `${userName} đã tham gia nhóm bằng link mời`,
+        type: "system_add",
+      });
+      const Message = require("../models/Message");
+      responseMessage = await Message.findById(notificationMessage._id).lean();
+    }
+
     participants.forEach((p) => {
       if (String(p.user_id) !== String(userId)) {
         req.io.to(`user:${p.user_id}`).emit("them_nguoi_moi", { user_id: userId, conversation_id: conversation._id, status: "joined" });
       }
+      if (responseMessage) {
+        req.io.to(`user:${p.user_id}`).emit("tin_nhan", responseMessage);
+      }
     });
+    
     req.io.to(`user:${userId}`).emit("tao_phong_moi", conversation);
-    res.status(200).json(conversation);
+    res.status(200).json({ conversation, isNewJoin });
+  } catch (error) {
+    const isClient = error.message.includes("hop le") || error.message.includes("giai tan");
+    res.status(isClient ? 400 : 500).json({ error: error.message });
+  }
+};
+
+/**
+ * GET /conversations/invite-link/:token
+ */
+exports.getInviteLinkInfo = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { userId } = req.query;
+    if (!token) return res.status(400).json({ error: "Token la bat buoc" });
+    const result = await ConversationService.getInfoByInviteToken(token, userId);
+    res.status(200).json(result);
   } catch (error) {
     const isClient = error.message.includes("hop le") || error.message.includes("giai tan");
     res.status(isClient ? 400 : 500).json({ error: error.message });

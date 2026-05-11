@@ -329,12 +329,12 @@ exports.joinByInviteToken = async (token, userId) => {
   if (existing) {
     if (existing.status === "joined") {
       // Đã tham gia rồi → trả về conversation
-      return conversation;
+      return { conversation, isNewJoin: false };
     }
     // Đang ở trạng thái invited → chuyển sang joined
     await Participant.findByIdAndUpdate(existing._id, { status: "joined" });
     await Conversation.findByIdAndUpdate(conversationId, { $inc: { member_count: 1 } });
-    return conversation;
+    return { conversation: await Conversation.findById(conversationId), isNewJoin: true };
   }
 
   // Chưa có → thêm mới
@@ -348,5 +348,26 @@ exports.joinByInviteToken = async (token, userId) => {
 
   await Conversation.findByIdAndUpdate(conversationId, { $inc: { member_count: 1 } });
 
-  return await Conversation.findById(conversationId);
+  return { conversation: await Conversation.findById(conversationId), isNewJoin: true };
+};
+
+exports.getInfoByInviteToken = async (token, userId) => {
+  const conversation = await Conversation.findOne({ invite_token: token }).lean();
+  if (!conversation) throw new Error("Link mời không hợp lệ hoặc đã hết hạn");
+  if (conversation.is_dissolved || conversation.status === "dissolved") {
+    throw new Error("Nhóm đã bị giải tán");
+  }
+
+  let isMember = false;
+  if (userId) {
+    const Participant = require("../models/Participant");
+    const existing = await Participant.findOne({
+      conversation_id: conversation._id.toString(),
+      user_id: userId,
+      status: "joined"
+    }).lean();
+    if (existing) isMember = true;
+  }
+
+  return { conversation, isMember };
 };
