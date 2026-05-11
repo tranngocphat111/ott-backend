@@ -328,6 +328,16 @@ io.on("connection", (socket) => {
   socket.on("tham_gia_nhom", (conversationId) => {
     socket.join(conversationId);
     console.log(`User tham gia vao phong: ${conversationId}`);
+
+    // Gửi trạng thái cuộc gọi nếu có cuộc gọi đang diễn ra trong nhóm này
+    const callState = activeCalls.get(conversationId);
+    if (callState && callState.isGroup) {
+      socket.emit("cap_nhat_trang_thai_goi_nhom", {
+        conversationId,
+        isCalling: true,
+        participantCount: callState.participants.size,
+      });
+    }
   });
 
   socket.on("roi_nhom_chat", (conversationId) => {
@@ -340,6 +350,17 @@ io.on("connection", (socket) => {
     socket.data.userId = userId;
     socket.join(`user:${userId}`);
     console.log(`User ${userId} da vao phong ca nhan`);
+
+    // Gửi trạng thái các cuộc gọi đang diễn ra cho người dùng vừa kết nối (Sidebar sync)
+    for (const [conversationId, callState] of activeCalls.entries()) {
+      if (callState.isGroup && callState.memberIds && callState.memberIds.has(userId)) {
+        socket.emit("cap_nhat_trang_thai_goi_nhom", {
+          conversationId,
+          isCalling: true,
+          participantCount: callState.participants.size,
+        });
+      }
+    }
   });
 
   // Kiểm tra xem người nhận có đang bận không TRƯỚC khi mở cửa sổ gọi
