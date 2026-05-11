@@ -160,16 +160,41 @@ const scheduleNoAnswerTimeout = ({ conversationId, callerId, callType }) => {
     const currentCallState = activeCalls.get(conversationId);
     if (!currentCallState) return;
 
-    if (currentCallState.participants.size <= 1) {
-      await createCallNotificationMessage({
-        conversationId,
-        senderId: callerId,
-        type: "call_missed",
-        content: `Cuộc gọi ${callType === "video" ? "video" : "thoại"} nhỡ`,
-      });
+    console.log(`[CALL] No-answer timeout (30s) reached for conversation ${conversationId}.`);
 
-      console.log(`[CALL] No-answer timeout triggered for ${conversationId}`);
+    // Tự động "từ chối" cho những người chưa bắt máy sau 30s
+    if (currentCallState.memberIds) {
+      currentCallState.memberIds.forEach(uid => {
+        if (!currentCallState.participants.has(uid)) {
+          // Gửi tín hiệu để client tự động đóng modal/dừng đổ chuông
+          io.to(`user:${uid}`).emit("ket_thuc_phong_goi", { 
+            conversationId, 
+            reason: "timeout",
+            message: "Cuộc gọi đã kết thúc do không trả lời" 
+          });
+          console.log(`[CALL] Auto-rejecting for user ${uid} (timeout)`);
+        }
+      });
+    }
+
+    // Thực sự đóng phòng nếu không có ai khác tham gia sau 30s (chỉ còn tối đa 1 người là người gọi)
+    const shouldCloseRoom = currentCallState.participants.size <= 1;
+
+    if (shouldCloseRoom) {
+      if (!currentCallState.isOutcomeEmitted) {
+        currentCallState.isOutcomeEmitted = true;
+        await createCallNotificationMessage({
+          conversationId,
+          senderId: callerId,
+          type: "call_missed",
+          content: `Cuộc gọi ${callType === "video" ? "video" : "thoại"} nhỡ`,
+        });
+      }
+
+      console.log(`[CALL] Room ${conversationId} closed due to no response.`);
       endCallRoom(conversationId, callerId);
+    } else {
+      console.log(`[CALL] Room ${conversationId} remains active for ${currentCallState.participants.size} participants.`);
     }
   }, NO_ANSWER_TIMEOUT_MS);
 };
@@ -332,7 +357,7 @@ io.on("connection", (socket) => {
 
       const participants = await ParticipantService.getParticipants(conversationId);
       const memberIdsFromDb = participants.map(p => p.user_id).filter(id => !!id);
-      
+
       // Nếu có danh sách mời đích danh, dùng danh sách đó. Nếu không, dùng tất cả thành viên (trường hợp 1-1 hoặc gọi cả nhóm mặc định)
       const memberIds = (invitedUserIds && Array.isArray(invitedUserIds) && invitedUserIds.length > 0)
         ? invitedUserIds
@@ -551,6 +576,13 @@ io.on("connection", (socket) => {
     });
 
     const callState = activeCalls.get(conversationId);
+    
+    // Nếu là nhóm, chỉ đóng modal của người từ chối, không đóng cả phòng
+    if (callState && callState.isGroup) {
+      io.to(`user:${userId}`).emit("ket_thuc_phong_goi", { conversationId, endedBy: userId });
+      return;
+    }
+
     if (callState && !callState.isOutcomeEmitted) {
       callState.isOutcomeEmitted = true;
       await emitCallOutcomeMessage({
@@ -570,6 +602,27 @@ io.on("connection", (socket) => {
     const callState = activeCalls.get(conversationId);
     if (!callState) return;
 
+    // Restore: Nếu là cuộc gọi nhóm, hành động "Kết thúc" của 1 người chỉ là "Rời đi"
+    if (callState.isGroup) {
+      callState.participants.delete(userId);
+      socket.leave(`call:${conversationId}`);
+
+      io.to(`call:${conversationId}`).emit("nguoi_dung_roi_goi", {
+        conversationId,
+        userId,
+        participants: Array.from(callState.participants),
+      });
+
+      io.to(`conversation:${conversationId}`).emit("cap_nhat_trang_thai_goi_nhom", {
+        conversationId,
+        isCalling: callState.participants.size > 0,
+        participantCount: callState.participants.size,
+      });
+
+      maybeCloseCallWhenOnlyOneLeft(conversationId, userId);
+      return;
+    }
+
     if (!callState.isOutcomeEmitted) {
       callState.isOutcomeEmitted = true;
       const outcome = callState.answeredAt ? "completed" : "missed";
@@ -586,31 +639,31 @@ io.on("connection", (socket) => {
     console.log(`Cuoc goi ket thuc tai phong ${conversationId}`);
   });
 
-const maybeCloseCallWhenOnlyOneLeft = (conversationId, endedBy = null) => {
-  const callState = activeCalls.get(conversationId);
-  if (!callState) return;
+  const maybeCloseCallWhenOnlyOneLeft = (conversationId, endedBy = null) => {
+    const callState = activeCalls.get(conversationId);
+    if (!callState) return;
 
-  // Đối với cuộc gọi nhóm: Chỉ kết thúc khi không còn ai (size === 0)
-  // Đối với cuộc gọi 1-1: Kết thúc khi chỉ còn 1 người (size === 1)
-  const shouldClose = callState.isGroup 
-    ? callState.participants.size === 0 
-    : callState.participants.size === 1;
+    // Đối với cuộc gọi nhóm: Chỉ kết thúc khi không còn ai (size === 0)
+    // Đối với cuộc gọi 1-1: Kết thúc khi chỉ còn 1 người (size === 1)
+    const shouldClose = callState.isGroup
+      ? callState.participants.size === 0
+      : callState.participants.size === 1;
 
-  if (shouldClose) {
-    const outcome = callState.answeredAt ? "completed" : "missed";
-    if (!callState.isOutcomeEmitted) {
-      callState.isOutcomeEmitted = true;
-      emitCallOutcomeMessage({
-        conversationId,
-        senderId: callState.initiatorId || endedBy || "",
-        callType: callState.callType,
-        outcome,
-        answeredAt: callState.answeredAt,
-      });
+    if (shouldClose) {
+      const outcome = callState.answeredAt ? "completed" : "missed";
+      if (!callState.isOutcomeEmitted) {
+        callState.isOutcomeEmitted = true;
+        emitCallOutcomeMessage({
+          conversationId,
+          senderId: callState.initiatorId || endedBy || "",
+          callType: callState.callType,
+          outcome,
+          answeredAt: callState.answeredAt,
+        });
+      }
+      endCallRoom(conversationId, endedBy);
     }
-    endCallRoom(conversationId, endedBy);
-  }
-};
+  };
 
   socket.on("trang_thai_camera", ({ conversationId, userId, isCameraOff }) => {
     if (!conversationId || !userId) return;
