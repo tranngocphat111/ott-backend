@@ -162,11 +162,11 @@ const getBulkOnlineStatus = async (userIds) => {
 
     if (offlineUserIds.length > 0) {
       const users = await User.find(
-        { _id: { $in: offlineUserIds } },
-        "last_active_at"
+        { user_id: { $in: offlineUserIds } },
+        "user_id last_active_at"
       ).lean();
       
-      const userMap = new Map(users.map((u) => [String(u._id), u.last_active_at]));
+      const userMap = new Map(users.map((u) => [u.user_id, u.last_active_at]));
       
       for (const uid of offlineUserIds) {
         result.set(uid, {
