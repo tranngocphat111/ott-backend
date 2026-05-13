@@ -5,6 +5,10 @@ const Message = require("../models/Message");
 const Participant = require("../models/Participant");
 const Conversation = require("../models/Conversation");
 const { getActiveCall } = require("../services/callStateService");
+const {
+  publishMessageDelivered,
+  publishMessageSeen,
+} = require("../events/chatEvents");
 
 const buildConversationPreviewContent = (message) => {
   if (!message) return "";
@@ -75,6 +79,7 @@ exports.getConversationsByUserId = async (req, res) => {
                 conversation_id: conversation._id,
                 is_deleted: { $ne: true },
                 is_revoked: { $ne: true },
+                sender_id: { $ne: userId },
                 deleted_for: { $ne: userId },
               })
                 .select("msg_id")
@@ -138,8 +143,13 @@ exports.getConversationsByUserId = async (req, res) => {
             name: member.user?.name || "",
             avatar: member.user?.avatar || "",
             status: member.user?.is_online ? "online" : "offline",
+            membership_status: member.status || "joined",
             role: member.roles === "admin" ? "admin" : "member",
             joined_at: member.joined_at,
+            last_delivered_message_id: member.last_delivered_message_id || "0",
+            last_delivered_at: member.last_delivered_at || null,
+            last_read_message_id: member.last_read_message_id || "0",
+            last_read_at: member.last_read_at || null,
           }));
 
           return {
@@ -149,6 +159,9 @@ exports.getConversationsByUserId = async (req, res) => {
               user_id: participant.user_id,
               conversation_id: participant.conversation_id._id,
               settings: participant.settings,
+              last_delivered_message_id:
+                participant.last_delivered_message_id || "0",
+              last_delivered_at: participant.last_delivered_at || null,
               last_read_message_id: participant.last_read_message_id,
               last_read_at: participant.last_read_at,
               deleted_msg_id: participant.deleted_msg_id,
@@ -223,23 +236,30 @@ exports.updatePinStatus = async (req, res) => {
 exports.updateLastRead = async (req, res) => {
   try {
     const { conversationId, userId, msgId } = req.body;
-    const participant = await ParticipantService.updateLastRead(
+    await publishMessageSeen({
       conversationId,
       userId,
       msgId,
-    );
+      deviceId: req.body.deviceId || null,
+    });
 
-    // Emit real-time read notification to others in the conversation
-    if (req.io && conversationId) {
-      req.io.to(conversationId).emit("tin_nhan_doc", {
-        conversationId,
-        userId,
-        msgId,
-        readAt: new Date(),
-      });
-    }
+    res.status(202).json({ queued: true, conversationId, userId, msgId });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-    res.status(200).json(participant);
+exports.updateLastDelivered = async (req, res) => {
+  try {
+    const { conversationId, userId, msgId, deviceId } = req.body;
+    await publishMessageDelivered({
+      conversationId,
+      userId,
+      msgId,
+      deviceId: deviceId || null,
+    });
+
+    res.status(202).json({ queued: true, conversationId, userId, msgId });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

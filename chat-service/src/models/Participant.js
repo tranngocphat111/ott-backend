@@ -14,10 +14,21 @@ const ParticipantSchema = new mongoose.Schema(
       ref: "Conversation",
     },
 
+    last_delivered_message_id: {
+      type: String,
+      required: true,
+      default: "0",
+    },
+
+    last_delivered_at: {
+      type: Date,
+      default: null,
+    },
+
     last_read_message_id: {
       type: String,
       required: true,
-      default: 0,
+      default: "0",
     },
 
     last_read_at: {

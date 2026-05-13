@@ -63,6 +63,7 @@ router.put(
 );
 router.put("/participants/pin", ParticipantController.updatePinStatus);
 router.put("/participants/read", ParticipantController.updateLastRead);
+router.put("/participants/delivered", ParticipantController.updateLastDelivered);
 router.put(
   "/participants/delete-conversation",
   ParticipantController.deleteConversation,
