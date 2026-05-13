@@ -88,6 +88,11 @@ const ConversationSchema = new mongoose.Schema(
       default: null,
       index: { sparse: true },
     },
+    
+    blocked_user_ids: {
+      type: [String],
+      default: [],
+    },
   },
   {
     timestamps: true,

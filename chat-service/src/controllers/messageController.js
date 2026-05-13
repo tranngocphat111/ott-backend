@@ -429,13 +429,14 @@ exports.getLinkMessages = async (req, res) => {
 exports.searchEverything = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { q = "", limit = 20, senderId } = req.query;
+    const { q = "", limit = 20, senderId, scope } = req.query;
 
     const results = await MessageService.searchEverything({
       userId,
       keyword: q,
       limit: parseInt(limit, 10),
       senderId,
+      scope: scope ? String(scope).split(",") : null,
     });
 
     res.status(200).json(results);

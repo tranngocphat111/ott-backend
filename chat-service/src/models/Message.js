@@ -94,5 +94,6 @@ const MessageSchema = new mongoose.Schema(
 MessageSchema.index({ conversation_id: 1, msg_id: -1 });
 MessageSchema.index({ conversation_id: 1, is_pinned: 1 });
 MessageSchema.index({ conversation_id: 1, type: 1 });
+MessageSchema.index({ content: 1 });
 
 module.exports = mongoose.model("Message", MessageSchema);

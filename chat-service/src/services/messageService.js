@@ -2,6 +2,7 @@ const Message = require("../models/Message");
 const Participant = require("../models/Participant");
 const Conversation = require("../models/Conversation");
 const User = require("../models/User");
+const Relationship = require("../models/Relationship");
 const ConversationService = require("./conversationService");
 const messageCacheService = require("./messageCacheService");
 const {
@@ -368,6 +369,32 @@ exports.sendMessage = async ({
 
   if (!participant) {
     throw new Error("Bạn không thuộc cuộc hội thoại này");
+  }
+
+  // Check for blocking in private conversations
+  const conversation = await Conversation.findById(conversationId).lean();
+  if (conversation && conversation.type === "private") {
+    const otherParticipant = await Participant.findOne({
+      conversation_id: conversationId,
+      user_id: { $ne: senderId },
+    }).lean();
+
+    if (otherParticipant) {
+      const relationship = await Relationship.findOne({
+        $or: [
+          { requester_id: senderId, receiver_id: otherParticipant.user_id },
+          { requester_id: otherParticipant.user_id, receiver_id: senderId },
+        ],
+      }).lean();
+
+      if (relationship && relationship.status === "BLOCKED") {
+        if (relationship.requester_id === senderId) {
+          throw new Error("Bạn đã chặn người này. Hãy bỏ chặn để tiếp tục trò chuyện.");
+        } else {
+          throw new Error("Bạn đã bị người này chặn.");
+        }
+      }
+    }
   }
 
   if (participant?.settings?.removed_from_group_at) {
@@ -1234,6 +1261,7 @@ exports.searchEverything = async ({
   keyword,
   limit = 20,
   senderId,
+  scope = null,
 }) => {
   const safeLimit = Number.isFinite(Number(limit))
     ? Math.max(1, Math.min(Number(limit), 50))
@@ -1314,6 +1342,24 @@ exports.searchEverything = async ({
       conversation_ids: userConversationMap.get(u.user_id) || [],
     }));
 
+  // Global phone search integration
+  const isPhone = /^\d{10,11}$/.test(query);
+  if (isPhone && !contacts.some(c => c.phone === query)) {
+    const globalUser = await User.findOne({
+      $or: [{ phone: query }, { user_id: query }]
+    }).select("user_id name avatar phone").lean();
+    
+    if (globalUser && globalUser.user_id !== userId) {
+      contacts.unshift({
+        user_id: globalUser.user_id,
+        name: globalUser.name || globalUser.phone || globalUser.user_id,
+        avatar: globalUser.avatar || "",
+        phone: globalUser.phone || globalUser.user_id,
+        conversation_ids: [],
+      });
+    }
+  }
+
   const convById = new Map(conversations.map((c) => [String(c._id), c]));
   const privateConvIdsByMatchedContact = new Set();
   contacts.forEach((contact) => {
@@ -1357,31 +1403,41 @@ exports.searchEverything = async ({
     messageFilter.sender_id = senderId;
   }
 
+  const shouldSearchMessages = !scope || scope.includes("messages") || scope.includes("all");
+  const shouldSearchFiles = !scope || scope.includes("files") || scope.includes("all");
+  const shouldSearchMedia = !scope || scope.includes("media") || scope.includes("all");
+
   const [matchedMessages, matchedFiles, matchedMedia] = await Promise.all([
-    Message.find({
-      ...messageFilter,
-      type: { $in: ["text", "link"] },
-      content: { $elemMatch: { $regex: queryRegex } },
-    })
-      .sort({ createdAt: -1 })
-      .limit(safeLimit)
-      .lean(),
-    Message.find({
-      ...messageFilter,
-      type: "file",
-      content: { $elemMatch: { $regex: queryRegex } },
-    })
-      .sort({ createdAt: -1 })
-      .limit(safeLimit)
-      .lean(),
-    Message.find({
-      ...messageFilter,
-      type: { $in: ["image", "video"] },
-      content: { $elemMatch: { $regex: queryRegex } },
-    })
-      .sort({ createdAt: -1 })
-      .limit(safeLimit)
-      .lean(),
+    shouldSearchMessages
+      ? Message.find({
+          ...messageFilter,
+          type: { $in: ["text", "link"] },
+          content: { $elemMatch: { $regex: queryRegex } },
+        })
+          .sort({ createdAt: -1 })
+          .limit(safeLimit)
+          .lean()
+      : Promise.resolve([]),
+    shouldSearchFiles
+      ? Message.find({
+          ...messageFilter,
+          type: "file",
+          content: { $elemMatch: { $regex: queryRegex } },
+        })
+          .sort({ createdAt: -1 })
+          .limit(safeLimit)
+          .lean()
+      : Promise.resolve([]),
+    shouldSearchMedia
+      ? Message.find({
+          ...messageFilter,
+          type: { $in: ["image", "video"] },
+          content: { $elemMatch: { $regex: queryRegex } },
+        })
+          .sort({ createdAt: -1 })
+          .limit(safeLimit)
+          .lean()
+      : Promise.resolve([]),
   ]);
 
   const senderIdsInResults = [

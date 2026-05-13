@@ -340,15 +340,101 @@ exports.getOrCreateInviteLink = async (conversationId, requesterId, baseUrl) => 
  * Tham gia nhóm bằng invite token.
  * Nếu đã là thành viên → trả về luôn. Nếu chưa → thêm vào.
  */
+
+
+exports.blockMember = async (conversationId, userId, adminId) => {
+  const ParticipantService = require("./participantService");
+  const Participant = require("../models/Participant");
+  
+  const { conversation, isOwner } = await ParticipantService.assertGroupManager(conversationId, adminId);
+
+  // Find target participant
+  const participant = await Participant.findOne({
+    conversation_id: conversationId,
+    user_id: userId,
+  });
+
+  if (participant) {
+    // Admin (deputy) cannot block other admins
+    if (!isOwner && participant.roles === "admin") {
+      throw new Error("Phó nhóm không thể chặn phó nhóm khác");
+    }
+
+    // Cannot block owner
+    if (String(userId) === String(conversation.created_by)) {
+      throw new Error("Không thể chặn trưởng nhóm");
+    }
+
+    // Hard delete participant
+    await Participant.deleteOne({
+      conversation_id: conversationId,
+      user_id: userId,
+    });
+
+    // Update member count
+    await Conversation.findByIdAndUpdate(conversationId, {
+      $inc: { member_count: -1 },
+    });
+  }
+
+  // Add to blocked list in Conversation model
+  await Conversation.findByIdAndUpdate(conversationId, {
+    $addToSet: { blocked_user_ids: userId },
+  });
+
+  return { success: true, conversationId, userId };
+};
+
+exports.unblockMember = async (conversationId, userId, adminId) => {
+  const ParticipantService = require("./participantService");
+  await ParticipantService.assertGroupManager(conversationId, adminId);
+
+  await Conversation.findByIdAndUpdate(conversationId, {
+    $pull: { blocked_user_ids: userId },
+  });
+
+  return { success: true, conversationId, userId };
+};
+
+exports.getBlockedGroupMembers = async (conversationId, requesterId) => {
+  const ParticipantService = require("./participantService");
+  await ParticipantService.assertGroupManager(conversationId, requesterId);
+
+  const conversation = await Conversation.findById(conversationId)
+    .select("blocked_user_ids")
+    .lean();
+
+  if (!conversation) throw new Error("Nhóm không tồn tại");
+
+  const User = require("../models/User");
+  const users = await User.find({
+    user_id: { $in: conversation.blocked_user_ids || [] },
+  })
+    .select("user_id name avatar")
+    .lean();
+
+  return users;
+};
+
+/**
+ * Tham gia nhóm bằng invite token.
+ * Nếu đã là thành viên → trả về luôn. Nếu chưa → thêm vào.
+ */
 exports.joinByInviteToken = async (token, userId) => {
   const conversation = await Conversation.findOne({ invite_token: token });
   if (!conversation) throw new Error("Link mời không hợp lệ hoặc đã hết hạn");
   if (conversation.is_dissolved) throw new Error("Nhóm đã bị giải tán");
   if (conversation.status === "dissolved") throw new Error("Nhóm đã bị giải tán");
 
+  // Check if user is blocked from this group
+  if (conversation.blocked_user_ids?.includes(userId)) {
+    throw new Error("Bạn đã bị chặn khỏi nhóm này và không thể tham gia lại.");
+  }
+
   const conversationId = conversation._id.toString();
 
   // Kiểm tra đã là thành viên chưa
+  const Participant = require("../models/Participant");
   const existing = await Participant.findOne({
     conversation_id: conversationId,
     user_id: userId,

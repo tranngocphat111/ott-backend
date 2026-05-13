@@ -32,6 +32,18 @@ router.delete(
   "/conversations/:conversationId/dissolve/:userId",
   ConversationController.dissolveGroup,
 );
+router.post(
+  "/conversations/:conversationId/block",
+  ConversationController.blockMember,
+);
+router.post(
+  "/conversations/:conversationId/unblock",
+  ConversationController.unblockMember,
+);
+router.get(
+  "/conversations/:conversationId/blocked-members",
+  ConversationController.getBlockedMembers,
+);
 
 router.get(
   "/participants/:userId",

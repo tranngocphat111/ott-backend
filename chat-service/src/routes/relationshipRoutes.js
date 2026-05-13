@@ -9,5 +9,7 @@ router.post("/cancel/:relationshipId", relationshipController.cancelRequest);
 router.get("/status", relationshipController.getStatus);
 router.get("/:userId/friends", relationshipController.getFriends);
 router.post("/unfriend", relationshipController.unfriend);
+router.post("/block", relationshipController.blockUser);
+router.post("/unblock", relationshipController.unblockUser);
 
 module.exports = router;
