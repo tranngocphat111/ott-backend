@@ -139,6 +139,15 @@ const copyS3Object = async (sourceKey) => {
   return newKey;
 };
 
+exports.getMessages = async (conversationId, { limit = 20, skip = 0 } = {}) => {
+  const messages = await Message.find({ conversation_id: conversationId })
+    .sort({ msg_id: -1 })
+    .skip(skip)
+    .limit(limit)
+    .lean();
+  return messages;
+};
+
 const maybeTranscodeVoiceKey = async (key) => {
   if (!key || !isWebVoiceAudioKey(key)) {
     return key;

@@ -7,8 +7,10 @@ const MessageController = require("../controllers/messageController");
 const ParticipantController = require("../controllers/participantController");
 const UserCategoryController = require("../controllers/userCategoryController");
 const relationshipRoutes = require("./relationshipRoutes");
+const aiRoutes = require("./aiRoutes");
 
 router.use("/relationships", relationshipRoutes);
+router.use("/ai", aiRoutes);
 
 router.post("/users/sync", UserController.syncUser);
 router.get("/users/:userId", UserController.getUser);

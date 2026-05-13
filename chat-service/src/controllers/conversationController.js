@@ -353,6 +353,55 @@ exports.joinByLink = async (req, res) => {
   }
 };
 
+exports.blockMember = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userId, adminId } = req.body;
+    if (!userId || !adminId) return res.status(400).json({ error: "userId và adminId là bắt buộc" });
+    
+    const result = await ConversationService.blockMember(conversationId, userId, adminId);
+    
+    // Emit to target user that they are removed/blocked
+    req.io.to(`user:${userId}`).emit("bi_chan_khoi_nhom", { conversationId });
+    
+    // Emit to other group members
+    const participants = await ParticipantService.getJoinedParticipants(conversationId);
+    participants.forEach(p => {
+      req.io.to(`user:${p.user_id}`).emit("nguoi_dung_bi_chan", { conversationId, userId });
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.unblockMember = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userId, adminId } = req.body;
+    if (!userId || !adminId) return res.status(400).json({ error: "userId và adminId là bắt buộc" });
+
+    const result = await ConversationService.unblockMember(conversationId, userId, adminId);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.getBlockedMembers = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { requesterId } = req.query;
+    if (!requesterId) return res.status(400).json({ error: "requesterId là bắt buộc" });
+
+    const result = await ConversationService.getBlockedGroupMembers(conversationId, requesterId);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 /**
  * GET /conversations/invite-link/:token
  */

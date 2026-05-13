@@ -8,6 +8,7 @@ const apiRoutes = require("./routes/api");
 const messageRoutes = require("./routes/messageRoutes");
 const messageEventsHandler = require("./events/messageEvents");
 const ParticipantService = require("./services/participantService");
+const aiRoutes = require("./routes/aiRoutes");
 const MessageService = require("./services/messageService");
 const { initAllConsumers } = require("./consumers");
 const Conversation = require("./models/Conversation");
@@ -1008,6 +1009,9 @@ app.use("/api", messageRoutes);
 
 // ========== OTHER ROUTES ==========
 app.use("/api", apiRoutes);
+// Redundant mounting to prevent 404s from various gateway mappings
+app.use("/api/ai", aiRoutes);
+app.use("/ai", aiRoutes);
 
 app.get("/", (req, res) => res.send("Chat Service dang chay..."));
 
