@@ -54,21 +54,7 @@ public class UserCreatedEventConsumer {
         log.info("[UserCreated] Created user account for userId={}", event.getUserId());
     }
 
-    @RabbitListener(queues = "${user.updated.queue}")
-    @Transactional
-    public void handleUserUpdated(UserUpdatedEvent event) {
-        if (event == null || event.getUserId() == null) return;
 
-        log.info("[UserUpdated] Received update for userId={}", event.getUserId());
-        userAccountRepository.findById(event.getUserId()).ifPresent(user -> {
-            if (event.getAvatar() != null) user.setAvatarUrl(event.getAvatar());
-            if (event.getCoverUrl() != null) user.setCoverUrl(event.getCoverUrl());
-            if (event.getDisplayName() != null) user.setDisplayName(event.getDisplayName());
-            if (event.getBio() != null) user.setBio(event.getBio());
-            userAccountRepository.save(user);
-            log.info("[UserUpdated] Successfully updated account for userId={}", event.getUserId());
-        });
-    }
 
     private String resolveUsername(UserCreatedEvent event) {
         String base = null;

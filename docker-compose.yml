@@ -1,6 +1,26 @@
 version: "3.8"
 
 services:
+  analytic-postgres:
+    image: postgres:15-alpine
+    container_name: analytic-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${ANALYTIC_DB_NAME:-admin_analytic_db}
+      POSTGRES_USER: ${ANALYTIC_DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${ANALYTIC_DB_PASSWORD:-postgres}
+    ports:
+      - "5434:5432"
+    volumes:
+      - analytic_postgres_data:/var/lib/postgresql/data
+    networks:
+      - ott-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${ANALYTIC_DB_USERNAME:-postgres} -d ${ANALYTIC_DB_NAME:-admin_analytic_db}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   redis:
     image: redis:7-alpine
     container_name: ott-redis
@@ -13,7 +33,7 @@ services:
     networks:
       - ott-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -33,7 +53,7 @@ services:
     networks:
       - ott-network
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
       interval: 15s
       timeout: 10s
       retries: 5

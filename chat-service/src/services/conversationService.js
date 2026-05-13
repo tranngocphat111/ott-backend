@@ -46,6 +46,12 @@ exports.findOrCreatePrivateConversation = async (user1Id, user2Id) => {
   if (privateParticipant) {
     return privateParticipant.conversation_id;
   }
+  return null;
+};
+
+exports.findOrCreatePrivateConversation = async (user1Id, user2Id) => {
+  const existingId = await exports.findPrivateConversation(user1Id, user2Id);
+  if (existingId) return existingId;
 
   // Nếu không thấy, tạo mới
   const conversation = await exports.createConversation({
@@ -124,7 +130,29 @@ exports.updateLastMessage = async (conversationId, message) => {
 };
 
 exports.getConversationById = async (conversationId) => {
-  return await Conversation.findById(conversationId);
+  const conversation = await Conversation.findById(conversationId).lean();
+  if (!conversation) return null;
+
+  const ParticipantService = require("./participantService");
+  const memberDetails = await ParticipantService.getConversationMembers(conversationId);
+
+  // Format participants to match frontend expectations (flattened)
+  const formattedParticipants = memberDetails.map((member) => ({
+    _id: member.user_id,
+    user_id: member.user_id,
+    display_name: member.nickname || member.user?.name || member.user_id,
+    nickname: member.nickname || "",
+    name: member.user?.name || "",
+    avatar: member.user?.avatar || "",
+    status: member.user?.is_online ? "online" : "offline",
+    role: member.roles === "admin" ? "admin" : "member",
+    joined_at: member.joined_at,
+  }));
+
+  return {
+    ...conversation,
+    participants: formattedParticipants
+  };
 };
 
 // Update conversation name/avatar

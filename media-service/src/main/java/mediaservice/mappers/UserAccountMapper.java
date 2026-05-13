@@ -37,6 +37,10 @@ public abstract class UserAccountMapper {
 
     @AfterMapping
     protected void buildFullUrls(@MappingTarget UserAccountResponse response, UserAccount source) {
+        // Debug logging to see what Hibernate actually loaded
+        java.util.logging.Logger.getLogger("UserAccountMapper")
+            .info("[Mapper] Mapping user " + source.getId() + " - avatarUrl in entity: " + source.getAvatarUrl());
+
         if (source.getAvatarUrl() != null) {
             response.setAvatarUrl(convertToFullUrl(source.getAvatarUrl()));
         }

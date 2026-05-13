@@ -26,22 +26,29 @@ public abstract class PostMapper {
     protected ContentAccessControlMapper contentAccessControlMapper;
 
     @Mapping(target = "hashTags", ignore = true)
-    @Mapping(target = "medias",   ignore = true)
+    @Mapping(target = "medias", ignore = true)
     public abstract Post toEntity(PostRequest request);
 
     @Mapping(target = "hashTags", ignore = true)
-    @Mapping(target = "accountId",          source = "account.id")
-    @Mapping(target = "accountUsername",     source = "account.username")
-    @Mapping(target = "accountDisplayName",  source = "account.displayName")
-    @Mapping(target = "accountAvatarUrl",    source = "account.avatarUrl")
-    @Mapping(target = "medias",              source = "medias")
-    @Mapping(target = "totalReactions",      ignore = true)
-    @Mapping(target = "totalComments",       ignore = true)
-    @Mapping(target = "totalShares",         ignore = true)
+    @Mapping(target = "accountId", source = "account.id")
+    @Mapping(target = "accountUsername", source = "account.username")
+    @Mapping(target = "accountDisplayName", source = "account.displayName")
+    @Mapping(target = "accountAvatarUrl", source = "account.avatarUrl")
+    @Mapping(target = "medias", source = "medias")
+    @Mapping(target = "totalReactions", ignore = true)
+    @Mapping(target = "totalComments", ignore = true)
+    @Mapping(target = "totalShares", ignore = true)
     public abstract PostResponse toResponse(Post post);
 
     @AfterMapping
-    protected void mapAccessControls(Post post, @MappingTarget PostResponse response) {
+    protected void buildFullUrls(Post post, @MappingTarget PostResponse response) {
+        if (post.getAccount() != null) {
+            String avatarUrl = post.getAccount().getAvatarUrl();
+            if (avatarUrl != null && !avatarUrl.isEmpty() && !avatarUrl.startsWith("http")) {
+                response.setAccountAvatarUrl(mediaUrlBuilder.buildS3Url("", avatarUrl));
+            }
+        }
+
         if (post.getAccessControls() == null || post.getAccessControls().isEmpty()) {
             response.setAccessControls(new ArrayList<>());
             return;
@@ -54,11 +61,12 @@ public abstract class PostMapper {
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "hashTags", ignore = true)
-    @Mapping(target = "medias",   ignore = true)
+    @Mapping(target = "medias", ignore = true)
     public abstract void updateEntity(PostRequest request, @MappingTarget Post post);
 
     public MediaResponse mediaToResponse(Media media) {
-        if (media == null) return null;
+        if (media == null)
+            return null;
         MediaResponse r = new MediaResponse();
         r.setId(media.getId());
         // Convert relative S3 key (e.g. "social/posts/uuid.jpg") to full HTTPS URL
@@ -73,7 +81,8 @@ public abstract class PostMapper {
             // Also resolve thumbnail URL if it's a relative key
             String thumbUrl = vm.getThumbnailUrl();
             r.setThumbnailUrl(thumbUrl != null && mediaUrlBuilder != null
-                    ? mediaUrlBuilder.buildS3Url("social/videos", thumbUrl) : thumbUrl);
+                    ? mediaUrlBuilder.buildS3Url("social/videos", thumbUrl)
+                    : thumbUrl);
             r.setDuration(vm.getDuration());
             r.setHasAudio(vm.isHasAudio());
         } else {

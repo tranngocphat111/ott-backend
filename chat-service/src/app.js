@@ -248,7 +248,7 @@ const emitCallOutcomeMessage = async ({
 };
 
 
-const ensureCallState = (conversationId, callType, memberIds = []) => {
+const ensureCallState = (conversationId, callType, memberIds = [], isGroup = false) => {
   if (!activeCalls.has(conversationId)) {
     activeCalls.set(conversationId, {
       conversationId,
@@ -258,10 +258,13 @@ const ensureCallState = (conversationId, callType, memberIds = []) => {
       startedAt: new Date().toISOString(),
       answeredAt: null,
       isOutcomeEmitted: false,
-      isGroup: false,
+      isGroup: !!isGroup,
       hadMultipleParticipants: false,
       noAnswerTimer: null,
     });
+  } else if (isGroup) {
+    // Cập nhật trạng thái group nếu thông tin mới xác nhận là group
+    activeCalls.get(conversationId).isGroup = true;
   }
   return activeCalls.get(conversationId);
 };
@@ -281,6 +284,20 @@ const removeUserFromAllCalls = (userId) => {
       userId,
       participants: Array.from(callState.participants),
     });
+
+    if (callState.isGroup) {
+      const updatePayload = {
+        conversationId,
+        isCalling: callState.participants.size > 0,
+        participantCount: callState.participants.size,
+      };
+      io.to(`conversation:${conversationId}`).emit("cap_nhat_trang_thai_goi_nhom", updatePayload);
+      if (callState.memberIds) {
+        callState.memberIds.forEach(uid => {
+          io.to(`user:${uid}`).emit("cap_nhat_trang_thai_goi_nhom", updatePayload);
+        });
+      }
+    }
 
     // Nếu không còn ai trong phòng và cuộc gọi chưa được trả lời -> Kết thúc hoàn toàn
     if (callState.participants.size === 0) {
@@ -311,6 +328,16 @@ io.on("connection", (socket) => {
   socket.on("tham_gia_nhom", (conversationId) => {
     socket.join(conversationId);
     console.log(`User tham gia vao phong: ${conversationId}`);
+
+    // Gửi trạng thái cuộc gọi nếu có cuộc gọi đang diễn ra trong nhóm này
+    const callState = activeCalls.get(conversationId);
+    if (callState && callState.isGroup) {
+      socket.emit("cap_nhat_trang_thai_goi_nhom", {
+        conversationId,
+        isCalling: true,
+        participantCount: callState.participants.size,
+      });
+    }
   });
 
   socket.on("roi_nhom_chat", (conversationId) => {
@@ -323,6 +350,17 @@ io.on("connection", (socket) => {
     socket.data.userId = userId;
     socket.join(`user:${userId}`);
     console.log(`User ${userId} da vao phong ca nhan`);
+
+    // Gửi trạng thái các cuộc gọi đang diễn ra cho người dùng vừa kết nối (Sidebar sync)
+    for (const [conversationId, callState] of activeCalls.entries()) {
+      if (callState.isGroup && callState.memberIds && callState.memberIds.has(userId)) {
+        socket.emit("cap_nhat_trang_thai_goi_nhom", {
+          conversationId,
+          isCalling: true,
+          participantCount: callState.participants.size,
+        });
+      }
+    }
   });
 
   // Kiểm tra xem người nhận có đang bận không TRƯỚC khi mở cửa sổ gọi
@@ -479,7 +517,12 @@ io.on("connection", (socket) => {
       socket.data.userId = userId;
       socket.join(`user:${userId}`);
 
-      const callState = ensureCallState(conversationId, callType);
+      const participantsDb = await ParticipantService.getParticipants(conversationId);
+      const memberIdsFromDb = participantsDb.map(p => p.user_id).filter(id => !!id);
+      const conversation = await Conversation.findById(conversationId);
+      const isGroup = conversation && conversation.type === "group";
+
+      const callState = ensureCallState(conversationId, callType, memberIdsFromDb, isGroup);
       const participantCountBeforeJoin = callState.participants.size;
       callState.participants.add(userId);
 
@@ -501,12 +544,9 @@ io.on("connection", (socket) => {
 
       socket.join(`call:${conversationId}`);
 
-      const conversation = await Conversation.findById(conversationId);
-      const isGroup = conversation && conversation.type === "group";
       let livekitToken = null;
       if (isGroup) {
         livekitToken = await livekitService.generateToken(conversationId, userId);
-        callState.isGroup = true;
       }
 
       io.to(`call:${conversationId}`).emit("nguoi_dung_tham_gia_goi", {
@@ -590,6 +630,50 @@ io.on("connection", (socket) => {
       });
     },
   );
+
+    socket.on("moi_them_thanh_vien_goi", async ({ conversationId, targetUserIds, callerId }) => {
+      if (!conversationId || !targetUserIds || !Array.isArray(targetUserIds)) return;
+      const convIdStr = String(conversationId);
+      console.log(`[CALL] Moi them thanh vien: conv=${convIdStr}, targets=${targetUserIds}, caller=${callerId}`);
+
+      const callState = activeCalls.get(convIdStr);
+      if (!callState) return;
+
+      targetUserIds.forEach(userId => {
+        const userIdStr = String(userId);
+        // Không mời người đã có trong cuộc gọi
+        if (callState.participants.has(userIdStr)) return;
+
+        // Thêm vào memberIds nếu chưa có (để signaling cancel sau này)
+        if (callState.memberIds) {
+          callState.memberIds.add(userIdStr);
+        }
+
+        // Gửi thông báo cuộc gọi đến
+        io.to(`user:${userIdStr}`).emit("cuoc_goi_den", {
+          conversationId: convIdStr,
+          callerId: String(callState.initiatorId || callerId),
+          callType: callState.callType,
+          isGroup: true,
+          participants: Array.from(callState.participants),
+          startedAt: callState.startedAt,
+        });
+
+        // Cập nhật trạng thái gọi cho họ ngay trên sidebar
+        io.to(`user:${userIdStr}`).emit("cap_nhat_trang_thai_goi_nhom", {
+          conversationId: convIdStr,
+          isCalling: true,
+          participantCount: callState.participants.size,
+        });
+      });
+    });
+
+    socket.on("chap_nhan_goi", ({ conversationId, userId }) => {
+      if (!conversationId || !userId) return;
+
+      const callState = activeCalls.get(conversationId);
+      if (!callState) return;
+    });
 
   socket.on("roi_cuoc_goi", ({ conversationId, userId }) => {
     if (!conversationId || !userId) return;
@@ -720,11 +804,11 @@ io.on("connection", (socket) => {
     const callState = activeCalls.get(conversationId);
     if (!callState) return;
 
-    // Đối với cuộc gọi nhóm: Chỉ kết thúc khi không còn ai (size === 0)
-    // Đối với cuộc gọi 1-1: Kết thúc khi chỉ còn 1 người (size === 1)
+    // Đối với cuộc gọi nhóm: Chỉ thực sự kết thúc khi KHÔNG còn ai (size === 0)
+    // Đối với cuộc gọi 1-1: Kết thúc khi chỉ còn 1 người hoặc 0 người
     const shouldClose = callState.isGroup
       ? callState.participants.size === 0
-      : callState.participants.size === 1;
+      : callState.participants.size <= 1;
 
     if (shouldClose) {
       const outcome = callState.answeredAt ? "completed" : "missed";

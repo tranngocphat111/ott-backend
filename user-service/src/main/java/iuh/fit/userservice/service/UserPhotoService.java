@@ -58,12 +58,20 @@ public class UserPhotoService {
     public UserPhotoResponse addPhoto(String userId, AddPhotoRequest request) {
         userValidationUtil.getUserById(userId); // validate tồn tại
 
-        long count = photoRepository.countByUserIdAndPhotoType(
-                userId, request.getPhotoType());
+        long count = photoRepository.countByUserIdAndPhotoType(userId, request.getPhotoType());
         if (count >= MAX_PHOTOS_PER_TYPE) {
-            log.warn("Photo limit reached | userId: {} | type: {} | count: {}",
-                    userId, request.getPhotoType(), count);
-            throw new AppException(ErrorCode.PHOTO_LIMIT_EXCEEDED);
+            log.info("Photo limit reached for userId: {} | type: {}. Deleting oldest photo.", userId, request.getPhotoType());
+            // Tìm ảnh cũ nhất (mà không phải ảnh đang active nếu có thể, 
+            // nhưng thực tế addPhoto thường gọi trước khi setActive nên cứ xóa cái cũ nhất)
+            List<UserPhoto> photos = photoRepository.findByUserIdAndPhotoTypeOrderByCreatedAtAsc(userId, request.getPhotoType());
+            if (!photos.isEmpty()) {
+                UserPhoto oldest = photos.get(0);
+                // Nếu cái cũ nhất đang active, thì xóa cái thứ 2 (nếu có)
+                if (Boolean.TRUE.equals(oldest.getIsActive()) && photos.size() > 1) {
+                    oldest = photos.get(1);
+                }
+                deletePhotoInternal(userId, oldest);
+            }
         }
 
         UserPhoto photo = UserPhoto.builder()

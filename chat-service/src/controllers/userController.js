@@ -32,11 +32,23 @@ exports.getAllUsers = async (req, res) => {
 exports.getUserByPhone = async (req, res) => {
   try {
     const { phone } = req.params;
+    const { requesterId } = req.query;
     const user = await UserService.getUserByPhone(phone);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    res.status(200).json(user);
+
+    const result = user.toObject ? user.toObject() : { ...user };
+    
+    if (requesterId) {
+      const ConversationService = require("../services/conversationService");
+      const conversationId = await ConversationService.findPrivateConversation(requesterId, result.user_id);
+      if (conversationId) {
+        result.conversation_id = String(conversationId);
+      }
+    }
+
+    res.status(200).json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

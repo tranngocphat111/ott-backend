@@ -3,17 +3,22 @@ package mediaservice.mappers;
 import mediaservice.dtos.requests.StoryRequest;
 import mediaservice.dtos.responses.StoryResponse;
 import mediaservice.models.Story;
+import mediaservice.utils.MediaUrlBuilder;
 import org.mapstruct.*;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring", uses = {StoryItemMapper.class})
-public interface StoryMapper {
+@Mapper(componentModel = "spring", uses = { StoryItemMapper.class })
+public abstract class StoryMapper {
+
+    @Autowired
+    protected MediaUrlBuilder mediaUrlBuilder;
 
     @Mapping(target = "hashTags", ignore = true)
     @Mapping(target = "storyItems", source = "storyItems", qualifiedByName = "toEntitySet")
     @Mapping(target = "storyMusics", ignore = true)
-    Story toEntity(StoryRequest request);
+    public abstract Story toEntity(StoryRequest request);
 
     @Mapping(target = "hashTags", ignore = true)
     @Mapping(target = "accountId", source = "account.id")
@@ -23,13 +28,23 @@ public interface StoryMapper {
     @Mapping(target = "storyItems", source = "storyItems", qualifiedByName = "toResponseList")
     @Mapping(target = "musics", ignore = true)
     @Mapping(target = "totalViews", ignore = true)
-    StoryResponse toResponse(Story story);
+    public abstract StoryResponse toResponse(Story story);
 
-    List<StoryResponse> toResponseList(List<Story> stories);
+    public abstract List<StoryResponse> toResponseList(List<Story> stories);
+
+    @AfterMapping
+    protected void buildFullUrls(Story source, @MappingTarget StoryResponse response) {
+        if (source.getAccount() != null && source.getAccount().getAvatarUrl() != null) {
+            String relative = source.getAccount().getAvatarUrl();
+            if (!relative.startsWith("http")) {
+                response.setAccountAvatarUrl(mediaUrlBuilder.buildS3Url("", relative));
+            }
+        }
+    }
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "hashTags", ignore = true)
     @Mapping(target = "storyItems", source = "storyItems", qualifiedByName = "toEntitySet")
     @Mapping(target = "storyMusics", ignore = true)
-    void updateEntity(StoryRequest request, @MappingTarget Story story);
+    public abstract void updateEntity(StoryRequest request, @MappingTarget Story story);
 }
