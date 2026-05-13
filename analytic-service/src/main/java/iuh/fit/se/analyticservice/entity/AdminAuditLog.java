@@ -1,37 +1,59 @@
 package iuh.fit.se.analyticservice.entity;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Builder;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "admin_audit_logs")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class AdminAuditLog {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(nullable = false, updatable = false)
+    private String id;
+
+    @Column(name = "event_id", unique = true)
+    private String eventId;
 
     @Column(name = "admin_id", nullable = false)
     private String adminId;
 
+    @Column(name = "target_user_id", nullable = false)
+    private String targetUserId;
+
     @Column(name = "action_type", nullable = false)
     private String actionType;
 
-    @Column(name = "target_id")
-    private String targetId;
+    @Column(name = "reason", columnDefinition = "TEXT")
+    private String reason;
 
-    @Column(name = "event_timestamp", nullable = false)
-    private Instant timestamp;
+    @Column(name = "duration_minutes")
+    private Long durationMinutes;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+    }
 }

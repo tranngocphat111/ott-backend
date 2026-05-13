@@ -1,6 +1,6 @@
 package iuh.fit.se.analyticservice.dto;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -10,9 +10,12 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class AuditLogDTO {
-    private Long id;
+    private String id;
+    private String eventId;
     private String adminId;
     private String actionType;
-    private String targetId;
-    private Instant timestamp;
+    private String targetUserId;
+    private String reason;
+    private Long durationMinutes;
+    private LocalDateTime createdAt;
 }

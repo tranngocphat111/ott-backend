@@ -1,7 +1,18 @@
 package iuh.fit.se.analyticservice.repository;
 
-import iuh.fit.se.analyticservice.entity.AdminAuditLog;
-import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
 
-public interface AdminAuditLogRepository extends JpaRepository<AdminAuditLog, Long> {
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import iuh.fit.se.analyticservice.entity.AdminAuditLog;
+
+@Repository
+public interface AdminAuditLogRepository extends JpaRepository<AdminAuditLog, String> {
+
+    boolean existsByEventId(String eventId);
+
+    long countByActionType(String actionType);
+
+    List<AdminAuditLog> findTop10ByOrderByCreatedAtDesc();
 }
