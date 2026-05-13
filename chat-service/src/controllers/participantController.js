@@ -79,6 +79,7 @@ exports.getConversationsByUserId = async (req, res) => {
                 conversation_id: conversation._id,
                 is_deleted: { $ne: true },
                 is_revoked: { $ne: true },
+                sender_id: { $ne: userId },
                 deleted_for: { $ne: userId },
               })
                 .select("msg_id")
