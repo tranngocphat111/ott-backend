@@ -10,8 +10,14 @@ const {
   GetObjectCommand,
   DeleteObjectCommand,
   CopyObjectCommand,
+  GetObjectTaggingCommand,
+  HeadObjectCommand,
 } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+const {
+  RekognitionClient,
+  DetectModerationLabelsCommand,
+} = require("@aws-sdk/client-rekognition");
 const { s3Client, bucketName } = require("../config/s3");
 const { publishMessageSentEvent } = require("./analyticsPublisher");
 
@@ -23,6 +29,211 @@ const { pipeline } = require("stream/promises");
 const crypto = require("crypto");
 
 const REVOKED_PLACEHOLDER = "Tin nhắn đã được thu hồi";
+const S3_CACHE_CONTROL = "public, max-age=31536000, immutable";
+const S3_POLICY_SIGNAL_PATTERN =
+  /(violation|moderation|unsafe|malware|virus|infected|blocked|denied|explicit.?deny|quarantine|sensitive|nsfw|adult|explicit)/i;
+const S3_POLICY_CLEAN_VALUE_PATTERN =
+  /^(clean|ok|pass|passed|safe|allowed|false|0|no|none)$/i;
+const MODERATION_MIN_CONFIDENCE = Number(
+  process.env.REKOGNITION_MIN_CONFIDENCE || 65,
+);
+const MODERATION_FAIL_CLOSED =
+  String(process.env.MODERATION_FAIL_CLOSED || "true").toLowerCase() !== "false";
+const rekognitionClient = new RekognitionClient({
+  region: process.env.AWS_REGION || "ap-southeast-1",
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+const sanitizeS3FileName = (fileName) => {
+  const baseName =
+    String(fileName || "file")
+      .split(/[\\/]/)
+      .pop()
+      ?.normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9._-]/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "") || "file";
+
+  return baseName.slice(0, 160) || "file";
+};
+
+const resolveS3ContentDisposition = (fileCategory, fileName) => {
+  const disposition = ["image", "video", "audio"].includes(fileCategory)
+    ? "inline"
+    : "attachment";
+  return `${disposition}; filename="${sanitizeS3FileName(fileName)}"`;
+};
+
+const extractS3ObjectKey = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  try {
+    if (/^https?:\/\//i.test(raw)) {
+      const url = new URL(raw);
+      return decodeURIComponent(url.pathname.replace(/^\/+/, ""));
+    }
+  } catch {
+    // Fall through to raw key normalization.
+  }
+
+  return decodeURIComponent(raw.replace(/^\/+/, "").split("?")[0] || "");
+};
+
+const isPolicySignal = (key, value) => {
+  const normalizedValue = String(value ?? "").trim();
+  if (S3_POLICY_CLEAN_VALUE_PATTERN.test(normalizedValue)) return false;
+
+  return (
+    S3_POLICY_SIGNAL_PATTERN.test(String(key || "")) ||
+    S3_POLICY_SIGNAL_PATTERN.test(normalizedValue)
+  );
+};
+
+const getS3MediaWarning = async (rawKey, index) => {
+  const key = extractS3ObjectKey(rawKey);
+  if (!key) return null;
+
+  try {
+    const [headResult, tagResult] = await Promise.allSettled([
+      s3Client.send(new HeadObjectCommand({ Bucket: bucketName, Key: key })),
+      s3Client.send(new GetObjectTaggingCommand({ Bucket: bucketName, Key: key })),
+    ]);
+
+    const metadata =
+      headResult.status === "fulfilled" ? headResult.value.Metadata || {} : {};
+    const tags =
+      tagResult.status === "fulfilled" ? tagResult.value.TagSet || [] : [];
+
+    const metadataSignal = Object.entries(metadata).find(([name, value]) =>
+      isPolicySignal(name, value),
+    );
+    const tagSignal = tags.find((tag) => isPolicySignal(tag.Key, tag.Value));
+    const signal = tagSignal || metadataSignal;
+
+    if (!signal) return null;
+
+    const signalName = Array.isArray(signal) ? signal[0] : signal.Key;
+    const signalValue = Array.isArray(signal) ? signal[1] : signal.Value;
+
+    return {
+      index,
+      key,
+      source: "s3",
+      reason: String(signalValue || signalName || "policy_violation"),
+    };
+  } catch (error) {
+    console.warn(
+      "Không thể đọc metadata/tag S3 để kiểm tra media:",
+      error?.message || error,
+    );
+    return null;
+  }
+};
+
+const buildModerationWarning = ({
+  index,
+  key,
+  source,
+  reason,
+  confidence,
+  labels,
+}) => ({
+  index,
+  key,
+  source,
+  reason: String(reason || "moderation_required"),
+  ...(typeof confidence === "number" ? { confidence } : {}),
+  ...(Array.isArray(labels) ? { labels } : {}),
+});
+
+const getRekognitionMediaWarning = async (rawKey, index) => {
+  const key = extractS3ObjectKey(rawKey);
+  if (!key) return null;
+
+  try {
+    const result = await rekognitionClient.send(
+      new DetectModerationLabelsCommand({
+        Image: {
+          S3Object: {
+            Bucket: bucketName,
+            Name: key,
+          },
+        },
+        MinConfidence: MODERATION_MIN_CONFIDENCE,
+      }),
+    );
+
+    const labels = result.ModerationLabels || [];
+    if (!labels.length) return null;
+
+    const normalizedLabels = labels.map((label) => ({
+      name: label.Name,
+      parentName: label.ParentName,
+      confidence: label.Confidence,
+    }));
+
+    return buildModerationWarning({
+      index,
+      key,
+      source: "rekognition",
+      reason:
+        labels
+          .slice(0, 3)
+          .map((label) => label.Name)
+          .filter(Boolean)
+          .join(", ") || "moderation_label",
+      confidence: Math.max(
+        ...labels.map((label) => Number(label.Confidence || 0)),
+      ),
+      labels: normalizedLabels,
+    });
+  } catch (error) {
+    console.warn(
+      "Không thể kiểm tra Rekognition moderation:",
+      error?.message || error,
+    );
+
+    if (!MODERATION_FAIL_CLOSED) return null;
+
+    return buildModerationWarning({
+      index,
+      key,
+      source: "rekognition_error",
+      reason: "moderation_unavailable",
+    });
+  }
+};
+
+const buildMediaPolicyMeta = async (type, contentArray) => {
+  if (!["image", "video"].includes(type)) return null;
+
+  const warnings = (
+    await Promise.all(
+      contentArray.map(async (key, index) => {
+        const s3Warning = await getS3MediaWarning(key, index);
+        if (s3Warning) return s3Warning;
+
+        if (type === "image") {
+          return getRekognitionMediaWarning(key, index);
+        }
+
+        return null;
+      }),
+    )
+  ).filter(Boolean);
+
+  if (!warnings.length) return null;
+
+  return {
+    media_policy_status: "flagged",
+    media_warnings: warnings,
+  };
+};
 
 const sanitizeAvatarValue = (value) => {
   const avatar = String(value || "").trim();
@@ -301,6 +512,10 @@ const syncConversationLastMessageOnRevoke = async (conversationId, message) => {
 };
 
 exports.generatePresignedUrl = async (fileName, fileType) => {
+  if (!fileName || !fileType) {
+    throw new Error("Thiếu tên file hoặc loại file");
+  }
+
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -314,14 +529,17 @@ exports.generatePresignedUrl = async (fileName, fileType) => {
         ? "audio"
         : "file";
 
+  const safeFileName = sanitizeS3FileName(fileName);
   const uniqueId = crypto.randomBytes(8).toString("hex");
 
-  const key = `messages/${fileCategory}/${year}/${month}/${day}/${uniqueId}_${fileName}`;
+  const key = `messages/${fileCategory}/${year}/${month}/${day}/${uniqueId}_${safeFileName}`;
 
   const command = new PutObjectCommand({
     Bucket: bucketName,
     Key: key,
     ContentType: fileType,
+    CacheControl: S3_CACHE_CONTROL,
+    ContentDisposition: resolveS3ContentDisposition(fileCategory, safeFileName),
   });
 
   const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
@@ -353,6 +571,8 @@ exports.sendMessage = async ({
       String(normalizedContent[0] || ""),
     );
   }
+
+  const mediaPolicyMeta = await buildMediaPolicyMeta(type, normalizedContent);
 
   let replyMessage = null;
   let replySender = null;
@@ -424,6 +644,7 @@ exports.sendMessage = async ({
     poll_question: pollQuestion || null,
     poll_multiple_choice: pollMultipleChoice || false,
     poll_options: pollOptions || [],
+    system_meta: mediaPolicyMeta,
   });
 
   const savedMessage = await newMessage.save();
