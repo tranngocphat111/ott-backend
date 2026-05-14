@@ -13,5 +13,5 @@ FROM eclipse-temurin:17-jre-alpine
 RUN apk add --no-cache ffmpeg
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
-EXPOSE 8080
+EXPOSE 8090 8091
 ENTRYPOINT ["java", "-jar", "app.jar"]
