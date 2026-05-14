@@ -14,6 +14,10 @@ const {
   HeadObjectCommand,
 } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+const {
+  RekognitionClient,
+  DetectModerationLabelsCommand,
+} = require("@aws-sdk/client-rekognition");
 const { s3Client, bucketName } = require("../config/s3");
 const { publishMessageSentEvent } = require("./analyticsPublisher");
 
@@ -30,6 +34,18 @@ const S3_POLICY_SIGNAL_PATTERN =
   /(violation|moderation|unsafe|malware|virus|infected|blocked|denied|explicit.?deny|quarantine|sensitive|nsfw|adult|explicit)/i;
 const S3_POLICY_CLEAN_VALUE_PATTERN =
   /^(clean|ok|pass|passed|safe|allowed|false|0|no|none)$/i;
+const MODERATION_MIN_CONFIDENCE = Number(
+  process.env.REKOGNITION_MIN_CONFIDENCE || 65,
+);
+const MODERATION_FAIL_CLOSED =
+  String(process.env.MODERATION_FAIL_CLOSED || "true").toLowerCase() !== "false";
+const rekognitionClient = new RekognitionClient({
+  region: process.env.AWS_REGION || "ap-southeast-1",
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
 
 const sanitizeS3FileName = (fileName) => {
   const baseName =
@@ -119,12 +135,95 @@ const getS3MediaWarning = async (rawKey, index) => {
   }
 };
 
+const buildModerationWarning = ({
+  index,
+  key,
+  source,
+  reason,
+  confidence,
+  labels,
+}) => ({
+  index,
+  key,
+  source,
+  reason: String(reason || "moderation_required"),
+  ...(typeof confidence === "number" ? { confidence } : {}),
+  ...(Array.isArray(labels) ? { labels } : {}),
+});
+
+const getRekognitionMediaWarning = async (rawKey, index) => {
+  const key = extractS3ObjectKey(rawKey);
+  if (!key) return null;
+
+  try {
+    const result = await rekognitionClient.send(
+      new DetectModerationLabelsCommand({
+        Image: {
+          S3Object: {
+            Bucket: bucketName,
+            Name: key,
+          },
+        },
+        MinConfidence: MODERATION_MIN_CONFIDENCE,
+      }),
+    );
+
+    const labels = result.ModerationLabels || [];
+    if (!labels.length) return null;
+
+    const normalizedLabels = labels.map((label) => ({
+      name: label.Name,
+      parentName: label.ParentName,
+      confidence: label.Confidence,
+    }));
+
+    return buildModerationWarning({
+      index,
+      key,
+      source: "rekognition",
+      reason:
+        labels
+          .slice(0, 3)
+          .map((label) => label.Name)
+          .filter(Boolean)
+          .join(", ") || "moderation_label",
+      confidence: Math.max(
+        ...labels.map((label) => Number(label.Confidence || 0)),
+      ),
+      labels: normalizedLabels,
+    });
+  } catch (error) {
+    console.warn(
+      "Không thể kiểm tra Rekognition moderation:",
+      error?.message || error,
+    );
+
+    if (!MODERATION_FAIL_CLOSED) return null;
+
+    return buildModerationWarning({
+      index,
+      key,
+      source: "rekognition_error",
+      reason: "moderation_unavailable",
+    });
+  }
+};
+
 const buildMediaPolicyMeta = async (type, contentArray) => {
   if (!["image", "video"].includes(type)) return null;
 
   const warnings = (
     await Promise.all(
-      contentArray.map((key, index) => getS3MediaWarning(key, index)),
+      contentArray.map(async (key, index) => {
+        const s3Warning = await getS3MediaWarning(key, index);
+        if (s3Warning) return s3Warning;
+
+        if (type === "image") {
+          return getRekognitionMediaWarning(key, index);
+        }
+
+        return null;
+      }),
     )
   ).filter(Boolean);
 
