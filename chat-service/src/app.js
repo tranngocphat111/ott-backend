@@ -1036,4 +1036,6 @@ app.get("/", (req, res) => res.send("Chat Service dang chay..."));
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Chat Service dang chay tren port ${PORT}`);
+  presenceService.cleanupStalePresenceOnStartup();
+  presenceService.startPresenceReconciler();
 });

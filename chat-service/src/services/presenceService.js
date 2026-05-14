@@ -26,13 +26,16 @@ presenceRedis.connect().catch((err) =>
 // ============================================================
 // CONSTANTS
 // ============================================================
-// Mỗi presence:{userId} key sẽ tồn tại trong Redis 5 phút
+// Mỗi presence:{userId} key sẽ tồn tại trong Redis 60 giây
 // nếu không được gia hạn (tránh zombie khi server crash)
-const PRESENCE_TTL_SECONDS = 300; // 5 phút
+const PRESENCE_TTL_SECONDS = Number(process.env.PRESENCE_TTL_SECONDS || 60);
 
 // Debounce: Chờ 4 giây trước khi broadcast USER_OFFLINE
 // để tránh nhấp nháy khi mạng di động bị gián đoạn ngắn
 const OFFLINE_DEBOUNCE_MS = 4000;
+const STALE_RECONCILE_INTERVAL_MS = Number(
+  process.env.PRESENCE_RECONCILE_INTERVAL_MS || 30000,
+);
 
 // Lưu các timer debounce theo userId (in-memory, chỉ cho single-node)
 const offlineTimers = new Map();
@@ -41,6 +44,7 @@ const offlineTimers = new Map();
 // HELPERS
 // ============================================================
 const presenceKey = (userId) => `presence:${userId}`;
+const USER_ID_FROM_PRESENCE_KEY_PATTERN = /^presence:(.+)$/;
 
 /**
  * Lấy danh sách socketIds đang active của một user
@@ -62,6 +66,35 @@ const refreshTTL = async (userId) => {
   } catch {
     /* ignore */
   }
+};
+
+const waitForRedisReady = async () => {
+  if (presenceRedis.isReady) return;
+
+  await new Promise((resolve) => {
+    const timer = setInterval(() => {
+      if (presenceRedis.isReady) {
+        clearInterval(timer);
+        resolve();
+      }
+    }, 100);
+  });
+};
+
+const scanPresenceKeys = async () => {
+  const keys = [];
+  let cursor = "0";
+
+  do {
+    const result = await presenceRedis.scan(cursor, {
+      MATCH: "presence:*",
+      COUNT: 500,
+    });
+    cursor = String(result.cursor);
+    keys.push(...(result.keys || []));
+  } while (cursor !== "0");
+
+  return keys;
 };
 
 // ============================================================
@@ -308,6 +341,77 @@ const scheduleOfflineBroadcast = (io, userId, getFriendsCallback) => {
   offlineTimers.set(userId, timer);
 };
 
+/**
+ * Khi chat-service restart, Socket.IO không có cơ hội phát disconnect cho các
+ * socket cũ. Dọn Redis presence ngay để API không trả online giả thêm vài phút.
+ */
+const cleanupStalePresenceOnStartup = async () => {
+  try {
+    await waitForRedisReady();
+    const keys = await scanPresenceKeys();
+    const userIds = keys
+      .map((key) => String(key).match(USER_ID_FROM_PRESENCE_KEY_PATTERN)?.[1])
+      .filter(Boolean);
+
+    if (keys.length > 0) {
+      await presenceRedis.del(keys);
+    }
+
+    if (userIds.length > 0) {
+      await User.updateMany(
+        { user_id: { $in: userIds } },
+        { is_online: false, last_active_at: new Date() },
+      );
+    }
+
+    console.log(
+      `[Presence] Startup cleanup removed ${keys.length} stale presence keys`,
+    );
+  } catch (err) {
+    console.error("[Presence] startup cleanup error:", err.message);
+  }
+};
+
+/**
+ * Nếu Redis key tự hết hạn sau crash/ngắt mạng nhưng Mongo vẫn còn is_online=true,
+ * đồng bộ lại để các màn hình đọc Mongo không bị online giả lâu.
+ */
+const reconcileStaleOnlineUsers = async () => {
+  try {
+    await waitForRedisReady();
+    const onlineUsers = await User.find({ is_online: true }, "user_id").lean();
+    if (!onlineUsers.length) return;
+
+    const staleUserIds = [];
+    const pipeline = presenceRedis.multi();
+    onlineUsers.forEach((user) => pipeline.sCard(presenceKey(user.user_id)));
+    const counts = await pipeline.exec();
+
+    onlineUsers.forEach((user, index) => {
+      if ((counts[index] || 0) <= 0) {
+        staleUserIds.push(user.user_id);
+      }
+    });
+
+    if (!staleUserIds.length) return;
+
+    await User.updateMany(
+      { user_id: { $in: staleUserIds } },
+      { is_online: false, last_active_at: new Date() },
+    );
+
+    console.log(
+      `[Presence] Reconciled ${staleUserIds.length} stale online users`,
+    );
+  } catch (err) {
+    console.error("[Presence] reconcile stale online users error:", err.message);
+  }
+};
+
+const startPresenceReconciler = () => {
+  setInterval(reconcileStaleOnlineUsers, STALE_RECONCILE_INTERVAL_MS).unref?.();
+};
+
 module.exports = {
   handleConnect,
   handleDisconnect,
@@ -319,4 +423,7 @@ module.exports = {
   refreshTTL,
   getSockets,
   presenceRedis,
+  cleanupStalePresenceOnStartup,
+  reconcileStaleOnlineUsers,
+  startPresenceReconciler,
 };
