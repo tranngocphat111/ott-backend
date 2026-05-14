@@ -122,35 +122,45 @@ public class MediaUrlBuilder {
 
         // If not a URL, assume it's already a relative path
         if (!fullUrl.startsWith("http://") && !fullUrl.startsWith("https://")) {
-            return fullUrl;
+            String path = fullUrl.trim();
+            if (path.startsWith("/")) path = path.substring(1);
+            return path;
         }
 
         try {
-            // Standard format: https://bucket-name.s3.region.amazonaws.com/folder/file.ext
-            if (fullUrl.contains(".amazonaws.com/")) {
-                String path = new java.net.URL(fullUrl).getPath();
-                if (path.startsWith("/")) return path.substring(1);
-                return path;
+            java.net.URL url = new java.net.URL(fullUrl);
+            String path = url.getPath();
+            
+            // Decode URL characters (e.g. %20 -> space)
+            path = java.net.URLDecoder.decode(path, "UTF-8");
+            
+            if (path.startsWith("/")) {
+                path = path.substring(1);
             }
 
-            // Search for known bucket names
+            // If the path starts with a known bucket name (path-style URL), strip it
             String[] knownBuckets = { bucketName, "riff-storage-iuh" };
             for (String b : knownBuckets) {
-                if (fullUrl.contains(b)) {
-                    int bucketIndex = fullUrl.indexOf(b);
-                    int pathStartIndex = bucketIndex + b.length() + 1;
-                    if (pathStartIndex < fullUrl.length()) {
-                        return fullUrl.substring(pathStartIndex);
-                    }
+                if (b != null && !b.isEmpty() && path.startsWith(b + "/")) {
+                    return path.substring(b.length() + 1);
                 }
             }
 
-            // Fallback: just get filename
-            return extractFileName(fullUrl);
+            return path;
         } catch (Exception e) {
-            log.error("Error extracting relative path from URL: {}", e.getMessage());
+            log.error("Error extracting relative path from URL {}: {}", fullUrl, e.getMessage());
             return extractFileName(fullUrl);
         }
+    }
+
+    /**
+     * Check if a URL belongs to the application's internal S3 bucket
+     */
+    public boolean isInternalS3Url(String url) {
+        if (url == null || url.isEmpty()) return false;
+        String s3BaseUrl = String.format("https://%s.s3.%s.amazonaws.com", bucketName, region);
+        // Also check baseUrl if configured differently (e.g. CDN)
+        return url.startsWith(s3BaseUrl) || (baseUrl != null && !baseUrl.isEmpty() && url.startsWith(baseUrl));
     }
 
     /**

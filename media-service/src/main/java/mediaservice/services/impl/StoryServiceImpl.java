@@ -8,6 +8,7 @@ import mediaservice.dtos.responses.StoryReelItemResponse;
 import mediaservice.dtos.responses.StoryReelResponse;
 import mediaservice.dtos.responses.StoryResponse;
 import mediaservice.mappers.StoryMapper;
+import mediaservice.mappers.StoryItemMapper;
 import mediaservice.mappers.UserAccountMapper;
 import mediaservice.dtos.messages.MediaDeleteJob;
 import mediaservice.realtime.MediaRealtimePublisher;
@@ -27,6 +28,10 @@ import mediaservice.repositories.StoryRepository;
 import mediaservice.repositories.StoryViewRepository;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.MediaDeleteJobPublisher;
+import mediaservice.services.MediaCompressionJobPublisher;
+import mediaservice.services.MediaUploadJobPublisher;
+import mediaservice.dtos.messages.MediaCompressionJob;
+import mediaservice.dtos.messages.MediaUploadJob;
 import mediaservice.services.StoryService;
 import mediaservice.utils.MediaUrlBuilder;
 import org.springframework.cache.annotation.CacheEvict;
@@ -39,6 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -57,12 +63,15 @@ public class StoryServiceImpl implements StoryService {
     private final StoryRepository storyRepository;
     private final StoryItemRepository storyItemRepository;
     private final StoryMapper storyMapper;
+    private final StoryItemMapper storyItemMapper;
     private final UserAccountRepository userAccountRepository;
     private final UserAccountMapper userAccountMapper;
     private final StoryViewRepository storyViewRepository;
     private final MediaDeleteJobPublisher mediaDeleteJobPublisher;
     private final MediaUrlBuilder mediaUrlBuilder;
     private final MediaRealtimePublisher mediaRealtimePublisher;
+    private final MediaCompressionJobPublisher mediaCompressionJobPublisher;
+    private final MediaUploadJobPublisher mediaUploadJobPublisher;
 
     @Override
     @Transactional
@@ -153,40 +162,171 @@ public class StoryServiceImpl implements StoryService {
     @Override
     @Transactional
     @CacheEvict(value = {"stories", "allStories", "storyReel"}, allEntries = true)
-    public StoryResponse updateStory(String id, StoryRequest request) {
+    public StoryResponse updateStory(String id, StoryRequest request, List<MultipartFile> files, List<String> captions) {
         Story story = storyRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Story not found with id: " + id));
 
         List<String> previousKeys = collectStoryMediaKeys(story);
-        storyMapper.updateEntity(request, story);
+        Set<String> keepKeys = new HashSet<>();
 
+        if (request.getVisibility() != null) {
+            story.setVisibility(request.getVisibility());
+        }
         if (request.getUserId() != null && !request.getUserId().isBlank()) {
             UserAccount account = userAccountRepository.findById(request.getUserId())
                     .orElseThrow(() -> new RuntimeException("User not found: " + request.getUserId()));
             story.setAccount(account);
         }
 
-        Story updatedStory = storyRepository.save(story);
+        // Process Story Items
+        List<StoryItem> currentItems = story.getStoryItems() != null ? new ArrayList<>(story.getStoryItems()) : new ArrayList<>();
+        List<StoryItem> nextItems = new ArrayList<>();
+        
+        int filePointer = 0;
+        boolean hasUpdateAsyncJobs = false;
 
         if (request.getStoryItems() != null) {
-            List<String> keepKeys = collectStoryRequestMediaKeys(request.getStoryItems());
-            List<String> deleteKeys = new ArrayList<>();
-            for (String key : previousKeys) {
-                if (!keepKeys.contains(key)) {
-                    deleteKeys.add(key);
+            for (int i = 0; i < request.getStoryItems().size(); i++) {
+                StoryItemRequest itemReq = request.getStoryItems().get(i);
+                if (itemReq == null) continue;
+
+                if (itemReq.getType() == StoryItemType.TEXT_ITEM) {
+                    StoryItem item = storyItemMapper.toEntity(itemReq);
+                    item.setStory(story);
+                    nextItems.add(item);
+                    continue;
+                }
+
+                String url = null;
+                if (itemReq.getType() == StoryItemType.IMAGE_ITEM && itemReq.getImageItem() != null) {
+                    url = itemReq.getImageItem().getUrl();
+                } else if (itemReq.getType() == StoryItemType.VIDEO_ITEM && itemReq.getVideoItem() != null) {
+                    url = itemReq.getVideoItem().getUrl();
+                }
+
+                if (url == null) {
+                    // Fallback to text or ignore
+                    continue;
+                }
+
+                boolean isInternal = mediaUrlBuilder.isInternalS3Url(url);
+                if (isInternal) {
+                    String relPath = resolveKey(url, itemReq.getType() == StoryItemType.VIDEO_ITEM ? "social/videos" : "social/posts");
+                    keepKeys.add(relPath);
+
+                    StoryItem matched = currentItems.stream()
+                            .filter(item -> {
+                                if (item instanceof ImageItem ii) return relPath.equals(resolveKey(ii.getUrl(), "social/posts"));
+                                if (item instanceof VideoItem vi) return relPath.equals(resolveKey(vi.getUrl(), "social/videos"));
+                                return false;
+                            })
+                            .findFirst()
+                            .orElse(null);
+
+                    if (matched != null) {
+                        nextItems.add(matched);
+                    } else {
+                        StoryItem newItem = storyItemMapper.toEntity(itemReq);
+                        newItem.setStory(story);
+                        nextItems.add(newItem);
+                    }
+                } else {
+                    // Placeholder -> Take from files
+                    if (files != null && filePointer < files.size()) {
+                        MultipartFile file = files.get(filePointer++);
+                        if (file.isEmpty()) continue;
+
+                        String contentType = file.getContentType() != null ? file.getContentType() : "";
+                        boolean isVideo = contentType.startsWith("video/");
+                        String folder = isVideo ? "social/videos" : "social/posts";
+                        String s3Key = buildS3Key(folder, file.getOriginalFilename());
+                        
+                        keepKeys.add(s3Key);
+
+                        StoryItem newItem = storyItemMapper.toEntity(itemReq);
+                        if (newItem instanceof ImageItem ii) {
+                            ii.setUrl(s3Key);
+                        } else if (newItem instanceof VideoItem vi) {
+                            vi.setUrl(s3Key);
+                        }
+                        newItem.setStory(story);
+                        storyItemRepository.save(newItem);
+                        
+                        // We use the same async processing as controller's upload
+                        enqueueAsyncMediaProcessing(file, s3Key, newItem.getId());
+                        nextItems.add(newItem);
+                        hasUpdateAsyncJobs = true;
+                    }
                 }
             }
-            if (deleteKeys.isEmpty()) {
-                publishAfterCommit(story.getId(), "STORY", "UPDATE");
-            } else {
-                enqueueDeleteJob(deleteKeys, story.getId(), "STORY", "UPDATE");
+        }
+
+        story.getStoryItems().clear();
+        story.getStoryItems().addAll(nextItems);
+        Story updatedStory = storyRepository.save(story);
+
+        List<String> deleteKeys = new ArrayList<>();
+        for (String key : previousKeys) {
+            if (!keepKeys.contains(key)) {
+                deleteKeys.add(key);
             }
-        } else {
+        }
+
+        if (deleteKeys.isEmpty()) {
             publishAfterCommit(story.getId(), "STORY", "UPDATE");
+        } else {
+            enqueueDeleteJob(deleteKeys, story.getId(), "STORY", "UPDATE");
         }
 
         return storyMapper.toResponse(updatedStory);
     }
+
+    private void enqueueAsyncMediaProcessing(MultipartFile file, String s3Key, String storyItemId) {
+        // Reuse logic from StoryController (I should probably move this to a shared helper, but for now I'll duplicate as it's small)
+        String contentType = file.getContentType() != null ? file.getContentType() : "";
+        boolean isVideo = contentType.startsWith("video/");
+        boolean isAudio = contentType.startsWith("audio/");
+
+        try {
+            if (isVideo || isAudio) {
+                String mediaType = isAudio ? "AUDIO" : "VIDEO";
+                String outputContentType = isAudio ? "audio/mp4" : "video/mp4";
+                String prefix = isAudio ? "audio-" : "video-";
+
+                java.nio.file.Path tempPath = mediaservice.utils.MediaTempFileStore.saveToTemp(file, prefix);
+                MediaCompressionJob job = new MediaCompressionJob(
+                    tempPath.toString(),
+                    mediaType,
+                    s3Key,
+                    outputContentType,
+                    null,
+                    "STORY",
+                    "UPLOAD",
+                    storyItemId,
+                    null
+                );
+                // I need the publisher here. They are already in the class.
+                mediaCompressionJobPublisher.publish(job);
+                return;
+            }
+
+            java.nio.file.Path tempPath = mediaservice.utils.MediaTempFileStore.saveToTemp(file, "image-");
+            MediaUploadJob job = new MediaUploadJob(
+                    tempPath.toString(),
+                    s3Key,
+                    contentType,
+                    null,
+                    "STORY",
+                    "UPLOAD",
+                    storyItemId,
+                    null
+            );
+            mediaUploadJobPublisher.publish(job);
+        } catch (Exception ex) {
+            // Ignore enqueue failures.
+        }
+    }
+    
 
     @Override
     @Transactional
@@ -289,6 +429,12 @@ public class StoryServiceImpl implements StoryService {
         }
 
         return keys;
+    }
+
+    private String buildS3Key(String folder, String originalFilename) {
+        String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(java.time.LocalDateTime.now());
+        String cleanName = (originalFilename != null) ? originalFilename.replaceAll("[^a-zA-Z0-9.-]", "_") : "file";
+        return folder + "/" + timestamp + "_" + java.util.UUID.randomUUID().toString().substring(0, 8) + "_" + cleanName;
     }
 
     private String resolveKey(String raw, String defaultFolder) {
