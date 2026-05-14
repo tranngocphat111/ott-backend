@@ -35,9 +35,13 @@ public class StoryController {
         return ResponseEntity.ok(storyService.createStory(request));
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<StoryResponse> updateStory(@PathVariable String id, @RequestBody StoryRequest request) {
-        return ResponseEntity.ok(storyService.updateStory(id, request));
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<StoryResponse> updateStory(
+            @PathVariable String id,
+            @RequestPart("request") StoryRequest request,
+            @RequestPart(value = "files", required = false) List<MultipartFile> files,
+            @RequestPart(value = "captions", required = false) List<String> captions) {
+        return ResponseEntity.ok(storyService.updateStory(id, request, files, captions));
     }
 
     @PutMapping("/{id}/view")

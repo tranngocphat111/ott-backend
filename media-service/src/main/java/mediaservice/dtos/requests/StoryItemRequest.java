@@ -13,5 +13,13 @@ public class StoryItemRequest {
     private ImageItemRequest imageItem;
     private VideoItemRequest videoItem;
     private TextItemRequest textItem;
+    private boolean isPrimary;
+    private int zIndex;
+    private double positionX;
+    private double positionY;
+    private double rotation;
+    private double scale;
+    private Long startTime;
+    private Long endTime;
 }
 
