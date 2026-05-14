@@ -1069,6 +1069,7 @@ io.on("connection", (socket) => {
         conversationId,
         callId: callState.callId,
         callType: callState.callType,
+        participants: Array.from(callState.participants),
         isGroup,
         livekitToken,
       };
