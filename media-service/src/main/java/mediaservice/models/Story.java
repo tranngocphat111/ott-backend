@@ -23,11 +23,11 @@ public class Story extends Content{
 
     private String highlightName;
 
-    @OneToMany(mappedBy = "story")
+    @OneToMany(mappedBy = "story", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<StoryMusic> storyMusics;
 
     private LocalDateTime expireAt;
 
-    @OneToMany(mappedBy = "story")
+    @OneToMany(mappedBy = "story", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<StoryItem> storyItems;
 }

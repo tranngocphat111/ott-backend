@@ -8,6 +8,7 @@ import mediaservice.models.TextItem;
 import mediaservice.models.VideoItem;
 import org.mapstruct.Mapper;
 import org.mapstruct.Named;
+import org.mapstruct.ReportingPolicy;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.HashSet;
@@ -16,7 +17,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-@Mapper(componentModel = "spring", uses = {ImageItemMapper.class, VideoItemMapper.class, TextItemMapper.class})
+@Mapper(componentModel = "spring", uses = {ImageItemMapper.class, VideoItemMapper.class, TextItemMapper.class}, unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public abstract class StoryItemMapper {
 
     @Autowired

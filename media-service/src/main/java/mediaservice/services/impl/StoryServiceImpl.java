@@ -24,6 +24,7 @@ import mediaservice.models.enums.StoryItemType;
 import mediaservice.models.enums.VisibilityType;
 import mediaservice.repositories.StoryItemRepository;
 import mediaservice.repositories.StoryRepository;
+import mediaservice.repositories.StoryViewRepository;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.MediaDeleteJobPublisher;
 import mediaservice.services.StoryService;
@@ -58,6 +59,7 @@ public class StoryServiceImpl implements StoryService {
     private final StoryMapper storyMapper;
     private final UserAccountRepository userAccountRepository;
     private final UserAccountMapper userAccountMapper;
+    private final StoryViewRepository storyViewRepository;
     private final MediaDeleteJobPublisher mediaDeleteJobPublisher;
     private final MediaUrlBuilder mediaUrlBuilder;
     private final MediaRealtimePublisher mediaRealtimePublisher;
@@ -99,12 +101,7 @@ public class StoryServiceImpl implements StoryService {
             savedStory.setStoryItems(new HashSet<>(persistedItems));
         }
 
-        boolean hasMedia = story.getStoryItems() != null && story.getStoryItems().stream().anyMatch(item ->
-            item instanceof ImageItem || item instanceof VideoItem
-        );
-        if (!hasMedia) {
-            publishAfterCommit(savedStory.getId(), "STORY", "CREATE");
-        }
+        publishAfterCommit(savedStory.getId(), "STORY", "CREATE");
 
         return storyMapper.toResponse(savedStory);
     }
@@ -199,6 +196,10 @@ public class StoryServiceImpl implements StoryService {
                 .orElseThrow(() -> new RuntimeException("Story not found with id: " + id));
 
         List<String> deleteKeys = collectStoryMediaKeys(story);
+        
+        // Delete related data first
+        storyViewRepository.deleteByStoryId(id);
+        
         storyRepository.delete(story);
 
         if (deleteKeys.isEmpty()) {
@@ -313,8 +314,11 @@ public class StoryServiceImpl implements StoryService {
     @Override
     @Transactional(readOnly = true)
     public List<StoryResponse> getStoriesByUserId(String userId) {
-        List<Story> stories = storyRepository.findAll(); // TODO: Add custom query
-        return storyMapper.toResponseList(stories);
+        List<Story> stories = storyRepository.findAll().stream()
+                .filter(s -> s.getAccount() != null && s.getAccount().getId().equals(userId))
+                .sorted(Comparator.comparing(Story::getCreatedAt).reversed())
+                .toList();
+        return stories.stream().map(this::toFullResponse).toList();
     }
 
     @Override
@@ -339,7 +343,7 @@ public class StoryServiceImpl implements StoryService {
                 accountId,
                 LocalDateTime.now()
         );
-        return storyMapper.toResponseList(stories);
+        return stories.stream().map(this::toFullResponse).toList();
     }
 
     @Override
@@ -417,5 +421,36 @@ public class StoryServiceImpl implements StoryService {
                 story.getVisibility()
         );
     }
-}
 
+    private StoryResponse toFullResponse(Story story) {
+        StoryResponse response = storyMapper.toResponse(story);
+        response.setTotalViews(storyViewRepository.countByStoryId(story.getId()));
+        return response;
+    }
+
+    @Override
+    @Transactional
+    public void viewStory(String storyId, String accountId) {
+        if (storyViewRepository.existsByStoryIdAndAccountId(storyId, accountId)) {
+            return;
+        }
+
+        Story story = storyRepository.findById(storyId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Story not found"));
+        
+        UserAccount account = userAccountRepository.findById(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
+
+        mediaservice.models.StoryView view = new mediaservice.models.StoryView();
+        view.setStory(story);
+        view.setAccount(account);
+        storyViewRepository.save(view);
+    }
+
+    @Override
+    public List<mediaservice.dtos.responses.UserAccountResponse> getStoryViewers(String storyId) {
+        return storyViewRepository.findByStoryIdOrderByViewedAtDesc(storyId).stream()
+                .map(view -> userAccountMapper.toResponse(view.getAccount()))
+                .toList();
+    }
+}

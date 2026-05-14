@@ -2,6 +2,7 @@ package mediaservice.mappers;
 
 import mediaservice.dtos.requests.UserAccountRequest;
 import mediaservice.dtos.responses.UserAccountResponse;
+import mediaservice.models.Account;
 import mediaservice.models.UserAccount;
 import mediaservice.utils.MediaUrlBuilder;
 import org.mapstruct.*;
@@ -21,11 +22,19 @@ public abstract class UserAccountMapper {
     @Mapping(target = "relationshipStatus", source = "relationshipStatus")
     public abstract UserAccount toEntity(UserAccountRequest request);
 
-    // Explicit mappings for response to include profile fields from UserAccount
     @Mapping(target = "work", source = "work")
     @Mapping(target = "location", source = "location")
     @Mapping(target = "relationshipStatus", source = "relationshipStatus")
     public abstract UserAccountResponse toResponse(UserAccount userAccount);
+
+    @Mapping(target = "isCreator", ignore = true)
+    @Mapping(target = "totalFollowers", ignore = true)
+    @Mapping(target = "totalFollowing", ignore = true)
+    @Mapping(target = "totalPosts", ignore = true)
+    @Mapping(target = "work", ignore = true)
+    @Mapping(target = "location", ignore = true)
+    @Mapping(target = "relationshipStatus", ignore = true)
+    public abstract UserAccountResponse toResponse(Account account);
 
     public abstract List<UserAccountResponse> toResponseList(List<UserAccount> userAccounts);
 
@@ -36,7 +45,7 @@ public abstract class UserAccountMapper {
     public abstract void updateEntity(UserAccountRequest request, @MappingTarget UserAccount userAccount);
 
     @AfterMapping
-    protected void buildFullUrls(@MappingTarget UserAccountResponse response, UserAccount source) {
+    protected void buildFullUrls(@MappingTarget UserAccountResponse response, Account source) {
         // Debug logging to see what Hibernate actually loaded
         java.util.logging.Logger.getLogger("UserAccountMapper")
             .info("[Mapper] Mapping user " + source.getId() + " - avatarUrl in entity: " + source.getAvatarUrl());

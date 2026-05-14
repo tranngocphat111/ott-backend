@@ -5,6 +5,7 @@ import mediaservice.dtos.requests.StoryRequest;
 import mediaservice.dtos.responses.StoryUploadResponse;
 import mediaservice.dtos.responses.StoryReelResponse;
 import mediaservice.dtos.responses.StoryResponse;
+import mediaservice.dtos.responses.UserAccountResponse;
 import mediaservice.dtos.messages.MediaCompressionJob;
 import mediaservice.dtos.messages.MediaUploadJob;
 import mediaservice.services.MediaCompressionJobPublisher;
@@ -32,6 +33,22 @@ public class StoryController {
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<StoryResponse> createStory(@RequestBody StoryRequest request) {
         return ResponseEntity.ok(storyService.createStory(request));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<StoryResponse> updateStory(@PathVariable String id, @RequestBody StoryRequest request) {
+        return ResponseEntity.ok(storyService.updateStory(id, request));
+    }
+
+    @PutMapping("/{id}/view")
+    public ResponseEntity<Void> viewStory(@PathVariable String id, @RequestParam String accountId) {
+        storyService.viewStory(id, accountId);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/{id}/viewers")
+    public ResponseEntity<List<UserAccountResponse>> getStoryViewers(@PathVariable String id) {
+        return ResponseEntity.ok(storyService.getStoryViewers(id));
     }
 
     /** POST /stories/upload - upload story media before creating story */

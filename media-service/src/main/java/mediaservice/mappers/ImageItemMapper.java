@@ -9,13 +9,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public abstract class ImageItemMapper {
 
     @Autowired
     protected MediaUrlBuilder mediaUrlBuilder;
 
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "story", ignore = true)
     public abstract ImageItem toEntity(ImageItemRequest request);
 
     public abstract ImageItemResponse toResponse(ImageItem imageItem);

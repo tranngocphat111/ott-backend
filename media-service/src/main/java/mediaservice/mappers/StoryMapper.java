@@ -9,7 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring", uses = { StoryItemMapper.class })
+@Mapper(componentModel = "spring", uses = { StoryItemMapper.class }, unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public abstract class StoryMapper {
 
     @Autowired

@@ -19,5 +19,7 @@ public interface StoryService {
     List<StoryResponse> getActiveStories();
     List<StoryResponse> getAuthorizedActiveStories(String accountId);
     StoryReelResponse getStoriesReel(String accountId, int suggestionLimit);
+    void viewStory(String storyId, String accountId);
+    List<mediaservice.dtos.responses.UserAccountResponse> getStoryViewers(String storyId);
 }
 
