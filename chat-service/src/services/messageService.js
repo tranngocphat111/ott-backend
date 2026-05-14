@@ -561,6 +561,7 @@ exports.sendMessage = async ({
   pollQuestion,
   pollMultipleChoice,
   pollOptions,
+  systemMeta,
 }) => {
   // Nếu content đã là array (image keys) thì dùng trực tiếp, không thì wrap
   const contentArray = Array.isArray(content) ? content : [content];
@@ -644,7 +645,7 @@ exports.sendMessage = async ({
     poll_question: pollQuestion || null,
     poll_multiple_choice: pollMultipleChoice || false,
     poll_options: pollOptions || [],
-    system_meta: mediaPolicyMeta,
+    system_meta: systemMeta !== undefined ? systemMeta : mediaPolicyMeta,
   });
 
   const savedMessage = await newMessage.save();

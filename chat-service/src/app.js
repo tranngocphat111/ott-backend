@@ -1,5 +1,6 @@
 const express = require("express");
 const http = require("http");
+const crypto = require("crypto");
 const { Server } = require("socket.io");
 const cors = require("cors");
 
@@ -45,6 +46,7 @@ messageEventsHandler(io);
 // In-memory call state by conversationId.
 // Note: This is suitable for single-node deployments.
 const NO_ANSWER_TIMEOUT_MS = 30000;
+const CALL_RECONNECT_GRACE_MS = 8000;
 const CALL_OUTCOME_DEDUPE_TTL_MS = 15000;
 const CALL_OUTCOME_RECENT_LOOKBACK_MS = 15000;
 const CALL_OUTCOME_TYPES = [
@@ -54,6 +56,16 @@ const CALL_OUTCOME_TYPES = [
   "call_no_answer",
 ];
 const recentCallOutcomeKeys = new Map();
+
+const normalizeId = (value) => String(value || "").trim();
+
+const createCallId = () => {
+  if (typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
 
 const normalizeCallType = (callType) => {
   return callType === "voice" ? "voice" : "video";
@@ -69,6 +81,65 @@ const formatCallDuration = (seconds) => {
   }
 
   return `${secs} giây`;
+};
+
+const getCallRoomName = (callState) => {
+  if (!callState) return "";
+  return `call:${callState.callId || callState.conversationId}`;
+};
+
+const isSameCall = (callState, callId) => {
+  if (!callState) return false;
+  const normalizedCallId = normalizeId(callId);
+  if (!normalizedCallId) return true;
+  return normalizeId(callState.callId) === normalizedCallId;
+};
+
+const clearNoAnswerTimer = (callState) => {
+  if (callState?.noAnswerTimer) {
+    clearTimeout(callState.noAnswerTimer);
+    callState.noAnswerTimer = null;
+  }
+};
+
+const clearParticipantDisconnectTimer = (callState, userId) => {
+  const normalizedUserId = normalizeId(userId);
+  if (!normalizedUserId || !callState?.disconnectTimers) return;
+
+  const timer = callState.disconnectTimers.get(normalizedUserId);
+  if (!timer) return;
+
+  clearTimeout(timer);
+  callState.disconnectTimers.delete(normalizedUserId);
+};
+
+const buildGroupCallUpdatePayload = (callState) => ({
+  conversationId: normalizeId(callState.conversationId),
+  callId: normalizeId(callState.callId),
+  callType: normalizeCallType(callState.callType),
+  isCalling: callState.participants.size > 0,
+  participantCount: callState.participants.size,
+});
+
+const emitGroupCallUpdate = (callState) => {
+  if (!callState?.isGroup) return;
+
+  const updatePayload = buildGroupCallUpdatePayload(callState);
+
+  io.to(normalizeId(callState.conversationId)).emit(
+    "cap_nhat_trang_thai_goi_nhom",
+    updatePayload,
+  );
+  io.to(`conversation:${callState.conversationId}`).emit(
+    "cap_nhat_trang_thai_goi_nhom",
+    updatePayload,
+  );
+
+  if (callState.memberIds) {
+    callState.memberIds.forEach((uid) => {
+      io.to(`user:${uid}`).emit("cap_nhat_trang_thai_goi_nhom", updatePayload);
+    });
+  }
 };
 
 const pruneRecentCallOutcomeKeys = () => {
@@ -97,11 +168,13 @@ const hasCallBeenAnswered = (callState) => {
 };
 
 const isUserBusyInAnotherCall = (userId, conversationId) => {
-  if (!userId) return false;
+  const normalizedUserId = normalizeId(userId);
+  if (!normalizedUserId) return false;
 
   for (const [activeConversationId, callState] of activeCalls.entries()) {
     if (activeConversationId === conversationId) continue;
-    if (callState.participants.has(userId)) {
+    if (callState.status === "ended") continue;
+    if (callState.participants.has(normalizedUserId)) {
       return true;
     }
   }
@@ -109,23 +182,32 @@ const isUserBusyInAnotherCall = (userId, conversationId) => {
   return false;
 };
 
-const endCallRoom = async (conversationId, endedBy = null) => {
+const endCallRoom = async (
+  conversationId,
+  endedBy = null,
+  expectedCallId = null,
+  reason = "ended",
+) => {
   const callState = activeCalls.get(conversationId);
   if (!callState) return;
+  if (!isSameCall(callState, expectedCallId)) return;
 
-  if (callState.noAnswerTimer) {
-    clearTimeout(callState.noAnswerTimer);
-    callState.noAnswerTimer = null;
+  clearNoAnswerTimer(callState);
+  if (callState.disconnectTimers) {
+    callState.disconnectTimers.forEach((timer) => clearTimeout(timer));
+    callState.disconnectTimers.clear();
   }
 
   const payload = {
     conversationId: String(conversationId),
+    callId: normalizeId(callState.callId),
     endedBy: endedBy ? String(endedBy) : null,
+    reason,
   };
 
-  console.log(`[CALL] endCallRoom: conversationId=${payload.conversationId}, endedBy=${payload.endedBy}`);
+  console.log(`[CALL] endCallRoom: conversationId=${payload.conversationId}, callId=${payload.callId}, endedBy=${payload.endedBy}, reason=${reason}`);
 
-  io.to(`call:${conversationId}`).emit("ket_thuc_phong_goi", payload);
+  io.to(getCallRoomName(callState)).emit("ket_thuc_phong_goi", payload);
 
   // Luôn phát tín hiệu đến memberIds từ cache để đảm bảo tốc độ và sự tin cậy
   if (callState.memberIds) {
@@ -150,19 +232,10 @@ const endCallRoom = async (conversationId, endedBy = null) => {
     }
   }
 
-  io.in(`call:${conversationId}`).socketsLeave(`call:${conversationId}`);
+  io.in(getCallRoomName(callState)).socketsLeave(getCallRoomName(callState));
   if (callState.isGroup) {
-    const updatePayload = {
-      conversationId: String(conversationId),
-      isCalling: false,
-      participantCount: 0,
-    };
-    io.to(`conversation:${conversationId}`).emit("cap_nhat_trang_thai_goi_nhom", updatePayload);
-    if (callState.memberIds) {
-      callState.memberIds.forEach((uid) => {
-        io.to(`user:${uid}`).emit("cap_nhat_trang_thai_goi_nhom", updatePayload);
-      });
-    }
+    callState.participants.clear();
+    emitGroupCallUpdate(callState);
   }
 
   activeCalls.delete(conversationId);
@@ -185,6 +258,7 @@ const createCallNotificationMessage = async ({
   senderId,
   type,
   content,
+  systemMeta,
 }) => {
   if (!conversationId || !senderId || !type || !content) return;
 
@@ -196,6 +270,7 @@ const createCallNotificationMessage = async ({
       content,
       type,
       size: 0,
+      systemMeta,
     });
 
     console.log(`[CALL] notification created: conversationId=${conversationId}, msgId=${message?.msg_id || ""}, type=${type}`);
@@ -207,7 +282,7 @@ const createCallNotificationMessage = async ({
   }
 };
 
-const getRecentCallOutcomeMessage = async (conversationId) => {
+const getRecentCallOutcomeMessage = async (conversationId, callId = null) => {
   if (!conversationId) return null;
 
   const since = new Date(Date.now() - CALL_OUTCOME_RECENT_LOOKBACK_MS);
@@ -215,6 +290,7 @@ const getRecentCallOutcomeMessage = async (conversationId) => {
     conversation_id: conversationId,
     type: { $in: CALL_OUTCOME_TYPES },
     is_deleted: false,
+    ...(callId ? { "system_meta.callId": normalizeId(callId) } : {}),
     createdAt: { $gte: since },
   })
     .sort({ createdAt: -1 })
@@ -225,18 +301,23 @@ const getRecentCallOutcomeMessage = async (conversationId) => {
 const emitFallbackCallOutcomeForMissingState = async ({
   conversationId,
   userId,
+  callId,
   callType,
   wasConnected,
   durationSeconds,
 }) => {
   if (!conversationId || !userId) return false;
 
-  const dedupeKey = `missing-state:${conversationId}:${userId}`;
+  const normalizedCallId = normalizeId(callId);
+  const dedupeKey = `missing-state:${conversationId}:${normalizedCallId || userId}`;
   if (!claimCallOutcome(dedupeKey)) {
     return false;
   }
 
-  const recentCallMessage = await getRecentCallOutcomeMessage(conversationId);
+  const recentCallMessage = await getRecentCallOutcomeMessage(
+    conversationId,
+    normalizedCallId,
+  );
   if (recentCallMessage) {
     console.warn(
       `[CALL] fallback skipped: recent ${recentCallMessage.type} already exists for conversationId=${conversationId}, msgId=${recentCallMessage.msg_id || ""}`,
@@ -263,6 +344,14 @@ const emitFallbackCallOutcomeForMissingState = async ({
     senderId: userId,
     type: messageType,
     content,
+    systemMeta: {
+      callId: normalizedCallId || null,
+      callType: normalizedCallType,
+      outcome: isCompleted ? "completed" : "missed",
+      reason: "missing_state_fallback",
+      durationSeconds: safeDurationSeconds,
+      endedAt: new Date().toISOString(),
+    },
   });
 
   return Boolean(message);
@@ -272,23 +361,28 @@ const scheduleNoAnswerTimeout = ({ conversationId, callerId, callType }) => {
   const callState = activeCalls.get(conversationId);
   if (!callState) return;
 
-  if (callState.noAnswerTimer) {
-    clearTimeout(callState.noAnswerTimer);
-  }
+  clearNoAnswerTimer(callState);
+  const callId = callState.callId;
 
   callState.noAnswerTimer = setTimeout(async () => {
     const currentCallState = activeCalls.get(conversationId);
-    if (!currentCallState) return;
+    if (!currentCallState || !isSameCall(currentCallState, callId)) return;
 
-    console.log(`[CALL] No-answer timeout (30s) reached for conversation ${conversationId}.`);
+    console.log(`[CALL] No-answer timeout (30s) reached for conversation ${conversationId}, callId=${callId}.`);
 
     // Tự động "từ chối" cho những người chưa bắt máy sau 30s
-    if (currentCallState.memberIds) {
-      currentCallState.memberIds.forEach(uid => {
+    const ringingMemberIds =
+      currentCallState.ringingMemberIds &&
+      currentCallState.ringingMemberIds.size > 0
+        ? currentCallState.ringingMemberIds
+        : currentCallState.memberIds;
+    if (ringingMemberIds) {
+      ringingMemberIds.forEach(uid => {
         if (!currentCallState.participants.has(uid)) {
           // Gửi tín hiệu để client tự động đóng modal/dừng đổ chuông
           io.to(`user:${uid}`).emit("ket_thuc_phong_goi", {
             conversationId,
+            callId,
             reason: "timeout",
             message: "Cuộc gọi đã kết thúc do không trả lời"
           });
@@ -297,19 +391,34 @@ const scheduleNoAnswerTimeout = ({ conversationId, callerId, callType }) => {
       });
     }
 
-    // Thực sự đóng phòng nếu không có ai khác tham gia sau 30s (chỉ còn tối đa 1 người là người gọi)
-    const shouldCloseRoom = currentCallState.participants.size <= 1;
+    currentCallState.noAnswerTimer = null;
 
-    if (shouldCloseRoom) {
-      await emitCallOutcomeForState({
+    if (currentCallState.isGroup) {
+      if (currentCallState.participants.size === 0) {
+        await finishCall({
+          conversationId,
+          callId,
+          endedBy: callerId,
+          outcome: "no_answer",
+          reason: "timeout",
+        });
+      } else {
+        console.log(`[CALL] Group room ${conversationId} remains active for ${currentCallState.participants.size} participant(s).`);
+      }
+      return;
+    }
+
+    // 1:1: nếu hết thời gian mà vẫn chỉ có caller, kết thúc bằng no-answer.
+    if (currentCallState.participants.size <= 1) {
+      await finishCall({
         conversationId,
-        senderId: callerId,
-        callState: currentCallState,
-        outcome: "missed",
+        callId,
+        endedBy: callerId,
+        outcome: "no_answer",
+        reason: "timeout",
       });
 
       console.log(`[CALL] Room ${conversationId} closed due to no response.`);
-      endCallRoom(conversationId, callerId);
     } else {
       console.log(`[CALL] Room ${conversationId} remains active for ${currentCallState.participants.size} participants.`);
     }
@@ -319,15 +428,47 @@ const scheduleNoAnswerTimeout = ({ conversationId, callerId, callType }) => {
 const emitCallOutcomeMessage = async ({
   conversationId,
   senderId,
+  callId,
   callType,
   outcome,
   answeredAt,
   endedAt = new Date().toISOString(),
   durationSeconds,
   dedupeKey,
+  reason,
 }) => {
-  if (!conversationId || !senderId) return;
+  if (!conversationId || !senderId) return null;
   if (!claimCallOutcome(dedupeKey)) return;
+
+  const normalizedCallId = normalizeId(callId);
+  if (normalizedCallId) {
+    const existingMessage = await Message.findOne({
+      conversation_id: conversationId,
+      type: { $in: CALL_OUTCOME_TYPES },
+      "system_meta.callId": normalizedCallId,
+      is_deleted: false,
+    })
+      .sort({ createdAt: -1 })
+      .select("msg_id type")
+      .lean();
+
+    if (existingMessage) {
+      console.warn(
+        `[CALL] outcome skipped: message already exists for callId=${normalizedCallId}, msgId=${existingMessage.msg_id || ""}`,
+      );
+      return existingMessage;
+    }
+  }
+
+  const normalizedCallType = normalizeCallType(callType);
+  const baseMeta = {
+    callId: normalizedCallId || null,
+    callType: normalizedCallType,
+    outcome,
+    reason: reason || outcome,
+    answeredAt: answeredAt || null,
+    endedAt,
+  };
 
   if (outcome === "completed") {
     const startAt = answeredAt ? new Date(answeredAt).getTime() : null;
@@ -338,20 +479,37 @@ const emitCallOutcomeMessage = async ({
       ? Math.max(0, Math.floor((endAt - startAt) / 1000))
       : 0;
 
-    await createCallNotificationMessage({
+    return createCallNotificationMessage({
       conversationId,
       senderId,
       type: "call_end",
-      content: `Cuộc gọi ${callType === "video" ? "video" : "thoại"} - ${formatCallDuration(safeDurationSeconds)}`,
+      content: `Cuộc gọi ${normalizedCallType === "video" ? "video" : "thoại"} - ${formatCallDuration(safeDurationSeconds)}`,
+      systemMeta: {
+        ...baseMeta,
+        durationSeconds: safeDurationSeconds,
+      },
     });
-    return;
   }
 
-  await createCallNotificationMessage({
+  const messageType =
+    outcome === "cancelled"
+      ? "call_cancel"
+      : outcome === "no_answer"
+      ? "call_no_answer"
+      : "call_missed";
+  const suffix =
+    outcome === "cancelled"
+      ? "đã hủy"
+      : outcome === "no_answer"
+      ? "không trả lời"
+      : "nhỡ";
+
+  return createCallNotificationMessage({
     conversationId,
     senderId,
-    type: "call_missed",
-    content: `Cuộc gọi ${callType === "video" ? "video" : "thoại"} nhỡ`,
+    type: messageType,
+    content: `Cuộc gọi ${normalizedCallType === "video" ? "video" : "thoại"} ${suffix}`,
+    systemMeta: baseMeta,
   });
 };
 
@@ -361,35 +519,199 @@ const emitCallOutcomeForState = async ({
   callState,
   outcome,
   durationSeconds,
+  reason,
 }) => {
   if (!callState || callState.isOutcomeEmitted) return;
 
   callState.isOutcomeEmitted = true;
   console.log(
-    `[CALL] outcome: conversationId=${conversationId}, outcome=${outcome}, answeredAt=${callState.answeredAt || ""}, hadMultipleParticipants=${!!callState.hadMultipleParticipants}, durationSeconds=${durationSeconds ?? ""}`,
+    `[CALL] outcome: conversationId=${conversationId}, callId=${callState.callId || ""}, outcome=${outcome}, answeredAt=${callState.answeredAt || ""}, hadMultipleParticipants=${!!callState.hadMultipleParticipants}, durationSeconds=${durationSeconds ?? ""}`,
   );
   await emitCallOutcomeMessage({
     conversationId,
     senderId: senderId || callState.initiatorId || "",
+    callId: callState.callId,
     callType: callState.callType || "video",
     outcome,
     answeredAt: callState.answeredAt,
+    endedAt: callState.endedAt || new Date().toISOString(),
     durationSeconds,
     dedupeKey: callState.outcomeKey,
+    reason,
   });
 };
 
+const resolveUnansweredOutcome = (callState, endedBy, fallback = "missed") => {
+  if (fallback === "no_answer" || fallback === "cancelled") return fallback;
+
+  const normalizedEndedBy = normalizeId(endedBy);
+  if (
+    normalizedEndedBy &&
+    normalizeId(callState?.initiatorId) === normalizedEndedBy
+  ) {
+    return "cancelled";
+  }
+
+  return fallback;
+};
+
+const finishCall = async ({
+  conversationId,
+  callId,
+  endedBy = null,
+  outcome,
+  reason,
+  durationSeconds,
+}) => {
+  const callState = activeCalls.get(conversationId);
+  if (!callState || !isSameCall(callState, callId)) {
+    return { ok: false, reason: "call_not_found" };
+  }
+
+  if (callState.status === "ended") {
+    return {
+      ok: true,
+      callId: callState.callId,
+      reason: "already_ended",
+      outcome: callState.outcome || outcome,
+    };
+  }
+
+  const endedAt = new Date().toISOString();
+  callState.status = "ended";
+  callState.endedAt = endedAt;
+  callState.endedBy = normalizeId(endedBy) || null;
+  callState.endReason = reason || outcome || "ended";
+
+  clearNoAnswerTimer(callState);
+
+  const wasAnswered = hasCallBeenAnswered(callState);
+  const finalOutcome =
+    outcome ||
+    (wasAnswered
+      ? "completed"
+      : resolveUnansweredOutcome(callState, endedBy, "missed"));
+  callState.outcome = finalOutcome;
+
+  await emitCallOutcomeForState({
+    conversationId,
+    senderId: callState.initiatorId || endedBy || "",
+    callState,
+    outcome: finalOutcome,
+    durationSeconds,
+    reason: reason || finalOutcome,
+  });
+
+  await endCallRoom(
+    conversationId,
+    endedBy,
+    callState.callId,
+    reason || finalOutcome,
+  );
+
+  return {
+    ok: true,
+    callId: callState.callId,
+    outcome: finalOutcome,
+    reason: reason || finalOutcome,
+  };
+};
+
+const maybeCloseCallWhenOnlyOneLeft = async (
+  conversationId,
+  endedBy = null,
+  callId = null,
+) => {
+  const callState = activeCalls.get(conversationId);
+  if (!callState || !isSameCall(callState, callId)) return;
+
+  const shouldClose = callState.isGroup
+    ? callState.participants.size === 0
+    : callState.participants.size <= 1;
+
+  if (!shouldClose) return;
+
+  const wasAnswered = hasCallBeenAnswered(callState);
+  const outcome = wasAnswered
+    ? "completed"
+    : resolveUnansweredOutcome(callState, endedBy, "cancelled");
+
+  await finishCall({
+    conversationId,
+    callId: callState.callId,
+    endedBy,
+    outcome,
+    reason: outcome,
+  });
+};
+
+const removeParticipantFromCall = async ({
+  conversationId,
+  userId,
+  callId = null,
+  socketToLeave = null,
+  reason = "left",
+}) => {
+  const callState = activeCalls.get(conversationId);
+  const normalizedUserId = normalizeId(userId);
+
+  if (!callState || !normalizedUserId || !isSameCall(callState, callId)) {
+    return { ok: false, reason: "call_not_found" };
+  }
+
+  clearParticipantDisconnectTimer(callState, normalizedUserId);
+
+  const wasParticipant = callState.participants.delete(normalizedUserId);
+  if (!wasParticipant) {
+    return {
+      ok: true,
+      callId: callState.callId,
+      participants: Array.from(callState.participants),
+      reason: "not_participant",
+    };
+  }
+
+  if (socketToLeave) {
+    socketToLeave.leave(getCallRoomName(callState));
+  }
+
+  const payload = {
+    conversationId,
+    callId: callState.callId,
+    userId: normalizedUserId,
+    participants: Array.from(callState.participants),
+    reason,
+  };
+
+  io.to(getCallRoomName(callState)).emit("nguoi_dung_roi_goi", payload);
+  emitGroupCallUpdate(callState);
+
+  await maybeCloseCallWhenOnlyOneLeft(
+    conversationId,
+    normalizedUserId,
+    callState.callId,
+  );
+
+  return { ok: true, callId: callState.callId, participants: payload.participants };
+};
 
 const ensureCallState = (conversationId, callType, memberIds = [], isGroup = false) => {
   if (!activeCalls.has(conversationId)) {
     const startedAt = new Date().toISOString();
+    const callId = createCallId();
     activeCalls.set(conversationId, {
       conversationId,
-      callType,
+      callId,
+      mediaRoomName: `call-${callId}`,
+      callType: normalizeCallType(callType),
+      status: "ringing",
       participants: new Set(),
-      memberIds: new Set(memberIds), // Lưu danh sách member để signaling cancel
+      memberIds: new Set(memberIds.map((id) => normalizeId(id)).filter(Boolean)), // Lưu danh sách member để signaling cancel
+      ringingMemberIds: new Set(),
+      declinedMemberIds: new Set(),
+      disconnectTimers: new Map(),
       startedAt,
-      outcomeKey: `${conversationId}:${startedAt}`,
+      outcomeKey: `${conversationId}:${callId}`,
       answeredAt: null,
       isOutcomeEmitted: false,
       isGroup: !!isGroup,
@@ -403,55 +725,56 @@ const ensureCallState = (conversationId, callType, memberIds = [], isGroup = fal
   return activeCalls.get(conversationId);
 };
 
-const removeUserFromAllCalls = (userId) => {
-  if (!userId) return;
+const removeUserFromAllCalls = (userId, reason = "disconnect") => {
+  const normalizedUserId = normalizeId(userId);
+  if (!normalizedUserId) return;
 
   for (const [conversationId, callState] of activeCalls.entries()) {
-    if (!callState.participants.has(userId)) {
+    if (!callState.participants.has(normalizedUserId)) {
       continue;
     }
 
-    callState.participants.delete(userId);
-
-    io.to(`call:${conversationId}`).emit("nguoi_dung_roi_goi", {
+    void removeParticipantFromCall({
       conversationId,
-      userId,
-      participants: Array.from(callState.participants),
+      userId: normalizedUserId,
+      callId: callState.callId,
+      reason,
     });
+  }
+};
 
-    if (callState.isGroup) {
-      const updatePayload = {
+const scheduleUserDisconnectFromAllCalls = (userId) => {
+  const normalizedUserId = normalizeId(userId);
+  if (!normalizedUserId) return;
+
+  for (const [conversationId, callState] of activeCalls.entries()) {
+    if (!callState.participants.has(normalizedUserId)) continue;
+    if (!callState.disconnectTimers) {
+      callState.disconnectTimers = new Map();
+    }
+    if (callState.disconnectTimers.has(normalizedUserId)) continue;
+
+    const callId = callState.callId;
+    const timer = setTimeout(() => {
+      const currentCallState = activeCalls.get(conversationId);
+      if (
+        !currentCallState ||
+        !isSameCall(currentCallState, callId) ||
+        !currentCallState.participants.has(normalizedUserId)
+      ) {
+        return;
+      }
+
+      currentCallState.disconnectTimers?.delete(normalizedUserId);
+      void removeParticipantFromCall({
         conversationId,
-        isCalling: callState.participants.size > 0,
-        participantCount: callState.participants.size,
-      };
-      io.to(`conversation:${conversationId}`).emit("cap_nhat_trang_thai_goi_nhom", updatePayload);
-      if (callState.memberIds) {
-        callState.memberIds.forEach(uid => {
-          io.to(`user:${uid}`).emit("cap_nhat_trang_thai_goi_nhom", updatePayload);
-        });
-      }
-    }
+        userId: normalizedUserId,
+        callId,
+        reason: "disconnect",
+      });
+    }, CALL_RECONNECT_GRACE_MS);
 
-    if (callState.participants.size === 0) {
-      const wasAnswered = hasCallBeenAnswered(callState);
-      const shouldEmitMissed =
-        !wasAnswered && String(callState.initiatorId) === String(userId);
-
-      if (wasAnswered || shouldEmitMissed) {
-        void emitCallOutcomeForState({
-          conversationId,
-          senderId: callState.initiatorId || userId,
-          callState,
-          outcome: wasAnswered ? "completed" : "missed",
-        });
-      }
-
-      endCallRoom(conversationId, userId);
-      continue;
-    }
-
-    maybeCloseCallWhenOnlyOneLeft(conversationId, userId);
+    callState.disconnectTimers.set(normalizedUserId, timer);
   }
 };
 
@@ -470,11 +793,10 @@ io.on("connection", (socket) => {
     // Gửi trạng thái cuộc gọi nếu có cuộc gọi đang diễn ra trong nhóm này
     const callState = activeCalls.get(conversationId);
     if (callState && callState.isGroup) {
-      socket.emit("cap_nhat_trang_thai_goi_nhom", {
-        conversationId,
-        isCalling: true,
-        participantCount: callState.participants.size,
-      });
+      socket.emit(
+        "cap_nhat_trang_thai_goi_nhom",
+        buildGroupCallUpdatePayload(callState),
+      );
     }
   });
 
@@ -501,11 +823,10 @@ io.on("connection", (socket) => {
     // Gửi trạng thái các cuộc gọi đang diễn ra cho người dùng vừa kết nối (Sidebar sync)
     for (const [conversationId, callState] of activeCalls.entries()) {
       if (callState.isGroup && callState.memberIds && callState.memberIds.has(userId)) {
-        socket.emit("cap_nhat_trang_thai_goi_nhom", {
-          conversationId,
-          isCalling: true,
-          participantCount: callState.participants.size,
-        });
+        socket.emit(
+          "cap_nhat_trang_thai_goi_nhom",
+          buildGroupCallUpdatePayload(callState),
+        );
       }
     }
   });
@@ -619,42 +940,100 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("bat_dau_goi", async ({ conversationId, callerId, callType, invitedUserIds }) => {
+  socket.on("bat_dau_goi", async ({ conversationId, callerId, callType, invitedUserIds }, ack) => {
+    const acknowledge = (payload = {}) => {
+      if (typeof ack === "function") ack(payload);
+    };
+
     try {
-      if (!conversationId || !callerId) return;
+      if (!conversationId || !callerId) {
+        acknowledge({ ok: false, reason: "missing_payload" });
+        return;
+      }
+
+      const existingCall = activeCalls.get(conversationId);
+      if (existingCall && existingCall.status !== "ended") {
+        acknowledge({
+          ok: false,
+          reason: "already_active",
+          conversationId,
+          callId: existingCall.callId,
+          callType: existingCall.callType,
+          isGroup: !!existingCall.isGroup,
+        });
+        io.to(`user:${callerId}`).emit("khong_the_tham_gia_goi", {
+          conversationId,
+          callId: existingCall.callId,
+          reason: "already_active",
+        });
+        return;
+      }
 
       socket.data.userId = callerId;
       socket.join(`user:${callerId}`);
 
       const participants = await ParticipantService.getParticipants(conversationId);
-      const memberIdsFromDb = participants.map(p => p.user_id).filter(id => !!id);
+      const memberIdsFromDb = participants
+        .map(p => normalizeId(p.user_id))
+        .filter(id => !!id);
 
       // Nếu có danh sách mời đích danh, dùng danh sách đó. Nếu không, dùng tất cả thành viên (trường hợp 1-1 hoặc gọi cả nhóm mặc định)
       const memberIds = (invitedUserIds && Array.isArray(invitedUserIds) && invitedUserIds.length > 0)
-        ? invitedUserIds
+        ? invitedUserIds.map((id) => normalizeId(id)).filter(Boolean)
         : memberIdsFromDb;
 
       const conversation = await Conversation.findById(conversationId);
       const isGroup = conversation && conversation.type === "group";
+      const normalizedCallerId = normalizeId(callerId);
+      const targetUserIds = memberIds.filter((userId) => userId && userId !== normalizedCallerId);
+      const busyTargets = targetUserIds.filter((userId) =>
+        isUserBusyInAnotherCall(userId, conversationId),
+      );
 
-      const callState = ensureCallState(conversationId, callType, memberIdsFromDb);
+      if (!isGroup && busyTargets.length > 0) {
+        if (claimCallOutcome(`busy:${conversationId}:${callerId}`)) {
+          await createCallNotificationMessage({
+            conversationId,
+            senderId: callerId,
+            type: "call_missed",
+            content: `Cuộc gọi ${normalizeCallType(callType) === "video" ? "video" : "thoại"} nhỡ (Người nhận đang bận)`,
+            systemMeta: {
+              callType: normalizeCallType(callType),
+              outcome: "busy",
+              reason: "busy",
+            },
+          });
+        }
+
+        io.to(`user:${callerId}`).emit("nguoi_dung_ban_goi", {
+          conversationId,
+          targetUserId: busyTargets[0],
+        });
+        acknowledge({ ok: false, reason: "busy", targetUserId: busyTargets[0] });
+        return;
+      }
+
+      const callState = ensureCallState(conversationId, callType, memberIdsFromDb, isGroup);
       callState.isGroup = !!isGroup;
 
       if (!callState.initiatorId) {
-        callState.initiatorId = callerId;
+        callState.initiatorId = normalizedCallerId;
       }
-      callState.participants.add(callerId);
+      callState.status = "ringing";
+      callState.ringingMemberIds = new Set(targetUserIds);
+      callState.participants.add(normalizedCallerId);
 
-      socket.join(`call:${conversationId}`);
+      socket.join(getCallRoomName(callState));
 
       let livekitToken = null;
       if (isGroup) {
-        livekitToken = await livekitService.generateToken(conversationId, callerId);
+        livekitToken = await livekitService.generateToken(callState.mediaRoomName, callerId);
         callState.isGroup = true;
       }
 
-      io.to(`call:${conversationId}`).emit("nguoi_dung_tham_gia_goi", {
+      io.to(getCallRoomName(callState)).emit("nguoi_dung_tham_gia_goi", {
         conversationId,
+        callId: callState.callId,
         userId: callerId,
         callType: callState.callType,
         participants: Array.from(callState.participants),
@@ -663,28 +1042,10 @@ io.on("connection", (socket) => {
       });
 
       if (isGroup) {
-        // Emit to the conversation room for those already inside the chat
-        io.to(`conversation:${conversationId}`).emit("cap_nhat_trang_thai_goi_nhom", {
-          conversationId,
-          isCalling: true,
-          participantCount: callState.participants.size,
-        });
-
-        // Also emit to each member's individual room to update their sidebars
-        if (callState.memberIds) {
-          callState.memberIds.forEach(uid => {
-            io.to(`user:${uid}`).emit("cap_nhat_trang_thai_goi_nhom", {
-              conversationId,
-              isCalling: true,
-              participantCount: callState.participants.size,
-            });
-          });
-        }
+        emitGroupCallUpdate(callState);
       }
 
       // Lọc bỏ người gọi khỏi danh sách nhận thông báo
-      const targetUserIds = memberIds.filter((userId) => userId && userId !== callerId);
-
       targetUserIds.forEach((userId) => {
         if (isUserBusyInAnotherCall(userId, conversationId)) {
           io.to(`user:${callerId}`).emit("nguoi_dung_ban_goi", {
@@ -696,6 +1057,7 @@ io.on("connection", (socket) => {
 
         io.to(`user:${userId}`).emit("cuoc_goi_den", {
           conversationId,
+          callId: callState.callId,
           callerId,
           callType: callState.callType,
           startedAt: callState.startedAt,
@@ -703,33 +1065,46 @@ io.on("connection", (socket) => {
         });
       });
 
-      io.to(`user:${callerId}`).emit("bat_dau_goi_thanh_cong", {
+      const successPayload = {
         conversationId,
+        callId: callState.callId,
         callType: callState.callType,
         isGroup,
         livekitToken,
-      });
+      };
+      io.to(`user:${callerId}`).emit("bat_dau_goi_thanh_cong", successPayload);
 
       scheduleNoAnswerTimeout({
         conversationId,
         callerId,
         callType: callState.callType,
       });
+      acknowledge({ ok: true, ...successPayload });
     } catch (error) {
       console.error("Loi bat_dau_goi:", error.message);
+      acknowledge({ ok: false, reason: "server_error", message: error.message });
     }
   });
 
   socket.on(
     "tham_gia_cuoc_goi",
-    async ({ conversationId, userId, callType }) => {
-      if (!conversationId || !userId) return;
+    async ({ conversationId, userId, callType, callId }, ack) => {
+      const acknowledge = (payload = {}) => {
+        if (typeof ack === "function") ack(payload);
+      };
+
+      if (!conversationId || !userId) {
+        acknowledge({ ok: false, reason: "missing_payload" });
+        return;
+      }
 
       if (isUserBusyInAnotherCall(userId, conversationId)) {
         io.to(`user:${userId}`).emit("khong_the_tham_gia_goi", {
           conversationId,
+          callId,
           reason: "busy",
         });
+        acknowledge({ ok: false, reason: "busy" });
         return;
       }
 
@@ -737,16 +1112,37 @@ io.on("connection", (socket) => {
       socket.join(`user:${userId}`);
 
       const participantsDb = await ParticipantService.getParticipants(conversationId);
-      const memberIdsFromDb = participantsDb.map(p => p.user_id).filter(id => !!id);
+      const memberIdsFromDb = participantsDb.map(p => normalizeId(p.user_id)).filter(id => !!id);
       const conversation = await Conversation.findById(conversationId);
       const isGroup = conversation && conversation.type === "group";
 
-      const callState = ensureCallState(conversationId, callType, memberIdsFromDb, isGroup);
-      const participantCountBeforeJoin = callState.participants.size;
-      callState.participants.add(userId);
+      const callState = activeCalls.get(conversationId);
+      if (!callState || !isSameCall(callState, callId)) {
+        io.to(`user:${userId}`).emit("ket_thuc_phong_goi", {
+          conversationId,
+          callId,
+          endedBy: null,
+          reason: "call_not_found",
+        });
+        acknowledge({ ok: false, reason: "call_not_found" });
+        return;
+      }
+
+      callState.isGroup = callState.isGroup || !!isGroup;
+      callState.callType = normalizeCallType(callState.callType || callType);
+      callState.memberIds = new Set([
+        ...Array.from(callState.memberIds || []),
+        ...memberIdsFromDb,
+      ]);
+      const normalizedJoinUserId = normalizeId(userId);
+      clearParticipantDisconnectTimer(callState, normalizedJoinUserId);
+      callState.ringingMemberIds?.delete(normalizedJoinUserId);
+      callState.declinedMemberIds?.delete(normalizedJoinUserId);
+      callState.participants.add(normalizedJoinUserId);
 
       if (!callState.answeredAt && callState.participants.size >= 2) {
         callState.answeredAt = new Date().toISOString();
+        callState.status = "accepted";
       }
 
       if (callState.participants.size >= 2) {
@@ -761,26 +1157,30 @@ io.on("connection", (socket) => {
         }
       }
 
-      socket.join(`call:${conversationId}`);
+      socket.join(getCallRoomName(callState));
 
       let livekitToken = null;
-      if (isGroup) {
-        livekitToken = await livekitService.generateToken(conversationId, userId);
+      if (callState.isGroup) {
+        livekitToken = await livekitService.generateToken(callState.mediaRoomName, userId);
       }
 
-      io.to(`call:${conversationId}`).emit("nguoi_dung_tham_gia_goi", {
+      const joinedPayload = {
         conversationId,
+        callId: callState.callId,
         userId,
         callType: callState.callType,
         participants: Array.from(callState.participants),
-        isGroup,
+        isGroup: callState.isGroup,
         livekitToken,
-      });
+      };
+
+      io.to(getCallRoomName(callState)).emit("nguoi_dung_tham_gia_goi", joinedPayload);
 
       // Quan trọng: Gửi token cho chính người vừa tham gia để họ mở màn hình gọi
-      if (isGroup) {
+      if (callState.isGroup) {
         io.to(`user:${userId}`).emit("bat_dau_goi_thanh_cong", {
           conversationId,
+          callId: callState.callId,
           userId,
           callType: callState.callType,
           participants: Array.from(callState.participants),
@@ -788,49 +1188,40 @@ io.on("connection", (socket) => {
           livekitToken,
         });
 
-        // Cập nhật số lượng người tham gia cho tất cả thành viên trong nhóm
-        if (callState.memberIds) {
-          callState.memberIds.forEach(uid => {
-            io.to(`user:${uid}`).emit("cap_nhat_trang_thai_goi_nhom", {
-              conversationId,
-              isCalling: true,
-              participantCount: callState.participants.size,
-            });
-          });
-        }
+        emitGroupCallUpdate(callState);
       }
 
-      if (isGroup) {
-        io.to(`conversation:${conversationId}`).emit("cap_nhat_trang_thai_goi_nhom", {
-          conversationId,
-          isCalling: true,
-          participantCount: callState.participants.size,
-        });
-      }
+      acknowledge({ ok: true, ...joinedPayload });
     },
   );
 
   socket.on(
     "gui_offer",
-    ({ conversationId, fromUserId, targetUserId, offer, callType }) => {
+    ({ conversationId, callId, fromUserId, targetUserId, offer, callType }) => {
       if (!conversationId || !fromUserId || !targetUserId || !offer) return;
+      const callState = activeCalls.get(conversationId);
+      if (!callState || !isSameCall(callState, callId)) return;
 
       io.to(`user:${targetUserId}`).emit("nhan_offer", {
         conversationId,
+        callId: callState.callId,
         fromUserId,
         offer,
-        callType: normalizeCallType(callType),
+        callType: normalizeCallType(callType || callState.callType),
       });
     },
   );
 
   socket.on(
     "gui_answer",
-    ({ conversationId, fromUserId, targetUserId, answer }) => {
+    ({ conversationId, callId, fromUserId, targetUserId, answer }) => {
       if (!conversationId || !fromUserId || !targetUserId || !answer) return;
+      const callState = activeCalls.get(conversationId);
+      if (!callState || !isSameCall(callState, callId)) return;
 
       io.to(`user:${targetUserId}`).emit("nhan_answer", {
         conversationId,
+        callId: callState.callId,
         fromUserId,
         answer,
       });
@@ -839,24 +1230,27 @@ io.on("connection", (socket) => {
 
   socket.on(
     "gui_ice_candidate",
-    ({ conversationId, fromUserId, targetUserId, candidate }) => {
+    ({ conversationId, callId, fromUserId, targetUserId, candidate }) => {
       if (!conversationId || !fromUserId || !targetUserId || !candidate) return;
+      const callState = activeCalls.get(conversationId);
+      if (!callState || !isSameCall(callState, callId)) return;
 
       io.to(`user:${targetUserId}`).emit("nhan_ice_candidate", {
         conversationId,
+        callId: callState.callId,
         fromUserId,
         candidate,
       });
     },
   );
 
-    socket.on("moi_them_thanh_vien_goi", async ({ conversationId, targetUserIds, callerId }) => {
+    socket.on("moi_them_thanh_vien_goi", async ({ conversationId, callId, targetUserIds, callerId }) => {
       if (!conversationId || !targetUserIds || !Array.isArray(targetUserIds)) return;
       const convIdStr = String(conversationId);
       console.log(`[CALL] Moi them thanh vien: conv=${convIdStr}, targets=${targetUserIds}, caller=${callerId}`);
 
       const callState = activeCalls.get(convIdStr);
-      if (!callState) return;
+      if (!callState || !isSameCall(callState, callId)) return;
 
       targetUserIds.forEach(userId => {
         const userIdStr = String(userId);
@@ -867,10 +1261,14 @@ io.on("connection", (socket) => {
         if (callState.memberIds) {
           callState.memberIds.add(userIdStr);
         }
+        if (callState.ringingMemberIds) {
+          callState.ringingMemberIds.add(userIdStr);
+        }
 
         // Gửi thông báo cuộc gọi đến
         io.to(`user:${userIdStr}`).emit("cuoc_goi_den", {
           conversationId: convIdStr,
+          callId: callState.callId,
           callerId: String(callState.initiatorId || callerId),
           callType: callState.callType,
           isGroup: true,
@@ -879,105 +1277,87 @@ io.on("connection", (socket) => {
         });
 
         // Cập nhật trạng thái gọi cho họ ngay trên sidebar
-        io.to(`user:${userIdStr}`).emit("cap_nhat_trang_thai_goi_nhom", {
-          conversationId: convIdStr,
-          isCalling: true,
-          participantCount: callState.participants.size,
-        });
+        io.to(`user:${userIdStr}`).emit(
+          "cap_nhat_trang_thai_goi_nhom",
+          buildGroupCallUpdatePayload(callState),
+        );
       });
     });
 
-    socket.on("chap_nhan_goi", ({ conversationId, userId }) => {
+    socket.on("chap_nhan_goi", ({ conversationId, userId, callId }) => {
       if (!conversationId || !userId) return;
 
       const callState = activeCalls.get(conversationId);
-      if (!callState) return;
+      if (!callState || !isSameCall(callState, callId)) return;
     });
 
-  socket.on("roi_cuoc_goi", ({ conversationId, userId }) => {
-    if (!conversationId || !userId) return;
-
-    const callState = activeCalls.get(conversationId);
-    if (!callState) return;
-
-    callState.participants.delete(userId);
-    socket.leave(`call:${conversationId}`);
-
-    io.to(`call:${conversationId}`).emit("nguoi_dung_roi_goi", {
-      conversationId,
-      userId,
-      participants: Array.from(callState.participants),
-    });
-
-    if (callState.isGroup) {
-      io.to(`conversation:${conversationId}`).emit("cap_nhat_trang_thai_goi_nhom", {
-        conversationId,
-        isCalling: callState.participants.size > 0,
-        participantCount: callState.participants.size,
-      });
-
-      // Cập nhật cho tất cả thành viên
-      if (callState.memberIds) {
-        callState.memberIds.forEach(uid => {
-          io.to(`user:${uid}`).emit("cap_nhat_trang_thai_goi_nhom", {
-            conversationId,
-            isCalling: callState.participants.size > 0,
-            participantCount: callState.participants.size,
-          });
-        });
-      }
-    }
-
-    if (callState.participants.size === 0) {
-      const wasAnswered = hasCallBeenAnswered(callState);
-      const shouldEmitMissed =
-        !wasAnswered && String(callState.initiatorId) === String(userId);
-
-      if (wasAnswered || shouldEmitMissed) {
-        void emitCallOutcomeForState({
-          conversationId,
-          senderId: callState.initiatorId || userId,
-          callState,
-          outcome: wasAnswered ? "completed" : "missed",
-        });
-      }
-
-      activeCalls.delete(conversationId);
+  socket.on("roi_cuoc_goi", ({ conversationId, userId, callId }, ack) => {
+    const acknowledge = (payload = {}) => {
+      if (typeof ack === "function") ack(payload);
+    };
+    if (!conversationId || !userId) {
+      acknowledge({ ok: false, reason: "missing_payload" });
       return;
     }
 
-    maybeCloseCallWhenOnlyOneLeft(conversationId, userId);
+    removeParticipantFromCall({
+      conversationId,
+      userId,
+      callId,
+      socketToLeave: socket,
+      reason: "left",
+    })
+      .then(acknowledge)
+      .catch((error) => {
+        console.error("Loi roi_cuoc_goi:", error.message);
+        acknowledge({ ok: false, reason: "server_error" });
+      });
   });
 
-  socket.on("tu_choi_goi", async ({ conversationId, userId, callerId }) => {
+  socket.on("tu_choi_goi", async ({ conversationId, callId, userId, callerId }) => {
     if (!conversationId || !userId || !callerId) return;
 
     io.to(`user:${callerId}`).emit("nguoi_dung_tu_choi_goi", {
       conversationId,
+      callId,
       userId,
     });
 
     const callState = activeCalls.get(conversationId);
-
-    // Nếu là nhóm, chỉ đóng modal của người từ chối, không đóng cả phòng
-    if (callState && callState.isGroup) {
-      io.to(`user:${userId}`).emit("ket_thuc_phong_goi", { conversationId, endedBy: userId });
+    if (!callState || !isSameCall(callState, callId)) {
+      io.to(`user:${userId}`).emit("ket_thuc_phong_goi", {
+        conversationId,
+        callId,
+        endedBy: userId,
+        reason: "call_not_found",
+      });
       return;
     }
 
-    if (callState) {
-      await emitCallOutcomeForState({
+    callState.declinedMemberIds?.add(normalizeId(userId));
+    callState.ringingMemberIds?.delete(normalizeId(userId));
+
+    // Nếu là nhóm, chỉ đóng modal của người từ chối, không đóng cả phòng
+    if (callState && callState.isGroup) {
+      io.to(`user:${userId}`).emit("ket_thuc_phong_goi", {
         conversationId,
-        senderId: callState.initiatorId || callerId,
-        callState,
-        outcome: hasCallBeenAnswered(callState) ? "completed" : "missed",
+        callId: callState.callId,
+        endedBy: userId,
+        reason: "declined",
       });
+      return;
     }
 
-    endCallRoom(conversationId, userId);
+    await finishCall({
+      conversationId,
+      callId: callState.callId,
+      endedBy: userId,
+      outcome: hasCallBeenAnswered(callState) ? "completed" : "missed",
+      reason: "declined",
+    });
   });
 
-  socket.on("ket_thuc_goi", async ({ conversationId, userId, callType, wasConnected, durationSeconds }, ack) => {
+  socket.on("ket_thuc_goi", async ({ conversationId, callId, userId, callType, wasConnected, durationSeconds }, ack) => {
     const acknowledge = (payload = {}) => {
       if (typeof ack === "function") {
         ack(payload);
@@ -991,11 +1371,12 @@ io.on("connection", (socket) => {
 
     const endingUserId = userId || socket.data.userId || "";
     const callState = activeCalls.get(conversationId);
-    if (!callState) {
-      console.warn(`[CALL] ket_thuc_goi missing active call: conversationId=${conversationId}, userId=${endingUserId}`);
+    if (!callState || !isSameCall(callState, callId)) {
+      console.warn(`[CALL] ket_thuc_goi missing active call: conversationId=${conversationId}, callId=${callId || ""}, userId=${endingUserId}`);
       const fallbackCreated = await emitFallbackCallOutcomeForMissingState({
         conversationId,
         userId: endingUserId,
+        callId,
         callType,
         wasConnected,
         durationSeconds,
@@ -1008,85 +1389,46 @@ io.on("connection", (socket) => {
     }
 
     console.log(
-      `[CALL] ket_thuc_goi received: conversationId=${conversationId}, userId=${endingUserId}, callType=${callType || callState.callType || ""}, wasConnected=${!!wasConnected}, durationSeconds=${durationSeconds ?? ""}, participants=${callState.participants.size}, answeredAt=${callState.answeredAt || ""}, hadMultipleParticipants=${!!callState.hadMultipleParticipants}`,
+      `[CALL] ket_thuc_goi received: conversationId=${conversationId}, callId=${callState.callId || ""}, userId=${endingUserId}, callType=${callType || callState.callType || ""}, wasConnected=${!!wasConnected}, durationSeconds=${durationSeconds ?? ""}, participants=${callState.participants.size}, answeredAt=${callState.answeredAt || ""}, hadMultipleParticipants=${!!callState.hadMultipleParticipants}`,
     );
 
     // Restore: Nếu là cuộc gọi nhóm, hành động "Kết thúc" của 1 người chỉ là "Rời đi"
     if (callState.isGroup) {
-      callState.participants.delete(endingUserId);
-      socket.leave(`call:${conversationId}`);
-
-      io.to(`call:${conversationId}`).emit("nguoi_dung_roi_goi", {
+      const leaveResult = await removeParticipantFromCall({
         conversationId,
         userId: endingUserId,
-        participants: Array.from(callState.participants),
+        callId: callState.callId,
+        socketToLeave: socket,
+        reason: "left",
       });
-
-      io.to(`conversation:${conversationId}`).emit("cap_nhat_trang_thai_goi_nhom", {
-        conversationId,
-        isCalling: callState.participants.size > 0,
-        participantCount: callState.participants.size,
-      });
-
-      // Cập nhật cho tất cả thành viên để đồng bộ Sidebar
-      if (callState.memberIds) {
-        callState.memberIds.forEach(uid => {
-          io.to(`user:${uid}`).emit("cap_nhat_trang_thai_goi_nhom", {
-            conversationId,
-            isCalling: callState.participants.size > 0,
-            participantCount: callState.participants.size,
-          });
-        });
-      }
-
-      maybeCloseCallWhenOnlyOneLeft(conversationId, endingUserId);
-      acknowledge({ ok: true, mode: "left_group" });
+      acknowledge({ ok: leaveResult.ok, mode: "left_group", callId: leaveResult.callId });
       return;
     }
 
     const outcome =
       hasCallBeenAnswered(callState) || wasConnected || Number(durationSeconds) > 0
         ? "completed"
-        : "missed";
-    await emitCallOutcomeForState({
+        : resolveUnansweredOutcome(callState, endingUserId, "cancelled");
+    const result = await finishCall({
       conversationId,
-      senderId: callState.initiatorId || endingUserId,
-      callState,
+      callId: callState.callId,
+      endedBy: endingUserId || null,
       outcome,
       durationSeconds,
+      reason: outcome,
     });
-
-    endCallRoom(conversationId, endingUserId || null);
-    acknowledge({ ok: true, outcome });
+    acknowledge(result);
     console.log(`Cuoc goi ket thuc tai phong ${conversationId}`);
   });
 
-  const maybeCloseCallWhenOnlyOneLeft = (conversationId, endedBy = null) => {
-    const callState = activeCalls.get(conversationId);
-    if (!callState) return;
-
-    // Đối với cuộc gọi nhóm: Chỉ thực sự kết thúc khi KHÔNG còn ai (size === 0)
-    // Đối với cuộc gọi 1-1: Kết thúc khi chỉ còn 1 người hoặc 0 người
-    const shouldClose = callState.isGroup
-      ? callState.participants.size === 0
-      : callState.participants.size <= 1;
-
-    if (shouldClose) {
-      const outcome = hasCallBeenAnswered(callState) ? "completed" : "missed";
-      void emitCallOutcomeForState({
-        conversationId,
-        senderId: callState.initiatorId || endedBy || "",
-        callState,
-        outcome,
-      });
-      endCallRoom(conversationId, endedBy);
-    }
-  };
-
-  socket.on("trang_thai_camera", ({ conversationId, userId, isCameraOff }) => {
+  socket.on("trang_thai_camera", ({ conversationId, callId, userId, isCameraOff }) => {
     if (!conversationId || !userId) return;
-    io.to(`call:${conversationId}`).emit("thay_doi_trang_thai_camera", {
+    const callState = activeCalls.get(conversationId);
+    if (!callState || !isSameCall(callState, callId)) return;
+
+    io.to(getCallRoomName(callState)).emit("thay_doi_trang_thai_camera", {
       conversationId,
+      callId: callState.callId,
       userId,
       isCameraOff,
     });
@@ -1102,8 +1444,8 @@ io.on("connection", (socket) => {
     const callRoomId = rooms.find(r => r.startsWith("call:"));
 
     if (callRoomId) {
-      console.log(`Socket cua user ${userId} trong phong ${callRoomId} dang ngat ket noi (disconnecting).`);
-      removeUserFromAllCalls(userId);
+      console.log(`Socket cua user ${userId} trong phong ${callRoomId} dang ngat ket noi (disconnecting), doi reconnect grace ${CALL_RECONNECT_GRACE_MS}ms.`);
+      scheduleUserDisconnectFromAllCalls(userId);
     }
   });
 
@@ -1126,8 +1468,8 @@ io.on("connection", (socket) => {
     const activeSockets = await io.in(`user:${userId}`).fetchSockets();
 
     if (activeSockets.length === 0) {
-      console.log(`User ${userId} da ngat ket noi hoan toan. Dang don dep cuoc goi...`);
-      removeUserFromAllCalls(userId);
+      console.log(`User ${userId} da ngat ket noi hoan toan. Len lich don dep cuoc goi sau reconnect grace...`);
+      scheduleUserDisconnectFromAllCalls(userId);
     } else {
       console.log(`User ${userId} ngat ket noi 1 socket, nhung van con ${activeSockets.length} socket khac hoat dong.`);
     }
