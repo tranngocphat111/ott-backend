@@ -23,6 +23,18 @@ const MessageService = require("../services/messageService");
 const messageCacheService = require("../services/messageCacheService");
 const logger = require("../utils/logger");
 const { Readable } = require("stream");
+const { pipeline } = require("stream/promises");
+
+const sanitizeDownloadFileName = (fileName) => {
+  const sanitized =
+    String(fileName || "")
+      .split(/[\\/]/)
+      .pop()
+      ?.replace(/[\r\n"]/g, "_")
+      .trim() || `download-${Date.now()}`;
+
+  return sanitized;
+};
 
 router.get("/media/download", async (req, res) => {
   try {
@@ -43,7 +55,14 @@ router.get("/media/download", async (req, res) => {
       });
     }
 
-    const upstream = await fetch(sourceUrl);
+    let safeSourceUrl;
+    try {
+      safeSourceUrl = new URL(sourceUrl).toString();
+    } catch {
+      safeSourceUrl = encodeURI(sourceUrl);
+    }
+
+    const upstream = await fetch(safeSourceUrl);
     if (!upstream.ok) {
       return res.status(upstream.status).json({
         success: false,
@@ -51,10 +70,10 @@ router.get("/media/download", async (req, res) => {
       });
     }
 
-    const inferredName =
+    const inferredName = sanitizeDownloadFileName(
       String(fileName || "").trim() ||
-      sourceUrl.split("/").pop()?.split("?")[0] ||
-      `download-${Date.now()}`;
+        safeSourceUrl.split("/").pop()?.split("?")[0],
+    );
 
     const contentType =
       upstream.headers.get("content-type") || "application/octet-stream";
@@ -62,7 +81,7 @@ router.get("/media/download", async (req, res) => {
     res.setHeader("Content-Type", contentType);
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="${encodeURIComponent(inferredName)}"`,
+      `attachment; filename="${encodeURIComponent(inferredName)}"; filename*=UTF-8''${encodeURIComponent(inferredName)}`,
     );
     const contentLength = upstream.headers.get("content-length");
     if (contentLength) {
@@ -71,7 +90,13 @@ router.get("/media/download", async (req, res) => {
 
     res.status(200);
     if (upstream.body) {
-      return Readable.fromWeb(upstream.body).pipe(res);
+      if (typeof Readable.fromWeb === "function") {
+        await pipeline(Readable.fromWeb(upstream.body), res);
+        return undefined;
+      }
+
+      const buffer = Buffer.from(await upstream.arrayBuffer());
+      return res.end(buffer);
     }
 
     return res.end();
