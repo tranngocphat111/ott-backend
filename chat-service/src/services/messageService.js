@@ -39,7 +39,7 @@ const MODERATION_MIN_CONFIDENCE = Number(
   process.env.REKOGNITION_MIN_CONFIDENCE || 65,
 );
 const MODERATION_FAIL_CLOSED =
-  String(process.env.MODERATION_FAIL_CLOSED || "true").toLowerCase() !== "false";
+  String(process.env.MODERATION_FAIL_CLOSED || "false").toLowerCase() === "true";
 const rekognitionClient = new RekognitionClient({
   region: process.env.AWS_REGION || "ap-southeast-1",
   credentials: {
