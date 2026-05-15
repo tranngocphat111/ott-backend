@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: moderation-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/moderation_service}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+
+server:
+  port: ${SERVER_PORT:8087}
+
+aws:
+  region: ${AWS_REGION:ap-southeast-1}
+
+moderation:
+  rabbitmq:
+    exchange: ${MODERATION_RABBITMQ_EXCHANGE:moderation.events}
+    queue:
+      review-requests: ${MODERATION_REVIEW_REQUEST_QUEUE:moderation.review.requests.queue}
+    routing-key:
+      violation-detected: ${MODERATION_VIOLATION_DETECTED_ROUTING_KEY:moderation.violation.detected}
