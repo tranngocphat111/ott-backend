@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import mediaservice.dtos.responses.ContentAccessControlResponse;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -18,6 +19,7 @@ public class StoryResponse extends BaseContentResponse {
     private LocalDateTime expireAt;
     private List<StoryItemResponse> storyItems;
     private List<MusicResponse> musics;
+    private List<ContentAccessControlResponse> accessControls;
     private int totalViews;
 }
 

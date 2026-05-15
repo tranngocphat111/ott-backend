@@ -9,7 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 
-@Mapper(componentModel = "spring", uses = { StoryItemMapper.class }, unmappedTargetPolicy = ReportingPolicy.IGNORE)
+@Mapper(componentModel = "spring", uses = { StoryItemMapper.class, ContentAccessControlMapper.class }, unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public abstract class StoryMapper {
 
     @Autowired
@@ -44,7 +44,7 @@ public abstract class StoryMapper {
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "hashTags", ignore = true)
-    @Mapping(target = "storyItems", source = "storyItems", qualifiedByName = "toEntitySet")
+    @Mapping(target = "storyItems", ignore = true)
     @Mapping(target = "storyMusics", ignore = true)
     public abstract void updateEntity(StoryRequest request, @MappingTarget Story story);
 }
