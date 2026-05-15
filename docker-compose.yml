@@ -1,25 +1,6 @@
 version: "3.8"
 
 services:
-  analytic-postgres:
-    image: postgres:15-alpine
-    container_name: analytic-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${ANALYTIC_DB_NAME:-admin_analytic_db}
-      POSTGRES_USER: ${ANALYTIC_DB_USERNAME:-postgres}
-      POSTGRES_PASSWORD: ${ANALYTIC_DB_PASSWORD:-postgres}
-    ports:
-      - "5434:5432"
-    volumes:
-      - analytic_postgres_data:/var/lib/postgresql/data
-    networks:
-      - ott-network
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${ANALYTIC_DB_USERNAME:-postgres} -d ${ANALYTIC_DB_NAME:-admin_analytic_db}" ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
 
   redis:
     image: redis:7-alpine
@@ -164,27 +145,25 @@ services:
         condition: service_healthy
 
   moderation-service:
-  build: ./moderation-service
-  container_name: ott-moderation
-  restart: unless-stopped
-  env_file: .env
-  ports:
-    - "8087:8087"
-  environment:
-    SPRING_DATASOURCE_URL: jdbc:postgresql://moderation-postgres:5432/${MODERATION_DB_NAME:-moderation_db}
-    SPRING_DATASOURCE_USERNAME: ${MODERATION_DB_USERNAME:-postgres}
-    SPRING_DATASOURCE_PASSWORD: ${MODERATION_DB_PASSWORD:-postgres}
-    SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
-    SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
-    SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
-    SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-rabbit123}
-  networks:
-    - ott-network
-  depends_on:
-    rabbitmq:
-      condition: service_healthy
-    moderation-postgres:
-      condition: service_healthy
+    build: ./moderation-service
+    container_name: ott-moderation
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8087:8087"
+    environment:
+      SPRING_DATASOURCE_URL: ${MODERATION_DB_URL}
+      SPRING_DATASOURCE_USERNAME: ${MODERATION_DB_USERNAME:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${MODERATION_DB_PASSWORD:-postgres}
+      SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+      SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-rabbit123}
+    networks:
+      - ott-network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
 
   api-gateway:
     build: ./api-gateway
