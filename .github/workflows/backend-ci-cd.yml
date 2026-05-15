@@ -266,10 +266,10 @@ jobs:
           done
 
           if [ -n "$REPO_DIR" ]; then
-            git config --global --add safe.directory "$REPO_DIR" || true
-            git -C "$REPO_DIR" fetch origin main
-            git -C "$REPO_DIR" checkout main
-            git -C "$REPO_DIR" pull --ff-only origin main
+            export HOME="${HOME:-/root}"
+            git -c safe.directory="$REPO_DIR" -C "$REPO_DIR" fetch origin main
+            git -c safe.directory="$REPO_DIR" -C "$REPO_DIR" checkout main
+            git -c safe.directory="$REPO_DIR" -C "$REPO_DIR" pull --ff-only origin main
 
             sudo cp "$REPO_DIR/deploy/docker-compose.prod.yml" "$APP_DIR/docker-compose.prod.yml"
             sudo cp "$REPO_DIR/deploy/deploy-service.sh" "$APP_DIR/deploy-service.sh"

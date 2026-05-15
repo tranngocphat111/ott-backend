@@ -3,8 +3,10 @@ package mediaservice.services;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import mediaservice.dtos.messages.MediaUploadJob;
+import mediaservice.repositories.MediaRepository;
 import mediaservice.realtime.MediaRealtimePublisher;
 import mediaservice.realtime.MediaRealtimeUpdate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +22,11 @@ public class MediaUploadJobConsumer {
 
     private final S3Service s3Service;
     private final MediaRealtimePublisher mediaRealtimePublisher;
+    private final MediaModerationPublisher mediaModerationPublisher;
+    private final MediaRepository mediaRepository;
+
+    @Value("${aws.social.s3.bucket-name}")
+    private String bucketName;
 
     @RabbitListener(queues = "${media.upload.queue}")
     public void handleUpload(MediaUploadJob job) throws Exception {
@@ -36,6 +43,7 @@ public class MediaUploadJobConsumer {
 
         try {
             uploadToS3(job, inputPath);
+            publishImageForReviewIfNeeded(job);
             mediaRealtimePublisher.publish(
                     job.getContentTargetType(),
                     job.getContentId(),
@@ -64,6 +72,37 @@ public class MediaUploadJobConsumer {
         try (InputStream inputStream = Files.newInputStream(inputPath)) {
             s3Service.uploadFile(inputStream, fileName, contentType, folder);
         }
+    }
+
+    private void publishImageForReviewIfNeeded(MediaUploadJob job) {
+        if (!isPostImageUpload(job)) {
+            return;
+        }
+
+        String uploaderId = resolveUploaderId(job.getMediaId());
+        mediaModerationPublisher.publishImageForReview(
+                job.getMediaId(),
+                uploaderId,
+                bucketName,
+                job.getS3Key());
+    }
+
+    private boolean isPostImageUpload(MediaUploadJob job) {
+        if (job == null) {
+            return false;
+        }
+        return "POST".equalsIgnoreCase(job.getContentTargetType())
+                && job.getContentType() != null
+                && job.getContentType().toLowerCase().startsWith("image/");
+    }
+
+    private String resolveUploaderId(String mediaId) {
+        if (mediaId == null || mediaId.isBlank()) {
+            return null;
+        }
+
+        return mediaRepository.findUploaderIdByMediaId(mediaId)
+                .orElse(null);
     }
 
     private void deleteQuietly(Path path) {
