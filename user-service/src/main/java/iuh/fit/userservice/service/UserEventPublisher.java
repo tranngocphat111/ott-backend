@@ -2,6 +2,7 @@ package iuh.fit.userservice.service;
 
 import iuh.fit.userservice.config.RabbitMQConfig;
 import iuh.fit.userservice.dto.event.UserCreatedEvent;
+import iuh.fit.userservice.dto.event.UserStatusChangedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -53,6 +54,20 @@ public class UserEventPublisher {
             log.info("Published user.logout event for userId={}, action={}", event.getUserId(), event.getAction());
         } catch (Exception e) {
             log.error("Failed to publish user.logout event for userId={}: {}", 
+                    event.getUserId(), e.getMessage());
+        }
+    }
+
+    public void publishUserStatusChanged(UserStatusChangedEvent event) {
+        try {
+            rabbitTemplate.convertAndSend(
+                    rabbitMQConfig.userEventsExchange,
+                    rabbitMQConfig.userStatusChangedRoutingKey,
+                    event
+            );
+            log.info("Published user.status.changed event for userId={}", event.getUserId());
+        } catch (Exception e) {
+            log.error("Failed to publish user.status.changed event for userId={}: {}",
                     event.getUserId(), e.getMessage());
         }
     }

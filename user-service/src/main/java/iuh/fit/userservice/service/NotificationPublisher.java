@@ -33,8 +33,11 @@ public class NotificationPublisher {
     @Value("${internal.api.key}")
     private String internalApiKey;
 
-    @Value("${analytics.queue.user-registered:analytics.user.registered.queue}")
-    private String userRegisteredAnalyticsQueue;
+    @Value("${rabbitmq.exchange.user-events:user.events}")
+    private String userEventsExchange;
+
+    @Value("${rabbitmq.routing-key.user-registered:user.registered}")
+    private String userRegisteredRoutingKey;
 
     @Async
     public void sendOtpEmail(String toEmail, String toName, String otpCode,
@@ -147,7 +150,7 @@ public class NotificationPublisher {
             event.put("register_method", registerMethod);
             event.put("timestamp", Instant.now());
 
-            rabbitTemplate.convertAndSend(userRegisteredAnalyticsQueue, event);
+            rabbitTemplate.convertAndSend(userEventsExchange, userRegisteredRoutingKey, event);
             log.info("User registered analytics event published for userId={}, method={}", userId, registerMethod);
         } catch (Exception e) {
             // Do not break registration flow if analytics pipeline is unavailable

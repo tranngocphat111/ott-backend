@@ -10,7 +10,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import iuh.fit.se.analyticservice.config.RabbitMqConfig;
 import iuh.fit.se.analyticservice.dto.UserRegisteredEvent;
 import iuh.fit.se.analyticservice.entity.RawUserEvent;
 import iuh.fit.se.analyticservice.repository.RawUserEventRepository;
@@ -25,7 +24,7 @@ public class UserRegisteredEventListener {
     private final RawUserEventRepository rawUserEventRepository;
     private final ObjectMapper objectMapper;
 
-    @RabbitListener(queues = RabbitMqConfig.USER_REGISTERED_QUEUE)
+    @RabbitListener(queues = "#{@userRegisteredQueue.name}")
     public void handleUserRegisteredEvent(Message message) {
         String payload = new String(message.getBody(), StandardCharsets.UTF_8);
         try {
