@@ -699,11 +699,12 @@ const ensureCallState = (conversationId, callType, memberIds = [], isGroup = fal
   if (!activeCalls.has(conversationId)) {
     const startedAt = new Date().toISOString();
     const callId = createCallId();
+    const effectiveCallType = isGroup ? "video" : normalizeCallType(callType);
     activeCalls.set(conversationId, {
       conversationId,
       callId,
       mediaRoomName: `call-${callId}`,
-      callType: normalizeCallType(callType),
+      callType: effectiveCallType,
       status: "ringing",
       participants: new Set(),
       memberIds: new Set(memberIds.map((id) => normalizeId(id)).filter(Boolean)), // Lưu danh sách member để signaling cancel
@@ -720,7 +721,9 @@ const ensureCallState = (conversationId, callType, memberIds = [], isGroup = fal
     });
   } else if (isGroup) {
     // Cập nhật trạng thái group nếu thông tin mới xác nhận là group
-    activeCalls.get(conversationId).isGroup = true;
+    const callState = activeCalls.get(conversationId);
+    callState.isGroup = true;
+    callState.callType = "video";
   }
   return activeCalls.get(conversationId);
 };
@@ -984,6 +987,7 @@ io.on("connection", (socket) => {
 
       const conversation = await Conversation.findById(conversationId);
       const isGroup = conversation && conversation.type === "group";
+      const effectiveCallType = isGroup ? "video" : normalizeCallType(callType);
       const normalizedCallerId = normalizeId(callerId);
       const targetUserIds = memberIds.filter((userId) => userId && userId !== normalizedCallerId);
       const busyTargets = targetUserIds.filter((userId) =>
@@ -996,9 +1000,9 @@ io.on("connection", (socket) => {
             conversationId,
             senderId: callerId,
             type: "call_missed",
-            content: `Cuộc gọi ${normalizeCallType(callType) === "video" ? "video" : "thoại"} nhỡ (Người nhận đang bận)`,
+            content: `Cuộc gọi ${effectiveCallType === "video" ? "video" : "thoại"} nhỡ (Người nhận đang bận)`,
             systemMeta: {
-              callType: normalizeCallType(callType),
+              callType: effectiveCallType,
               outcome: "busy",
               reason: "busy",
             },
@@ -1013,7 +1017,7 @@ io.on("connection", (socket) => {
         return;
       }
 
-      const callState = ensureCallState(conversationId, callType, memberIdsFromDb, isGroup);
+      const callState = ensureCallState(conversationId, effectiveCallType, memberIdsFromDb, isGroup);
       callState.isGroup = !!isGroup;
 
       if (!callState.initiatorId) {
@@ -1130,7 +1134,9 @@ io.on("connection", (socket) => {
       }
 
       callState.isGroup = callState.isGroup || !!isGroup;
-      callState.callType = normalizeCallType(callState.callType || callType);
+      callState.callType = callState.isGroup
+        ? "video"
+        : normalizeCallType(callState.callType || callType);
       callState.memberIds = new Set([
         ...Array.from(callState.memberIds || []),
         ...memberIdsFromDb,
