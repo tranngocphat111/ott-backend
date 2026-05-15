@@ -42,3 +42,5 @@ deploy/*.secret
 *.md
 !AWS_MICROSERVICE_DEPLOY_CICD_GUIDE.md
 *.mermaid
+*.map
+/scripts

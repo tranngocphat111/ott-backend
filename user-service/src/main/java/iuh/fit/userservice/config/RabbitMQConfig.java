@@ -34,6 +34,9 @@ public class RabbitMQConfig {
     @Value("${rabbitmq.queue.user-updated:user.updated.queue}")
     public String userUpdatedQueue;
 
+    @Value("${rabbitmq.routing-key.user-status-changed}")
+    public String userStatusChangedRoutingKey;
+
     @Bean
     public MessageConverter jsonMessageConverter() {
         Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter();

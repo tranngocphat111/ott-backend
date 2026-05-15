@@ -39,8 +39,11 @@ public class NotificationPublisher {
     @Value("${internal.api-key}")
     private String internalApiKey;
 
-    @Value("${analytics.queue.user-login:analytics.user.login.queue}")
-    private String userLoginAnalyticsQueue;
+    @Value("${rabbitmq.exchange.user-events:user.events}")
+    private String userEventsExchange;
+
+    @Value("${rabbitmq.routing-key.user-login:user.login}")
+    private String userLoginRoutingKey;
 
     public String getNotificationServiceUrl() {
         return notificationServiceUrl;
@@ -138,7 +141,7 @@ public class NotificationPublisher {
             event.put("login_method", loginMethod);
             event.put("timestamp", Instant.now());
 
-            rabbitTemplate.convertAndSend(userLoginAnalyticsQueue, event);
+            rabbitTemplate.convertAndSend(userEventsExchange, userLoginRoutingKey, event);
             log.info("User login analytics event published for userId={}, method={}", userId, loginMethod);
         } catch (Exception e) {
             // Do not break login flow if analytics is unavailable

@@ -14,6 +14,7 @@ const MessageService = require("./services/messageService");
 const { initAllConsumers } = require("./consumers");
 const Conversation = require("./models/Conversation");
 const Message = require("./models/Message");
+const User = require("./models/User");
 const livekitService = require("./services/livekitService");
 const { activeCalls } = require("./services/callStateService");
 const presenceService = require("./services/presenceService");
@@ -282,6 +283,44 @@ const createCallNotificationMessage = async ({
   }
 };
 
+const getUserDisplayName = async (userId) => {
+  const normalizedUserId = normalizeId(userId);
+  if (!normalizedUserId) return "Ai đó";
+
+  try {
+    const user = await User.findOne({ user_id: normalizedUserId })
+      .select("name")
+      .lean();
+    return String(user?.name || "").trim() || "Ai đó";
+  } catch (error) {
+    console.error("Khong the lay ten user cho thong bao cuoc goi:", error.message);
+    return "Ai đó";
+  }
+};
+
+const createCallJoinNotificationMessage = async ({
+  conversationId,
+  userId,
+  callState,
+}) => {
+  if (!conversationId || !userId || !callState?.isGroup) return null;
+
+  const displayName = await getUserDisplayName(userId);
+  return createCallNotificationMessage({
+    conversationId,
+    senderId: userId,
+    type: "call_join",
+    content: `${displayName} đã tham gia cuộc gọi`,
+    systemMeta: {
+      callId: normalizeId(callState.callId) || null,
+      callType: callState.callType || "video",
+      action: "joined_call",
+      userId: normalizeId(userId),
+      joinedAt: new Date().toISOString(),
+    },
+  });
+};
+
 const getRecentCallOutcomeMessage = async (conversationId, callId = null) => {
   if (!conversationId) return null;
 
@@ -372,8 +411,7 @@ const scheduleNoAnswerTimeout = ({ conversationId, callerId, callType }) => {
 
     // Tự động "từ chối" cho những người chưa bắt máy sau 30s
     const ringingMemberIds =
-      currentCallState.ringingMemberIds &&
-      currentCallState.ringingMemberIds.size > 0
+      currentCallState.ringingMemberIds instanceof Set
         ? currentCallState.ringingMemberIds
         : currentCallState.memberIds;
     if (ringingMemberIds) {
@@ -728,21 +766,28 @@ const ensureCallState = (conversationId, callType, memberIds = [], isGroup = fal
   return activeCalls.get(conversationId);
 };
 
-const removeUserFromAllCalls = (userId, reason = "disconnect") => {
+const removeUserFromAllCalls = async (userId, reason = "disconnect") => {
   const normalizedUserId = normalizeId(userId);
   if (!normalizedUserId) return;
 
+  const removals = [];
   for (const [conversationId, callState] of activeCalls.entries()) {
     if (!callState.participants.has(normalizedUserId)) {
       continue;
     }
 
-    void removeParticipantFromCall({
-      conversationId,
-      userId: normalizedUserId,
-      callId: callState.callId,
-      reason,
-    });
+    removals.push(
+      removeParticipantFromCall({
+        conversationId,
+        userId: normalizedUserId,
+        callId: callState.callId,
+        reason,
+      }),
+    );
+  }
+
+  if (removals.length > 0) {
+    await Promise.allSettled(removals);
   }
 };
 
@@ -908,6 +953,24 @@ io.on("connection", (socket) => {
   socket.on("kiem_tra_ban_goi", async ({ conversationId, callerId }) => {
     if (!conversationId || !callerId) return;
     try {
+      if (isUserBusyInAnotherCall(callerId, conversationId)) {
+        io.to(`user:${callerId}`).emit("nguoi_dung_ban_goi", {
+          conversationId,
+          targetUserId: callerId,
+          reason: "caller_busy",
+        });
+        return;
+      }
+
+      const conversation = await Conversation.findById(conversationId)
+        .select("type")
+        .lean();
+
+      if (conversation?.type === "group") {
+        io.to(`user:${callerId}`).emit("san_sang_de_goi", { conversationId });
+        return;
+      }
+
       const participants = await ParticipantService.getParticipants(conversationId);
       const targetUserIds = participants
         .map((p) => p.user_id)
@@ -989,10 +1052,23 @@ io.on("connection", (socket) => {
       const isGroup = conversation && conversation.type === "group";
       const effectiveCallType = isGroup ? "video" : normalizeCallType(callType);
       const normalizedCallerId = normalizeId(callerId);
+      if (isUserBusyInAnotherCall(normalizedCallerId, conversationId)) {
+        io.to(`user:${callerId}`).emit("nguoi_dung_ban_goi", {
+          conversationId,
+          targetUserId: normalizedCallerId,
+          reason: "caller_busy",
+        });
+        acknowledge({ ok: false, reason: "caller_busy", targetUserId: normalizedCallerId });
+        return;
+      }
+
       const targetUserIds = memberIds.filter((userId) => userId && userId !== normalizedCallerId);
       const busyTargets = targetUserIds.filter((userId) =>
         isUserBusyInAnotherCall(userId, conversationId),
       );
+      const availableTargetUserIds = isGroup
+        ? targetUserIds.filter((userId) => !busyTargets.includes(userId))
+        : targetUserIds;
 
       if (!isGroup && busyTargets.length > 0) {
         if (claimCallOutcome(`busy:${conversationId}:${callerId}`)) {
@@ -1024,7 +1100,7 @@ io.on("connection", (socket) => {
         callState.initiatorId = normalizedCallerId;
       }
       callState.status = "ringing";
-      callState.ringingMemberIds = new Set(targetUserIds);
+      callState.ringingMemberIds = new Set(availableTargetUserIds);
       callState.participants.add(normalizedCallerId);
 
       socket.join(getCallRoomName(callState));
@@ -1049,16 +1125,8 @@ io.on("connection", (socket) => {
         emitGroupCallUpdate(callState);
       }
 
-      // Lọc bỏ người gọi khỏi danh sách nhận thông báo
-      targetUserIds.forEach((userId) => {
-        if (isUserBusyInAnotherCall(userId, conversationId)) {
-          io.to(`user:${callerId}`).emit("nguoi_dung_ban_goi", {
-            conversationId,
-            targetUserId: userId,
-          });
-          return;
-        }
-
+      // Lọc bỏ người gọi và người đang bận ở cuộc gọi khác khỏi danh sách nhận thông báo.
+      availableTargetUserIds.forEach((userId) => {
         io.to(`user:${userId}`).emit("cuoc_goi_den", {
           conversationId,
           callId: callState.callId,
@@ -1142,6 +1210,7 @@ io.on("connection", (socket) => {
         ...memberIdsFromDb,
       ]);
       const normalizedJoinUserId = normalizeId(userId);
+      const wasAlreadyParticipant = callState.participants.has(normalizedJoinUserId);
       clearParticipantDisconnectTimer(callState, normalizedJoinUserId);
       callState.ringingMemberIds?.delete(normalizedJoinUserId);
       callState.declinedMemberIds?.delete(normalizedJoinUserId);
@@ -1196,6 +1265,14 @@ io.on("connection", (socket) => {
         });
 
         emitGroupCallUpdate(callState);
+
+        if (!wasAlreadyParticipant) {
+          void createCallJoinNotificationMessage({
+            conversationId,
+            userId,
+            callState,
+          });
+        }
       }
 
       acknowledge({ ok: true, ...joinedPayload });
@@ -1259,10 +1336,17 @@ io.on("connection", (socket) => {
       const callState = activeCalls.get(convIdStr);
       if (!callState || !isSameCall(callState, callId)) return;
 
-      targetUserIds.forEach(userId => {
-        const userIdStr = String(userId);
+      const availableTargetUserIds = Array.from(new Set(
+        targetUserIds
+          .map((userId) => normalizeId(userId))
+          .filter(Boolean),
+      )).filter((userIdStr) => {
         // Không mời người đã có trong cuộc gọi
-        if (callState.participants.has(userIdStr)) return;
+        if (callState.participants.has(userIdStr)) return false;
+        return !isUserBusyInAnotherCall(userIdStr, convIdStr);
+      });
+
+      availableTargetUserIds.forEach(userIdStr => {
 
         // Thêm vào memberIds nếu chưa có (để signaling cancel sau này)
         if (callState.memberIds) {
@@ -1289,6 +1373,26 @@ io.on("connection", (socket) => {
           buildGroupCallUpdatePayload(callState),
         );
       });
+    });
+
+    socket.on("dang_xuat", async ({ userId }, ack) => {
+      const acknowledge = (payload = {}) => {
+        if (typeof ack === "function") ack(payload);
+      };
+
+      const logoutUserId = normalizeId(userId || socket.data.userId);
+      if (!logoutUserId) {
+        acknowledge({ ok: false, reason: "missing_user" });
+        return;
+      }
+
+      try {
+        await removeUserFromAllCalls(logoutUserId, "logout");
+        acknowledge({ ok: true });
+      } catch (error) {
+        console.error("Loi don dep cuoc goi khi dang xuat:", error.message);
+        acknowledge({ ok: false, reason: "server_error" });
+      }
     });
 
     socket.on("chap_nhan_goi", ({ conversationId, userId, callId }) => {

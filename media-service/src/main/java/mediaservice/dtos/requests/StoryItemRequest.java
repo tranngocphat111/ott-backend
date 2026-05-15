@@ -9,6 +9,7 @@ import mediaservice.models.enums.StoryItemType;
 @AllArgsConstructor
 @NoArgsConstructor
 public class StoryItemRequest {
+    private String id;
     private StoryItemType type;  // IMAGE_ITEM, VIDEO_ITEM, TEXT_ITEM
     private ImageItemRequest imageItem;
     private VideoItemRequest videoItem;

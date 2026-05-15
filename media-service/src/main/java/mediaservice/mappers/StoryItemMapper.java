@@ -45,6 +45,9 @@ public abstract class StoryItemMapper {
             item.setScale(request.getScale());
             item.setStartTime(request.getStartTime());
             item.setEndTime(request.getEndTime());
+            if (request.getId() != null) {
+                item.setId(request.getId());
+            }
         }
         return item;
     }
@@ -71,6 +74,7 @@ public abstract class StoryItemMapper {
         response.setScale(storyItem.getScale());
         response.setStartTime(storyItem.getStartTime());
         response.setEndTime(storyItem.getEndTime());
+        response.setId(storyItem.getId());
         
         return response;
     }
