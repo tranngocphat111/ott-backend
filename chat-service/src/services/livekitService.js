@@ -4,9 +4,10 @@ const { AccessToken } = require("livekit-server-sdk");
  * Generate a token for a user to join a LiveKit room.
  * @param {string} roomName - The name of the room (e.g., conversationId).
  * @param {string} participantName - The user's name or ID.
+ * @param {{ name?: string, metadata?: string }} participantInfo - Display metadata for other participants.
  * @returns {string} The generated token.
  */
-exports.generateToken = async (roomName, participantName) => {
+exports.generateToken = async (roomName, participantName, participantInfo = {}) => {
   const apiKey = process.env.LIVEKIT_API_KEY?.trim();
   const apiSecret = process.env.LIVEKIT_API_SECRET?.trim();
 
@@ -21,6 +22,8 @@ exports.generateToken = async (roomName, participantName) => {
 
   const at = new AccessToken(apiKey, apiSecret, {
     identity: String(participantName),
+    name: String(participantInfo.name || "").trim() || undefined,
+    metadata: String(participantInfo.metadata || "").trim() || undefined,
   });
 
   at.addGrant({
