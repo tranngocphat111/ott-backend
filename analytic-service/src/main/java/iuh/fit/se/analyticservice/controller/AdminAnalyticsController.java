@@ -21,7 +21,7 @@ import iuh.fit.se.analyticservice.service.AdminAuditLogService;
 
 @RestController
 @RequestMapping("/api/v1/admin/analytics")
-@PreAuthorize("hasAnyRole('SUPER_ADMIN','ANALYST')")
+@PreAuthorize("hasRole('ADMIN')")
 public class AdminAnalyticsController {
 
     private final AdminAnalyticsService adminAnalyticsService;
@@ -79,7 +79,7 @@ public class AdminAnalyticsController {
 
     // 5) Audit logs
     @GetMapping("/audit-logs")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public PaginatedAuditLogsResponse getAuditLogs(
             @RequestParam(name = "page", defaultValue = "0") int page,
             @RequestParam(name = "size", defaultValue = "10") int size) {

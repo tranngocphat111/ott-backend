@@ -105,38 +105,34 @@ public class AdminAnalyticsService {
         List<RecentNewUserDTO> result = new ArrayList<>();
         String normalizedQuery = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
 
-        try {
-            for (RawUserEvent event : recentEvents) {
-                UserDetailDTO user = userServiceClient.getUserById(event.getUserId());
-                RecentNewUserDTO dto = new RecentNewUserDTO(
-                        event.getUserId(),
-                        user != null ? user.getEmail() : null,
-                        user != null ? user.getFullName() : null
-                );
-
-                if (matchesQuery(dto, normalizedQuery)) {
-                    result.add(dto);
-                }
-            }
-
-            int safeSize = size <= 0 ? 10 : Math.min(size, 100);
-            int safePage = Math.max(page, 0);
-            int totalElements = result.size();
-            int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / safeSize);
-            int fromIndex = Math.min(safePage * safeSize, totalElements);
-            int toIndex = Math.min(fromIndex + safeSize, totalElements);
-
-            return new PaginatedRecentUsersResponse(
-                    result.subList(fromIndex, toIndex),
-                    totalElements,
-                    safePage,
-                    safeSize,
-                    totalPages
+        for (RawUserEvent event : recentEvents) {
+            UserDetailDTO user = fetchUserDetail(event.getUserId());
+            RecentNewUserDTO dto = new RecentNewUserDTO(
+                    event.getUserId(),
+                    user != null ? user.getEmail() : null,
+                    user != null ? user.getFullName() : null
             );
-        } catch (Exception ex) {
-            log.warn("user-service unavailable, return empty recent users list", ex);
-            return new PaginatedRecentUsersResponse(new ArrayList<>(), 0, 0, size <= 0 ? 10 : size, 0);
+
+            if (matchesQuery(dto, normalizedQuery)) {
+                result.add(dto);
+            }
         }
+
+        int safeSize = size <= 0 ? 10 : Math.min(size, 100);
+        int safePage = Math.max(page, 0);
+        int totalElements = result.size();
+        int totalPages = totalElements == 0 ? 0 : (int) Math.ceil((double) totalElements / safeSize);
+        long requestedOffset = (long) safePage * safeSize;
+        int fromIndex = (int) Math.min(requestedOffset, totalElements);
+        int toIndex = Math.min(fromIndex + safeSize, totalElements);
+
+        return new PaginatedRecentUsersResponse(
+                result.subList(fromIndex, toIndex),
+                totalElements,
+                safePage,
+                safeSize,
+                totalPages
+        );
     }
 
     public MessageTypesResponse getMessageTypes(String timeRange) {
@@ -286,6 +282,16 @@ public class AdminAnalyticsService {
         return value != null && value.toLowerCase(Locale.ROOT).contains(query);
     }
 
+    private UserDetailDTO fetchUserDetail(String userId) {
+        try {
+            return userServiceClient.getUserById(userId);
+        } catch (RuntimeException ex) {
+            log.warn("user-service unavailable for userId={}, returning analytics event without profile details",
+                    userId, ex);
+            return null;
+        }
+    }
+
     private List<LocalDate> buildDateRange(Instant from, java.util.Set<LocalDate> firstDates, java.util.Set<LocalDate> secondDates) {
         TreeSet<LocalDate> allDates = new TreeSet<>();
         allDates.addAll(firstDates);
@@ -338,7 +344,7 @@ public class AdminAnalyticsService {
             case "last7days", "7d", "last_7_days" -> today.minusDays(6).atStartOfDay().toInstant(ZoneOffset.UTC);
             case "last30days", "30d", "last_30_days" -> today.minusDays(29).atStartOfDay().toInstant(ZoneOffset.UTC);
             case "all", "alltime", "all_time" -> null;
-            default -> null;
+            default -> throw new IllegalArgumentException("Unsupported timeRange: " + timeRange);
         };
     }
 }

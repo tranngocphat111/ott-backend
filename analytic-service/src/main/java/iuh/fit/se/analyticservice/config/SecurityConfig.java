@@ -1,5 +1,9 @@
 package iuh.fit.se.analyticservice.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import iuh.fit.se.analyticservice.dto.ApiErrorResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,6 +22,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtGra
 import org.springframework.security.web.SecurityFilterChain;
 
 import javax.crypto.spec.SecretKeySpec;
+import java.io.IOException;
+import java.time.Instant;
 
 @Configuration
 @EnableWebSecurity
@@ -28,13 +34,21 @@ public class SecurityConfig {
     private String jwtSecret;
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, ObjectMapper objectMapper) throws Exception {
         http
                 .cors(org.springframework.security.config.Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .anyRequest().authenticated()
+                )
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((request, response, authException) ->
+                                writeErrorResponse(response, objectMapper, HttpStatus.UNAUTHORIZED,
+                                        "Authentication is required", request))
+                        .accessDeniedHandler((request, response, accessDeniedException) ->
+                                writeErrorResponse(response, objectMapper, HttpStatus.FORBIDDEN,
+                                        "Access is denied", request))
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt
@@ -44,6 +58,23 @@ public class SecurityConfig {
                 );
 
         return http.build();
+    }
+
+    private void writeErrorResponse(
+            HttpServletResponse response,
+            ObjectMapper objectMapper,
+            HttpStatus status,
+            String message,
+            HttpServletRequest request) throws IOException {
+        response.setStatus(status.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        objectMapper.writeValue(response.getOutputStream(), new ApiErrorResponse(
+                Instant.now(),
+                status.value(),
+                status.getReasonPhrase(),
+                message,
+                request.getRequestURI()
+        ));
     }
 
     @Bean

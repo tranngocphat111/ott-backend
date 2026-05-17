@@ -257,6 +257,8 @@ services:
       NOTIF_SERVICE_URL: http://notification-service:8083
       MEDIA_SERVICE_URL: http://media-service:8090
       CHAT_SERVICE_URL: http://chat-service:5000
+      ANALYTIC_SERVICE_URL: http://analytic-service:8092
+      FRONTEND_URL_DEPLOYED: ${FRONTEND_URL_DEPLOYED:-https://your-frontend-domain.example.com}
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
@@ -265,6 +267,7 @@ services:
       - notification-service
       - media-service
       - chat-service
+      - analytic-service
     networks:
       - ott-network
 
