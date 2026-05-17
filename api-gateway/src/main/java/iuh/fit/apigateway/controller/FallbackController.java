@@ -51,4 +51,14 @@ public class FallbackController {
                         .message("MEDIA_SERVICE_UNAVAILABLE")
                         .build());
     }
+
+    @RequestMapping("/analytic")
+    public ResponseEntity<ApiResponse<Void>> analyticFallback() {
+        log.warn("Circuit breaker triggered for analytic-service");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.<Void>builder()
+                        .code(5004)
+                        .message("ANALYTIC_SERVICE_UNAVAILABLE")
+                        .build());
+    }
 }
