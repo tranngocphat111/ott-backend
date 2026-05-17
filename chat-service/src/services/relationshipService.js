@@ -11,6 +11,50 @@ exports.getRelationshipBetween = async (userId1, userId2) => {
   });
 };
 
+const ensureFriendRequestSentMessage = async (
+  relationship,
+  requesterId,
+  receiverId,
+  { reuseExisting = false } = {},
+) => {
+  const ConversationService = require("./conversationService");
+  const MessageService = require("./messageService");
+  const Message = require("../models/Message");
+
+  const conversation = await ConversationService.findOrCreatePrivateConversation(
+    requesterId,
+    receiverId,
+  );
+  const relationshipId = relationship._id.toString();
+
+  let message = null;
+  if (reuseExisting) {
+    message = await Message.findOne({
+      conversation_id: conversation._id,
+      type: "system_friend_request",
+      "system_meta.action": "friend_request_sent",
+      "system_meta.relationship_id": relationshipId,
+    }).lean();
+  }
+
+  if (!message) {
+    message = await MessageService.sendMessage({
+      conversationId: conversation._id,
+      senderId: requesterId,
+      content: "Đã gửi lời mời kết bạn",
+      type: "system_friend_request",
+      systemMeta: {
+        action: "friend_request_sent",
+        relationship_id: relationshipId,
+        requester_id: requesterId,
+        receiver_id: receiverId,
+      },
+    });
+  }
+
+  return { conversation, message };
+};
+
 exports.sendFriendRequest = async (requesterId, receiverId) => {
   if (requesterId === receiverId) {
     throw new Error("Không thể tự kết bạn với chính mình.");
@@ -23,7 +67,16 @@ exports.sendFriendRequest = async (requesterId, receiverId) => {
       throw new Error("Hai người đã là bạn bè.");
     }
     if (relationship.status === "PENDING") {
-      throw new Error("Đã tồn tại lời mời kết bạn.");
+      if (String(relationship.requester_id) === String(requesterId)) {
+        const { conversation, message } = await ensureFriendRequestSentMessage(
+          relationship,
+          requesterId,
+          receiverId,
+          { reuseExisting: true },
+        );
+        return { relationship, conversation, message };
+      }
+      throw new Error("Người này đã gửi lời mời kết bạn cho bạn.");
     }
     if (relationship.status === "BLOCKED") {
       if (relationship.requester_id === requesterId) {
@@ -58,24 +111,11 @@ exports.sendFriendRequest = async (requesterId, receiverId) => {
     console.error(`[RelationshipService] Failed to publish REQUEST_SENT event: ${err.message}`);
   }
 
-  // --- NEW: Create/Find Conversation and send message ---
-  const ConversationService = require("./conversationService");
-  const MessageService = require("./messageService");
-  
-  const conversation = await ConversationService.findOrCreatePrivateConversation(requesterId, receiverId);
-  
-  const message = await MessageService.sendMessage({
-    conversationId: conversation._id,
-    senderId: requesterId,
-    content: "Đã gửi lời mời kết bạn",
-    type: "system_friend_request",
-    systemMeta: {
-      action: "friend_request_sent",
-      relationship_id: relationship._id.toString(),
-      requester_id: requesterId,
-      receiver_id: receiverId,
-    },
-  });
+  const { conversation, message } = await ensureFriendRequestSentMessage(
+    relationship,
+    requesterId,
+    receiverId,
+  );
 
   return { relationship, conversation, message };
 };
