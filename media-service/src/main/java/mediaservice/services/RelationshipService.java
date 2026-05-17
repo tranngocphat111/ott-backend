@@ -39,9 +39,11 @@ public interface RelationshipService {
 
     /** Lấy danh sách bạn bè (ACCEPTED) của user. */
     List<RelationshipResponse> getFriends(String userId);
+    List<RelationshipResponse> getFriends(String userId, Pageable pageable);
 
     /** Lấy danh sách lời mời kết bạn user nhận được (PENDING). */
     List<RelationshipResponse> getPendingRequests(String userId);
+    List<RelationshipResponse> getPendingRequests(String userId, Pageable pageable);
 
     /** Lấy danh sách lời mời kết bạn user đã gửi (PENDING). */
     List<RelationshipResponse> getSentRequests(String userId);
