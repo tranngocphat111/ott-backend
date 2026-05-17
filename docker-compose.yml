@@ -159,6 +159,7 @@ services:
       SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-rabbit123}
+      MODERATION_REVIEW_REQUEST_DLQ: ${MODERATION_REVIEW_REQUEST_DLQ:-moderation.review.requests.dlq}
     networks:
       - ott-network
     depends_on:
@@ -179,6 +180,7 @@ services:
       - user-service
       - notification-service
       - media-service
+      - analytic-service
 
 volumes:
   redis_data:

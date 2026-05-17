@@ -18,17 +18,20 @@ public class RabbitMqConfig {
 
     public static final String USER_LOGIN_QUEUE = "analytics.user.login.queue";
     public static final String USER_REGISTERED_QUEUE = "analytics.user.registered.queue";
+    public static final String USER_STATUS_CHANGED_QUEUE = "analytics.user.status.queue";
     public static final String MESSAGE_SENT_QUEUE = "analytics.message.sent.queue";
     public static final String POST_CREATED_QUEUE = "analytics.post.created.queue";
     public static final String USER_EVENTS_EXCHANGE = "user.events";
     public static final String USER_ROUTING_KEY_PATTERN = "user.#";
     public static final String USER_LOGIN_ROUTING_KEY = "user.login";
     public static final String USER_REGISTERED_ROUTING_KEY = "user.registered";
+    public static final String USER_STATUS_CHANGED_ROUTING_KEY = "user.status.changed";
     public static final String CONTENT_VIOLATION_QUEUE = "analytics.content.violation.queue";
     public static final String ANALYTICS_DLX = "analytics.dlx";
 
     public static final String USER_LOGIN_DLQ = "analytics.user.login.dlq";
     public static final String USER_REGISTERED_DLQ = "analytics.user.registered.dlq";
+    public static final String USER_STATUS_CHANGED_DLQ = "analytics.user.status.dlq";
     public static final String MESSAGE_SENT_DLQ = "analytics.message.sent.dlq";
     public static final String POST_CREATED_DLQ = "analytics.post.created.dlq";
     public static final String CONTENT_VIOLATION_DLQ = "analytics.content.violation.dlq";
@@ -56,6 +59,13 @@ public class RabbitMqConfig {
     }
 
     @Bean
+    public Queue userStatusChangedQueue() {
+        return QueueBuilder.durable(USER_STATUS_CHANGED_QUEUE)
+                .withArguments(dlqArguments(USER_STATUS_CHANGED_DLQ))
+                .build();
+    }
+
+    @Bean
     public Binding userLoginBinding(@Qualifier("userLoginQueue") Queue userLoginQueue, TopicExchange userEventsExchange) {
         return BindingBuilder.bind(userLoginQueue).to(userEventsExchange).with(USER_LOGIN_ROUTING_KEY);
     }
@@ -63,6 +73,13 @@ public class RabbitMqConfig {
     @Bean
     public Binding userRegisteredBinding(@Qualifier("userRegisteredQueue") Queue userRegisteredQueue, TopicExchange userEventsExchange) {
         return BindingBuilder.bind(userRegisteredQueue).to(userEventsExchange).with(USER_REGISTERED_ROUTING_KEY);
+    }
+
+    @Bean
+    public Binding userStatusChangedBinding(
+            @Qualifier("userStatusChangedQueue") Queue userStatusChangedQueue,
+            TopicExchange userEventsExchange) {
+        return BindingBuilder.bind(userStatusChangedQueue).to(userEventsExchange).with(USER_STATUS_CHANGED_ROUTING_KEY);
     }
 
     @Bean
@@ -110,6 +127,11 @@ public class RabbitMqConfig {
     }
 
     @Bean
+    public Queue userStatusChangedDlq() {
+        return QueueBuilder.durable(USER_STATUS_CHANGED_DLQ).build();
+    }
+
+    @Bean
     public Queue messageSentDlq() {
         return QueueBuilder.durable(MESSAGE_SENT_DLQ).build();
     }
@@ -141,6 +163,13 @@ public class RabbitMqConfig {
     @Bean
     public Binding userRegisteredDlqBinding(@Qualifier("userRegisteredDlq") Queue userRegisteredDlq, DirectExchange analyticsDlx) {
         return BindingBuilder.bind(userRegisteredDlq).to(analyticsDlx).with(USER_REGISTERED_DLQ);
+    }
+
+    @Bean
+    public Binding userStatusChangedDlqBinding(
+            @Qualifier("userStatusChangedDlq") Queue userStatusChangedDlq,
+            DirectExchange analyticsDlx) {
+        return BindingBuilder.bind(userStatusChangedDlq).to(analyticsDlx).with(USER_STATUS_CHANGED_DLQ);
     }
 
     @Bean

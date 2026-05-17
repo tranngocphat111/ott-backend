@@ -5,13 +5,11 @@ import java.time.ZoneId;
 import java.util.Locale;
 
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
-import org.springframework.amqp.core.ExchangeTypes;
-import org.springframework.amqp.rabbit.annotation.Exchange;
-import org.springframework.amqp.rabbit.annotation.Queue;
-import org.springframework.amqp.rabbit.annotation.QueueBinding;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
+import iuh.fit.se.analyticservice.config.RabbitMqConfig;
 import iuh.fit.se.analyticservice.dto.UserStatusChangedEvent;
 import iuh.fit.se.analyticservice.entity.AdminAuditLog;
 import iuh.fit.se.analyticservice.repository.AdminAuditLogRepository;
@@ -25,13 +23,7 @@ public class ModerationEventListener {
 
     private final AdminAuditLogRepository adminAuditLogRepository;
 
-    @RabbitListener(
-            bindings = @QueueBinding(
-                    value = @Queue(value = "analytic.user.status.queue", durable = "true"),
-                    exchange = @Exchange(value = "user.events", type = ExchangeTypes.TOPIC, durable = "true"),
-                    key = "user.status.changed"
-            )
-    )
+    @RabbitListener(queues = RabbitMqConfig.USER_STATUS_CHANGED_QUEUE)
     public void handleUserStatusChangedEvent(UserStatusChangedEvent event) {
         try {
             validateEvent(event);
@@ -61,6 +53,9 @@ public class ModerationEventListener {
                     event.getNewStatus(),
                     auditLog.getActionType()
             );
+        } catch (DataIntegrityViolationException duplicate) {
+            log.warn("Duplicate moderation status event ignored: eventId={}",
+                    event != null ? event.getEventId() : null);
         } catch (Exception ex) {
             log.error("Failed to process user.status.changed event: {}", event, ex);
             throw new AmqpRejectAndDontRequeueException("Invalid moderation analytics event", ex);
