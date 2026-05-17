@@ -331,6 +331,10 @@ exports.joinByLink = async (req, res) => {
         senderId: userId,
         content: `${userName} đã tham gia nhóm`,
         type: "system_add",
+        systemMeta: {
+          action: "member_join",
+          user_id: userId,
+        },
       });
       const Message = require("../models/Message");
       responseMessage = await Message.findById(notificationMessage._id).lean();
