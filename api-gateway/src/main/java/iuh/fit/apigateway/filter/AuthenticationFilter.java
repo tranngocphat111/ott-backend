@@ -82,6 +82,11 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
             return writeErrorResponse(exchange, HttpStatus.FORBIDDEN, 1007, "Access denied");
         }
 
+        if ("OPTIONS".equalsIgnoreCase(method)) {
+            log.debug("CORS preflight request - bypassing authentication: {} {}", method, path);
+            return chain.filter(exchange);
+        }
+
         // Public endpoints - bypass auth
         if (isPublic(path)) {
             log.debug("Public endpoint - bypassing authentication: {} {}", method, path);

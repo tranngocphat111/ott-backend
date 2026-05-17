@@ -993,12 +993,57 @@ io.on("connection", (socket) => {
   });
   // ────────────────────────────────────────────────────────────
 
-  const publishReceiptFromSocket = async (publisher, payload = {}) => {
+  const publishReceiptFromSocket = async (publisher, payload = {}, receiptType = "delivered") => {
     const conversationId = payload.conversationId;
     const userId = payload.userId || socket.data.userId;
     const msgId = payload.msgId;
 
     if (!conversationId || !userId || !msgId) return;
+
+    let participant = null;
+    try {
+      participant =
+        receiptType === "seen"
+          ? await ParticipantService.updateLastRead(conversationId, userId, msgId)
+          : await ParticipantService.updateLastDelivered(conversationId, userId, msgId);
+
+      if (participant) {
+        const participantPayload = {
+          user_id: participant.user_id,
+          conversation_id: String(participant.conversation_id),
+          last_delivered_message_id: participant.last_delivered_message_id || "0",
+          last_delivered_at: participant.last_delivered_at || null,
+          last_read_message_id: participant.last_read_message_id || "0",
+          last_read_at: participant.last_read_at || null,
+        };
+
+        const syncPayload = {
+          conversationId,
+          userId,
+          changedUserId: userId,
+          msgId,
+          receiptType,
+          participant: participantPayload,
+        };
+
+        const participants = await ParticipantService.getJoinedParticipants(conversationId);
+        participants.forEach((item) => {
+          io.to(`user:${item.user_id}`).emit("participant_cursor_changed", syncPayload);
+        });
+
+        if (receiptType === "seen") {
+          io.to(`user:${userId}`).emit("conversation_read_synced", syncPayload);
+        }
+      }
+    } catch (error) {
+      console.error("[chat receipt] local update failed:", error.message);
+      socket.emit("message_receipt_error", {
+        conversationId,
+        msgId,
+        error: error.message,
+      });
+      return;
+    }
 
     try {
       await publisher({
@@ -1018,15 +1063,15 @@ io.on("connection", (socket) => {
   };
 
   socket.on("message_delivered", (payload) => {
-    publishReceiptFromSocket(publishMessageDelivered, payload);
+    publishReceiptFromSocket(publishMessageDelivered, payload, "delivered");
   });
 
   socket.on("messages_delivered_up_to", (payload) => {
-    publishReceiptFromSocket(publishMessageDelivered, payload);
+    publishReceiptFromSocket(publishMessageDelivered, payload, "delivered");
   });
 
   socket.on("message_seen_up_to", (payload) => {
-    publishReceiptFromSocket(publishMessageSeen, payload);
+    publishReceiptFromSocket(publishMessageSeen, payload, "seen");
   });
 
   // Kiểm tra xem người nhận có đang bận không TRƯỚC khi mở cửa sổ gọi

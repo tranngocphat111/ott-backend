@@ -23,35 +23,43 @@ exports.createConversation = async ({
   return await newConversation.save();
 };
 
-exports.findOrCreatePrivateConversation = async (user1Id, user2Id) => {
-  const Participant = require("../models/Participant");
-  
-  // Tìm các participant của user1
-  const p1 = await Participant.find({ user_id: user1Id }).lean();
-  const conv1Ids = p1.map(p => String(p.conversation_id));
-  
-  // Tìm tất cả các participant của user2 mà thuộc các conversation của user1
+exports.findPrivateConversation = async (user1Id, user2Id) => {
+  if (!user1Id || !user2Id) return null;
+
+  const user1Participants = await Participant.find({ user_id: user1Id })
+    .select("conversation_id")
+    .lean();
+  const user1ConversationIds = user1Participants.map((item) => item.conversation_id);
+
+  if (user1ConversationIds.length === 0) return null;
+
   const commonParticipants = await Participant.find({
     user_id: user2Id,
-    conversation_id: { $in: conv1Ids }
-  }).populate("conversation_id").lean();
+    conversation_id: { $in: user1ConversationIds },
+  })
+    .select("conversation_id")
+    .lean();
+  const commonConversationIds = commonParticipants.map((item) => item.conversation_id);
 
-  // Tìm cuộc hội thoại type 'private' trong số các cuộc hội thoại chung
-  const privateParticipant = commonParticipants.find(p => 
-    p.conversation_id && 
-    p.conversation_id.type === "private" && 
-    !p.conversation_id.is_self_conversation
-  );
+  if (commonConversationIds.length === 0) return null;
 
-  if (privateParticipant) {
-    return privateParticipant.conversation_id;
-  }
-  return null;
+  const conversation = await Conversation.findOne({
+    _id: { $in: commonConversationIds },
+    type: "private",
+    is_self_conversation: { $ne: true },
+    is_deleted: false,
+  })
+    .select("_id")
+    .lean();
+
+  return conversation?._id || null;
 };
 
 exports.findOrCreatePrivateConversation = async (user1Id, user2Id) => {
-  const existingId = await exports.findPrivateConversation(user1Id, user2Id);
-  if (existingId) return existingId;
+  const existingConversationId = await exports.findPrivateConversation(user1Id, user2Id);
+  if (existingConversationId) {
+    return await Conversation.findById(existingConversationId);
+  }
 
   // Nếu không thấy, tạo mới
   const conversation = await exports.createConversation({

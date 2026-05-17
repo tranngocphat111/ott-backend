@@ -236,14 +236,61 @@ exports.updatePinStatus = async (req, res) => {
 exports.updateLastRead = async (req, res) => {
   try {
     const { conversationId, userId, msgId } = req.body;
-    await publishMessageSeen({
+
+    const participant = await ParticipantService.updateLastRead(
       conversationId,
       userId,
       msgId,
-      deviceId: req.body.deviceId || null,
+    );
+
+    if (!participant) {
+      return res.status(404).json({ error: "Participant not found" });
+    }
+
+    const participantPayload = {
+      user_id: participant.user_id,
+      conversation_id: String(participant.conversation_id),
+      last_delivered_message_id: participant.last_delivered_message_id || "0",
+      last_delivered_at: participant.last_delivered_at || null,
+      last_read_message_id: participant.last_read_message_id || "0",
+      last_read_at: participant.last_read_at || null,
+    };
+
+    const syncPayload = {
+      conversationId,
+      userId,
+      changedUserId: userId,
+      msgId,
+      receiptType: "seen",
+      participant: participantPayload,
+    };
+
+    req.io.to(`user:${userId}`).emit("conversation_read_synced", syncPayload);
+
+    const joinedParticipants =
+      await ParticipantService.getJoinedParticipants(conversationId);
+    joinedParticipants.forEach((item) => {
+      req.io.to(`user:${item.user_id}`).emit("participant_cursor_changed", {
+        ...syncPayload,
+        userId,
+      });
     });
 
-    res.status(202).json({ queued: true, conversationId, userId, msgId });
+    try {
+      await publishMessageSeen({
+        conversationId,
+        userId,
+        msgId,
+        deviceId: req.body.deviceId || null,
+      });
+    } catch (publishError) {
+      console.error(
+        "[ParticipantController] Failed to publish seen receipt:",
+        publishError.message,
+      );
+    }
+
+    res.status(200).json(participantPayload);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -252,14 +299,31 @@ exports.updateLastRead = async (req, res) => {
 exports.updateLastDelivered = async (req, res) => {
   try {
     const { conversationId, userId, msgId, deviceId } = req.body;
-    await publishMessageDelivered({
+    const participant = await ParticipantService.updateLastDelivered(
       conversationId,
       userId,
       msgId,
-      deviceId: deviceId || null,
-    });
+    );
 
-    res.status(202).json({ queued: true, conversationId, userId, msgId });
+    if (!participant) {
+      return res.status(404).json({ error: "Participant not found" });
+    }
+
+    try {
+      await publishMessageDelivered({
+        conversationId,
+        userId,
+        msgId,
+        deviceId: deviceId || null,
+      });
+    } catch (publishError) {
+      console.error(
+        "[ParticipantController] Failed to publish delivered receipt:",
+        publishError.message,
+      );
+    }
+
+    res.status(200).json(participant);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

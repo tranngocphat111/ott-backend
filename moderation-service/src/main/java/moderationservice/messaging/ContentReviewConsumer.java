@@ -12,6 +12,7 @@ import moderationservice.routing.ModerationRouter;
 import moderationservice.service.IdempotencyService;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -38,6 +39,15 @@ public class ContentReviewConsumer {
 
     @RabbitListener(queues = "${moderation.rabbitmq.queue.review-requests}")
     public void handleContentReviewRequest(ContentReviewRequest request) {
+        try {
+            processContentReviewRequest(request);
+        } catch (IllegalArgumentException ex) {
+            log.warn("Rejecting invalid moderation request: {}", ex.getMessage());
+            throw new AmqpRejectAndDontRequeueException("Invalid moderation review request", ex);
+        }
+    }
+
+    private void processContentReviewRequest(ContentReviewRequest request) {
         validateRequestEnvelope(request);
 
         String requestId = request.getRequestId().trim();
@@ -49,17 +59,20 @@ public class ContentReviewConsumer {
                 requestId, request.getSourceService(), request.getContentType(), request.getContentRefId());
 
         ModerationResult result = moderationRouter.route(request);
-        moderationDecisionRecordRepository.save(buildDecisionRecord(request, result));
 
         if (result.getDecision() == ModerationDecision.REJECTED) {
             ContentViolationDetected event = buildViolationEvent(request, result);
             rabbitTemplate.convertAndSend(moderationExchange, violationDetectedRoutingKey, event);
             log.warn("Published content violation event: requestId={}, violationId={}, labels={}",
                     requestId, event.getViolationId(), event.getMatchedLabels());
-            return;
         }
 
-        log.info("Moderation request approved without publishing event: requestId={}", requestId);
+        moderationDecisionRecordRepository.save(buildDecisionRecord(request, result));
+
+        if (result.getDecision() != ModerationDecision.REJECTED) {
+            log.info("Moderation request completed without publishing violation event: requestId={}, decision={}",
+                    requestId, result.getDecision());
+        }
     }
 
     private ModerationDecisionRecord buildDecisionRecord(ContentReviewRequest request, ModerationResult result) {

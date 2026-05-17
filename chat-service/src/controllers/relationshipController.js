@@ -1,15 +1,25 @@
 const relationshipService = require("../services/relationshipService");
+const ConversationService = require("../services/conversationService");
 
 exports.sendRequest = async (req, res) => {
   try {
     const { requesterId, receiverId } = req.body;
     const result = await relationshipService.sendFriendRequest(requesterId, receiverId);
     const { relationship, conversation, message } = result;
+    const detailedConversation = conversation?._id
+      ? await ConversationService.getConversationById(conversation._id)
+      : null;
+    const conversationPayload = detailedConversation || conversation;
 
     // Emit socket events for new conversation and system message (not yet moved to MQ)
-    req.io.to(`user:${receiverId}`).emit("tao_phong_moi", conversation);
-    req.io.to(`user:${receiverId}`).emit("tin_nhan", message);
-    req.io.to(`user:${requesterId}`).emit("tin_nhan", message);
+    if (conversationPayload) {
+      req.io.to(`user:${requesterId}`).emit("tao_phong_moi", conversationPayload);
+      req.io.to(`user:${receiverId}`).emit("tao_phong_moi", conversationPayload);
+    }
+    if (message) {
+      req.io.to(`user:${receiverId}`).emit("tin_nhan", message);
+      req.io.to(`user:${requesterId}`).emit("tin_nhan", message);
+    }
 
     res.status(200).json(relationship);
   } catch (error) {

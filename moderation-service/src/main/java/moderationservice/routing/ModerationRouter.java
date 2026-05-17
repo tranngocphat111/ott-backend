@@ -51,7 +51,19 @@ public class ModerationRouter {
     private ModerationResult moderateImage(Map<String, Object> payload) {
         String bucket = requiredPayloadValue(payload, "bucket");
         String objectKey = requiredPayloadValue(payload, "objectKey");
-        List<String> labels = rekognitionModerationProvider.scanImage(bucket, objectKey);
+        List<String> labels;
+        try {
+            labels = rekognitionModerationProvider.scanImage(bucket, objectKey);
+        } catch (RuntimeException ex) {
+            log.error("Image moderation provider failed for bucket={}, objectKey={}", bucket, objectKey, ex);
+            return ModerationResult.builder()
+                    .decision(ModerationDecision.NEEDS_REVIEW)
+                    .severity(ViolationSeverity.MEDIUM)
+                    .violationType(IMAGE_VIOLATION_TYPE)
+                    .reason("Image moderation provider unavailable")
+                    .matchedLabels(List.of("REKOGNITION_SCAN_FAILED"))
+                    .build();
+        }
         return buildResult(labels, IMAGE_VIOLATION_TYPE);
     }
 

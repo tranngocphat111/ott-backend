@@ -27,6 +27,7 @@ const publishRelationshipEvent = async (type, relationship) => {
     const routingKey = `relationship.${type.toLowerCase()}`;
     const payload = {
       type,
+      source: "chat-service",
       relationshipId: relationship.relationship_id || relationship._id,
       requesterId: relationship.requester_id,
       receiverId: relationship.receiver_id,

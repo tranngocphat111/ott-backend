@@ -13,10 +13,19 @@ spring:
         format_sql: true
     open-in-view: false
   rabbitmq:
-    host: ${SPRING_RABBITMQ_HOST:localhost}
+    host: ${SPRING_RABBITMQ_HOST:rabbitmq}
     port: ${SPRING_RABBITMQ_PORT:5672}
     username: ${SPRING_RABBITMQ_USERNAME:guest}
     password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000
+          multiplier: 2.0
+          max-interval: 5000
 
 server:
   port: ${SERVER_PORT:8087}
@@ -27,7 +36,11 @@ aws:
 moderation:
   rabbitmq:
     exchange: ${MODERATION_RABBITMQ_EXCHANGE:moderation.events}
+    dlx: ${MODERATION_RABBITMQ_DLX:moderation.dlx}
     queue:
       review-requests: ${MODERATION_REVIEW_REQUEST_QUEUE:moderation.review.requests.queue}
+    dlq:
+      review-requests: ${MODERATION_REVIEW_REQUEST_DLQ:moderation.review.requests.dlq}
     routing-key:
+      review-requests: ${MODERATION_REVIEW_REQUEST_ROUTING_KEY:moderation.review.requests.queue}
       violation-detected: ${MODERATION_VIOLATION_DETECTED_ROUTING_KEY:moderation.violation.detected}

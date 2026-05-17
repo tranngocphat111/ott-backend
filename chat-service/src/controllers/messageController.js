@@ -2,6 +2,39 @@ const MessageService = require("../services/messageService");
 const ParticipantService = require("../services/participantService");
 const { publishMessageCreated } = require("../events/chatEvents");
 
+const emitMessageToParticipants = async (io, conversationId, message) => {
+  if (!io || !conversationId || !message) return;
+
+  const participants = await ParticipantService.getJoinedParticipants(
+    conversationId,
+  );
+  participants.forEach((participant) => {
+    io.to(`user:${participant.user_id}`).emit("tin_nhan", message);
+  });
+};
+
+const publishMessageCreatedBestEffort = async (req, payload, message) => {
+  try {
+    await publishMessageCreated({
+      ...payload,
+      message,
+    });
+  } catch (error) {
+    console.warn(
+      "[chat-events] publish message.created failed; emitting socket fallback:",
+      error?.message || error,
+    );
+    try {
+      await emitMessageToParticipants(req.io, payload.conversationId, message);
+    } catch (fallbackError) {
+      console.warn(
+        "[chat-events] socket fallback failed:",
+        fallbackError?.message || fallbackError,
+      );
+    }
+  }
+};
+
 exports.generatePresignedUrl = async (req, res) => {
   try {
     const { fileName, fileType } = req.body;
@@ -41,12 +74,12 @@ exports.sendMessage = async (req, res) => {
       pollOptions,
     });
 
-    await publishMessageCreated({
+    await publishMessageCreatedBestEffort(req, {
       conversationId,
       msgId: savedMessage.msg_id,
       senderId,
       createdAt: savedMessage.createdAt || new Date().toISOString(),
-    });
+    }, savedMessage);
 
     // Nếu là poll, tự động tạo thêm 1 tin system thông báo
     if (type === "poll" && pollQuestion) {
@@ -58,12 +91,12 @@ exports.sendMessage = async (req, res) => {
           type: "system_poll",
           size: 0,
         });
-        await publishMessageCreated({
+        await publishMessageCreatedBestEffort(req, {
           conversationId,
           msgId: sysMsg.msg_id,
           senderId,
           createdAt: sysMsg.createdAt || new Date().toISOString(),
-        });
+        }, sysMsg);
       } catch (sysErr) {
         console.warn("Không thể tạo thông báo poll:", sysErr.message);
       }

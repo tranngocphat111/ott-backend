@@ -173,11 +173,9 @@ const handleMessageCreated = async (io, payload) => {
     conversationId,
   );
 
-  participants
-    .filter((participant) => String(participant.user_id) !== String(senderId))
-    .forEach((participant) => {
-      io.to(`user:${participant.user_id}`).emit("tin_nhan", message);
-    });
+  participants.forEach((participant) => {
+    io.to(`user:${participant.user_id}`).emit("tin_nhan", message);
+  });
 };
 
 const handleReceipt = async (payload, routingKey) => {
