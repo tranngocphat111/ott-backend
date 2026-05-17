@@ -2,6 +2,12 @@ const Relationship = require("../models/Relationship");
 const { publishRelationshipEvent } = require("../events/relationshipEvents");
 const { publishNotification } = require("../events/notificationEvents");
 
+const getUserDisplayName = async (userId) => {
+  const User = require("../models/User");
+  const user = await User.findOne({ user_id: userId }).select("name").lean();
+  return String(user?.name || "").trim() || "Người dùng";
+};
+
 exports.getRelationshipBetween = async (userId1, userId2) => {
   return await Relationship.findOne({
     $or: [
@@ -15,7 +21,7 @@ const ensureFriendRequestSentMessage = async (
   relationship,
   requesterId,
   receiverId,
-  { reuseExisting = false } = {},
+  { reuseExisting = false, requesterName: requesterNameOverride } = {},
 ) => {
   const ConversationService = require("./conversationService");
   const MessageService = require("./messageService");
@@ -26,6 +32,10 @@ const ensureFriendRequestSentMessage = async (
     receiverId,
   );
   const relationshipId = relationship._id.toString();
+  const requesterName =
+    String(requesterNameOverride || "").trim() ||
+    await getUserDisplayName(requesterId);
+  const messageContent = `${requesterName} đã gửi lời mời kết bạn`;
 
   let message = null;
   if (reuseExisting) {
@@ -35,19 +45,52 @@ const ensureFriendRequestSentMessage = async (
       "system_meta.action": "friend_request_sent",
       "system_meta.relationship_id": relationshipId,
     }).lean();
+
+    if (message) {
+      const currentContent = Array.isArray(message.content)
+        ? String(message.content[0] || "")
+        : String(message.content || "");
+      const nextSystemMeta = {
+        ...(message.system_meta || {}),
+        requester_name: requesterName,
+      };
+      const shouldUpdateMessage =
+        currentContent !== messageContent ||
+        String(message.system_meta?.requester_name || "") !== requesterName;
+
+      if (shouldUpdateMessage) {
+        const updatedMessage = await Message.findByIdAndUpdate(
+          message._id,
+          {
+            content: [messageContent],
+            system_meta: nextSystemMeta,
+          },
+          { new: true },
+        ).lean();
+        if (updatedMessage) {
+          message = updatedMessage;
+        }
+      }
+
+      message = {
+        ...message,
+        sender_name: requesterName,
+      };
+    }
   }
 
   if (!message) {
     message = await MessageService.sendMessage({
       conversationId: conversation._id,
       senderId: requesterId,
-      content: "Đã gửi lời mời kết bạn",
+      content: messageContent,
       type: "system_friend_request",
       systemMeta: {
         action: "friend_request_sent",
         relationship_id: relationshipId,
         requester_id: requesterId,
         receiver_id: receiverId,
+        requester_name: requesterName,
       },
     });
   }
@@ -98,13 +141,14 @@ exports.sendFriendRequest = async (requesterId, receiverId) => {
   }
 
   await relationship.save();
+  const requesterName = await getUserDisplayName(requesterId);
   try {
     await publishRelationshipEvent("REQUEST_SENT", relationship);
     await publishNotification({
       recipientId: receiverId,
       senderId: requesterId,
       type: "FRIEND_REQUEST",
-      content: "Bạn có một lời mời kết bạn mới",
+      content: `${requesterName} đã gửi cho bạn lời mời kết bạn`,
       referenceId: relationship._id.toString()
     });
   } catch (err) {
@@ -115,6 +159,7 @@ exports.sendFriendRequest = async (requesterId, receiverId) => {
     relationship,
     requesterId,
     receiverId,
+    { requesterName },
   );
 
   return { relationship, conversation, message };

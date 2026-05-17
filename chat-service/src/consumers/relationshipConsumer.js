@@ -6,6 +6,12 @@ const Message = require("../models/Message");
 const EXCHANGE_NAME = "relationship.events";
 const ROUTING_KEY = "relationship.#";
 
+const getUserDisplayName = async (userId) => {
+  const User = require("../models/User");
+  const user = await User.findOne({ user_id: userId }).select("name").lean();
+  return String(user?.name || "").trim() || "Người dùng";
+};
+
 const getRelationshipSystemMessageConfig = (content, relationship) => {
   const type = String(content?.type || "").toUpperCase();
   const requesterId = relationship?.requester_id || content?.requesterId;
@@ -54,6 +60,14 @@ const ensureRelationshipSystemMessage = async (content, relationship, io) => {
 
   const config = getRelationshipSystemMessageConfig(content, relationship);
   if (!config) return null;
+  const requesterName =
+    config.action === "friend_request_sent"
+      ? await getUserDisplayName(config.requesterId)
+      : "";
+  const messageContent =
+    config.action === "friend_request_sent" && requesterName
+      ? `${requesterName} đã gửi lời mời kết bạn`
+      : config.content;
 
   const conversation = await ConversationService.findOrCreatePrivateConversation(
     config.requesterId,
@@ -72,13 +86,14 @@ const ensureRelationshipSystemMessage = async (content, relationship, io) => {
   const message = await MessageService.sendMessage({
     conversationId: conversation._id,
     senderId: config.senderId,
-    content: config.content,
+    content: messageContent,
     type: config.type,
     systemMeta: {
       action: config.action,
       relationship_id: config.relationshipId,
       requester_id: config.requesterId,
       receiver_id: config.receiverId,
+      ...(requesterName ? { requester_name: requesterName } : {}),
     },
   });
 
