@@ -24,6 +24,7 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Stri
 
     /** Lấy danh sách lời mời kết bạn đang chờ mà user nhận được (receiver) */
     List<Relationship> findByReceiverIdAndStatus(String receiverId, RelationshipStatusType status);
+    List<Relationship> findByReceiverIdAndStatus(String receiverId, RelationshipStatusType status, org.springframework.data.domain.Pageable pageable);
 
     /** Lấy danh sách lời mời kết bạn user đã gửi (requester) */
     List<Relationship> findByRequesterIdAndStatus(String requesterId, RelationshipStatusType status);
@@ -33,4 +34,10 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Stri
            "(r.requester.id = :userId OR r.receiver.id = :userId) AND r.status = :status")
     List<Relationship> findFriendsByUserId(@Param("userId") String userId,
                                            @Param("status") RelationshipStatusType status);
+
+    @Query("SELECT r FROM Relationship r WHERE " +
+           "(r.requester.id = :userId OR r.receiver.id = :userId) AND r.status = :status")
+    List<Relationship> findFriendsByUserId(@Param("userId") String userId,
+                                           @Param("status") RelationshipStatusType status,
+                                           org.springframework.data.domain.Pageable pageable);
 }

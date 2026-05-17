@@ -204,9 +204,23 @@ public class RelationshipServiceImpl implements RelationshipService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<RelationshipResponse> getFriends(String userId, Pageable pageable) {
+        return relationshipMapper.toResponseList(
+                relationshipRepository.findFriendsByUserId(userId, RelationshipStatusType.ACCEPTED, pageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<RelationshipResponse> getPendingRequests(String userId) {
         return relationshipMapper.toResponseList(
                 relationshipRepository.findByReceiverIdAndStatus(userId, RelationshipStatusType.PENDING));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RelationshipResponse> getPendingRequests(String userId, Pageable pageable) {
+        return relationshipMapper.toResponseList(
+                relationshipRepository.findByReceiverIdAndStatus(userId, RelationshipStatusType.PENDING, pageable));
     }
 
     @Override

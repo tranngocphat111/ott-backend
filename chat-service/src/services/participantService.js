@@ -1,5 +1,26 @@
 const Participant = require("../models/Participant");
 const Conversation = require("../models/Conversation");
+const mongoose = require("mongoose");
+
+const normalizeMessageId = (value) => {
+  const normalized = String(value || "0").trim();
+  return /^\d+$/.test(normalized) ? normalized : "0";
+};
+
+const isMessageIdAfter = (left, right) => {
+  const safeLeft = normalizeMessageId(left);
+  const safeRight = normalizeMessageId(right);
+  try {
+    return BigInt(safeLeft) > BigInt(safeRight);
+  } catch {
+    return safeLeft > safeRight;
+  }
+};
+
+const isObjectIdLike = (value) => {
+  const normalized = String(value || "").trim();
+  return mongoose.Types.ObjectId.isValid(normalized);
+};
 
 const assertGroupManager = async (conversationId, requesterId) => {
   const conversation = await Conversation.findById(conversationId);
@@ -135,7 +156,7 @@ exports.getConversationsByUserId = async (userId) => {
 
     // Có tin nhắn mới hơn thời điểm xóa → hiển thị lại
     if (lastMsgId) {
-      return BigInt(lastMsgId) > BigInt(deletedMsgId);
+      return isMessageIdAfter(lastMsgId, deletedMsgId);
     }
 
     // Đã xóa, cuộc hội thoại không còn tin nhắn mới → ẩn
@@ -349,7 +370,7 @@ exports.getConversationMembers = async (conversationId) => {
     participants.map(async (p) => {
       // Try to find by UUID first, then by ObjectId
       let user = await User.findOne({ user_id: p.user_id }).lean();
-      if (!user) {
+      if (!user && isObjectIdLike(p.user_id)) {
         user = await User.findById(p.user_id).lean();
       }
       return {
