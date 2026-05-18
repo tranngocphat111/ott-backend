@@ -138,6 +138,40 @@ exports.votePoll = async (req, res) => {
       error.message === "Tin nhắn không tồn tại" ||
       error.message === "Tin nhắn không phải là khảo sát" ||
       error.message === "Khảo sát này chỉ cho phép chọn 1 đáp án" ||
+      error.message === "Khảo sát đã bị khóa" ||
+      error.message === "Khảo sát đã bị xóa hoặc thu hồi"
+    ) {
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.lockPoll = async (req, res) => {
+  try {
+    const { msgId } = req.params;
+    const { conversationId, userId } = req.body;
+
+    const result = await MessageService.lockPoll({
+      conversationId,
+      msgId,
+      userId,
+    });
+
+    const participants =
+      await ParticipantService.getParticipants(conversationId);
+    participants.forEach((p) => {
+      req.io.to(`user:${p.user_id}`).emit("tin_nhan_cap_nhat", result);
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    if (
+      error.message === "Tin nhắn không tồn tại" ||
+      error.message === "Tin nhắn không phải là khảo sát" ||
+      error.message === "Chỉ người tạo khảo sát mới có thể khóa bình chọn" ||
+      error.message === "Khảo sát đã bị khóa" ||
       error.message === "Khảo sát đã bị xóa hoặc thu hồi"
     ) {
       return res.status(400).json({ error: error.message });
