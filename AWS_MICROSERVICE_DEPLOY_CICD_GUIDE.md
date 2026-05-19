@@ -98,7 +98,7 @@ Vi sao chon cach nay:
 | `chat-service` | `chat-service` | 5000 | `ott-chat-service` | Node 20, Socket.IO, AI, MongoDB |
 | `analytic-service` | `analytic-service` | 8092 | `ott-analytic-service` | Java 21 |
 | `redis` | Docker image public | 6379 | Khong can ECR | Chi noi bo Docker network |
-| `rabbitmq` | Docker image public | 5672/15672 | Khong can ECR | Khong mo public |
+| `rabbitmq` | Docker image public | 5672/15672 | Khong can ECR | 5672 chi noi bo; 15672 chi mo tam thoi va gioi han IP neu can xem UI |
 | `analytic-postgres` | Docker image public | 5432 | Khong can ECR | Chi cho analytics, can backup volume |
 
 Trong code hien tai, `auth`, `user`, `notification`, `media` dang dung DB URL qua bien moi truong. `chat-service` dung `MONGO_URI`. Nghia la EC2 khong nhat thiet phai chay tat ca database, tru `analytic-postgres` trong compose hien tai.
@@ -199,13 +199,14 @@ Inbound:
 | 443 | `0.0.0.0/0`, `::/0` | HTTPS public |
 | 22 | IP nha ban/khong mo | Chi can neu dung SSH; neu dung SSM thi khong can |
 | 8080 | IP cua ban tam thoi | Chi mo khi test gateway truc tiep, sau do dong |
+| 15672 | IP nha ban/32 tam thoi | RabbitMQ Management UI neu can vao `http://EC2_IP:15672` |
 
 Khong mo public:
 
 - `5432` Postgres.
 - `6379` Redis.
 - `5672` RabbitMQ.
-- `15672` RabbitMQ management.
+- `15672` RabbitMQ management cho `0.0.0.0/0`. Neu can dung truc tiep, chi mo Source la IP nha ban `/32`.
 - `5000` chat-service.
 - `8090`, `8091`, `8092` neu da proxy qua gateway/Nginx.
 
@@ -634,6 +635,8 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "${RABBITMQ_MANAGEMENT_BIND:-127.0.0.1}:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
