@@ -12,6 +12,7 @@ on:
       - "media-service/**"
       - "chat-service/**"
       - "analytic-service/**"
+      - "moderation-service/**"
       - "deploy/**"
       - ".dockerignore"
       - ".github/workflows/backend-ci-cd.yml"
@@ -91,12 +92,17 @@ jobs:
               - "deploy/**"
               - ".dockerignore"
               - ".github/workflows/backend-ci-cd.yml"
+            moderation-service:
+              - "moderation-service/**"
+              - "deploy/**"
+              - ".dockerignore"
+              - ".github/workflows/backend-ci-cd.yml"
 
       - id: matrix
         shell: bash
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.force_all }}" == "true" ]]; then
-            echo 'services=["api-gateway","auth-service","user-service","notification-service","media-service","chat-service","analytic-service"]' >> "$GITHUB_OUTPUT"
+            echo 'services=["api-gateway","auth-service","user-service","notification-service","media-service","chat-service","analytic-service","moderation-service"]' >> "$GITHUB_OUTPUT"
           else
             echo 'services=${{ steps.filter.outputs.changes }}' >> "$GITHUB_OUTPUT"
           fi
@@ -174,6 +180,10 @@ jobs:
             analytic-service)
               echo "dir=analytic-service" >> "$GITHUB_OUTPUT"
               echo "repo=ott-analytic-service" >> "$GITHUB_OUTPUT"
+              ;;
+            moderation-service)
+              echo "dir=moderation-service" >> "$GITHUB_OUTPUT"
+              echo "repo=ott-moderation-service" >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "Unknown service: ${{ matrix.service }}" >&2

@@ -225,6 +225,7 @@ services:
     restart: unless-stopped
     environment:
       JAVA_TOOL_OPTIONS: -XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:InitialRAMPercentage=20.0
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       ANALYTIC_SERVER_PORT: 8092
       ANALYTIC_DB_URL: jdbc:postgresql://analytic-postgres:5432/${ANALYTIC_DB_NAME:-admin_analytic_db}
       ANALYTIC_DB_USERNAME: ${ANALYTIC_DB_USERNAME:-postgres}
@@ -238,6 +239,30 @@ services:
     depends_on:
       analytic-postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ott-network
+
+  moderation-service:
+    image: ${MODERATION_SERVICE_IMAGE:?MODERATION_SERVICE_IMAGE is required}
+    container_name: ott-moderation
+    restart: unless-stopped
+    environment:
+      JAVA_TOOL_OPTIONS: -XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:InitialRAMPercentage=20.0
+      SERVER_PORT: 8087
+      SPRING_DATASOURCE_URL: ${MODERATION_DB_URL:?MODERATION_DB_URL is required}
+      SPRING_DATASOURCE_USERNAME: ${MODERATION_DB_USERNAME:?MODERATION_DB_USERNAME is required}
+      SPRING_DATASOURCE_PASSWORD: ${MODERATION_DB_PASSWORD:?MODERATION_DB_PASSWORD is required}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
+      AWS_REGION: ${AWS_REGION:-ap-southeast-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID is required}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY is required}
+      MODERATION_REVIEW_REQUEST_DLQ: ${MODERATION_REVIEW_REQUEST_DLQ:-moderation.review.requests.dlq}
+    depends_on:
       rabbitmq:
         condition: service_healthy
     networks:
@@ -258,7 +283,7 @@ services:
       MEDIA_SERVICE_URL: http://media-service:8090
       CHAT_SERVICE_URL: http://chat-service:5000
       ANALYTIC_SERVICE_URL: http://analytic-service:8092
-      FRONTEND_URL_DEPLOYED: ${FRONTEND_URL_DEPLOYED:-https://your-frontend-domain.example.com}
+      FRONTEND_URL_DEPLOYED: ${FRONTEND_URL_DEPLOYED:-https://riff-iuh.vercel.app}
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
@@ -268,6 +293,7 @@ services:
       - media-service
       - chat-service
       - analytic-service
+      - moderation-service
     networks:
       - ott-network
 

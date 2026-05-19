@@ -18,6 +18,7 @@ case "$SERVICE" in
   media-service) IMAGE_KEY="MEDIA_SERVICE_IMAGE" ;;
   chat-service) IMAGE_KEY="CHAT_SERVICE_IMAGE" ;;
   analytic-service) IMAGE_KEY="ANALYTIC_SERVICE_IMAGE" ;;
+  moderation-service) IMAGE_KEY="MODERATION_SERVICE_IMAGE" ;;
   *)
     echo "Unknown service: $SERVICE" >&2
     exit 1
@@ -57,6 +58,10 @@ touch "$IMAGES_FILE"
     notification-service|user-service|media-service|chat-service)
       echo "Ensuring shared dependencies are running: redis rabbitmq"
       docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" up -d redis rabbitmq
+      ;;
+    moderation-service)
+      echo "Ensuring shared dependency is running: rabbitmq"
+      docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" up -d rabbitmq
       ;;
     auth-service)
       echo "Ensuring shared dependency is running: rabbitmq"

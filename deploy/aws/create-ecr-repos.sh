@@ -13,6 +13,7 @@ repos=(
   ott-media-service
   ott-chat-service
   ott-analytic-service
+  ott-moderation-service
 )
 
 for repo in "${repos[@]}"; do
