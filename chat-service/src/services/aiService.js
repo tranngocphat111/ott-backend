@@ -28,7 +28,11 @@ const MAX_MESSAGE_CHARS = 700;
 const MAX_TRANSLATE_CHARS = 4000;
 
 const EMPTY_SUMMARY =
-  "Cuộc hội thoại hiện chưa có nội dung quan trọng để tóm tắt.";
+  "Cuộc hội thoại hiện chưa có đủ nội dung rõ ràng để tóm tắt.";
+const EMPTY_SUMMARY_ALIASES = new Set([
+  EMPTY_SUMMARY.toLowerCase(),
+  "Cuộc hội thoại hiện chưa có nội dung quan trọng để tóm tắt.".toLowerCase(),
+]);
 
 const STRICT_JSON_SCHEMA_MODELS = new Set([
   "openai/gpt-oss-20b",
@@ -482,12 +486,16 @@ const extractFallbackActionItems = (messages) =>
       due: "",
     }));
 
+const isEmptySummaryValue = (value) =>
+  EMPTY_SUMMARY_ALIASES.has(sanitizeText(value, 160).toLowerCase());
+
 const normalizeSummaryPayload = (payload, messages) => {
   const summary = sanitizeText(payload?.summary, 1200) || EMPTY_SUMMARY;
-  const highlights = Array.isArray(payload?.highlights)
+  const hasImportantContent = !isEmptySummaryValue(summary);
+  const highlights = hasImportantContent && Array.isArray(payload?.highlights)
     ? payload.highlights.map((item) => sanitizeText(item, 180)).filter(Boolean).slice(0, 5)
     : [];
-  const actionItems = Array.isArray(payload?.actionItems)
+  const actionItems = hasImportantContent && Array.isArray(payload?.actionItems)
     ? payload.actionItems
         .map((item) => ({
           owner: sanitizeText(item?.owner || "Chưa rõ", 50),
@@ -497,7 +505,7 @@ const normalizeSummaryPayload = (payload, messages) => {
         .filter((item) => item.task)
         .slice(0, 5)
     : [];
-  const questions = Array.isArray(payload?.questions)
+  const questions = hasImportantContent && Array.isArray(payload?.questions)
     ? payload.questions.map((item) => sanitizeText(item, 180)).filter(Boolean).slice(0, 5)
     : [];
 
@@ -509,7 +517,7 @@ const normalizeSummaryPayload = (payload, messages) => {
     sentiment: sanitizeText(payload?.sentiment || "neutral", 30),
     meta: {
       messageCount: messages.length,
-      hasImportantContent: summary !== EMPTY_SUMMARY,
+      hasImportantContent,
     },
   };
 };
@@ -740,9 +748,11 @@ Trả về đúng JSON:
 }
 Quy tắc:
 - Không bịa thông tin, không thêm lời khuyên ngoài hội thoại.
-- Nếu chỉ có chào hỏi/tin rác/không có nội dung giá trị, summary phải là: "${EMPTY_SUMMARY}" và các mảng để rỗng.
+- Chỉ dùng summary "${EMPTY_SUMMARY}" khi gần như không có nội dung text để hiểu, ví dụ toàn emoji, chào hỏi rời rạc hoặc ký tự rác.
+- Trao đổi ngắn về xin lỗi, hiểu/chưa hiểu, cần giải thích thêm vẫn là nội dung hợp lệ; hãy tóm tắt trạng thái đang được làm rõ thay vì kết luận là không có giá trị.
 - Giữ tiếng Việt trừ khi metadata yêu cầu ngôn ngữ khác. Viết gọn, dễ đọc, nêu rõ quyết định hoặc việc cần làm nếu có.
-- Chỉ đưa action item khi hội thoại thật sự có yêu cầu hoặc cam kết rõ.`,
+- Chỉ đưa action item khi hội thoại thật sự có yêu cầu hoặc cam kết rõ.
+- questions chỉ chứa điểm thật sự còn cần người trong hội thoại làm rõ. Không biến questions thành gợi ý trả lời, không liệt kê câu hỏi đã có phản hồi rõ sau đó, và để rỗng nếu summary là "${EMPTY_SUMMARY}".`,
         },
         {
           role: "user",
