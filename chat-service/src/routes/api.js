@@ -98,6 +98,7 @@ router.post("/messages", MessageController.sendMessage);
 router.post("/messages/forward", MessageController.forwardMessage);
 router.put("/messages/:msgId/reaction", MessageController.reactToMessage);
 router.put("/messages/:msgId/vote", MessageController.votePoll);
+router.put("/messages/:msgId/poll-lock", MessageController.lockPoll);
 router.put("/messages/:msgId/revoke", MessageController.revokeMessage);
 router.put("/messages/:msgId/delete", MessageController.deleteMessage);
 router.put("/messages/:msgId/pin", MessageController.pinMessage);

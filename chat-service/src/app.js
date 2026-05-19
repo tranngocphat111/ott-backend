@@ -26,14 +26,61 @@ connectDB();
 const app = express();
 const server = http.createServer(app);
 
-app.use(cors());
+const normalizeOrigin = (origin) => String(origin || "").trim().replace(/\/+$/, "");
+const splitOrigins = (...values) =>
+  values
+    .flatMap((value) => String(value || "").split(","))
+    .map(normalizeOrigin)
+    .filter(Boolean);
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const allowedOrigins = Array.from(new Set(splitOrigins(
+  process.env.CHAT_ALLOWED_ORIGINS,
+  process.env.CORS_ALLOWED_ORIGINS,
+  process.env.FRONTEND_URL,
+  process.env.FRONTEND_URL_ALT,
+  process.env.FRONTEND_URL_DEPLOYED,
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:3000",
+  "https://*.vercel.app",
+)));
+
+const isOriginAllowed = (origin) => {
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (!normalizedOrigin) return true;
+
+  return allowedOrigins.some((allowedOrigin) => {
+    if (allowedOrigin === "*") return true;
+    if (allowedOrigin === normalizedOrigin) return true;
+    if (!allowedOrigin.includes("*")) return false;
+
+    const pattern = `^${escapeRegExp(allowedOrigin).replace(/\\\*/g, ".*")}$`;
+    return new RegExp(pattern).test(normalizedOrigin);
+  });
+};
+
+const corsOrigin = (origin, callback) => {
+  callback(null, isOriginAllowed(origin));
+};
+
+const corsOptions = {
+  origin: corsOrigin,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+  allowedHeaders: ["Content-Type", "Authorization", "Accept", "X-Requested-With"],
+  credentials: false,
+};
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
+    origin: corsOrigin,
+    methods: corsOptions.methods,
+    allowedHeaders: corsOptions.allowedHeaders,
+    credentials: false,
   },
 });
 

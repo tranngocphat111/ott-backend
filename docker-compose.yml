@@ -106,6 +106,10 @@ services:
     environment:
       PORT: ${CHAT_SERVICE_PORT}
       MONGO_URI: ${CHAT_MONGO_URI}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      FRONTEND_URL_ALT: ${FRONTEND_URL_ALT:-http://127.0.0.1:5173}
+      FRONTEND_URL_DEPLOYED: ${FRONTEND_URL_DEPLOYED:-https://*.vercel.app}
+      CHAT_ALLOWED_ORIGINS: ${CHAT_ALLOWED_ORIGINS:-}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       REDIS_HOST: redis
       REDIS_PORT: 6379

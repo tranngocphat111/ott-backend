@@ -22,6 +22,9 @@ public class RelationshipSocketServer {
     @Value("${relationship.socket.port:8091}")
     private Integer port;
 
+    @Value("${relationship.socket.origin:*}")
+    private String origin;
+
     private SocketIOServer server;
 
     @PostConstruct
@@ -29,7 +32,7 @@ public class RelationshipSocketServer {
         Configuration config = new Configuration();
         config.setHostname(host);
         config.setPort(port);
-        config.setOrigin("*");
+        config.setOrigin(origin);
 
         server = new SocketIOServer(config);
 

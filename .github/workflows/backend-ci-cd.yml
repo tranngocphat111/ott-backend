@@ -273,7 +273,10 @@ jobs:
 
             sudo cp "$REPO_DIR/deploy/docker-compose.prod.yml" "$APP_DIR/docker-compose.prod.yml"
             sudo cp "$REPO_DIR/deploy/deploy-service.sh" "$APP_DIR/deploy-service.sh"
+            sudo cp "$REPO_DIR/deploy/aws/configure-ec2-disk-guardrails.sh" "$APP_DIR/configure-ec2-disk-guardrails.sh"
+            sudo cp "$REPO_DIR/deploy/aws/grow-root-volume-ubuntu.sh" "$APP_DIR/grow-root-volume-ubuntu.sh"
             sudo chmod +x "$APP_DIR/deploy-service.sh"
+            sudo chmod +x "$APP_DIR/configure-ec2-disk-guardrails.sh" "$APP_DIR/grow-root-volume-ubuntu.sh"
           else
             echo "No ott-backend git clone found on EC2; using existing /opt/ott deploy files."
           fi

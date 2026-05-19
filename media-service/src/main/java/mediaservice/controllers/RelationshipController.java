@@ -95,13 +95,29 @@ public class RelationshipController {
 
     /* ─── Danh sách bạn bè ────────────────────────────────── */
     @GetMapping("/friends/{userId}")
-    public ResponseEntity<List<RelationshipResponse>> getFriends(@PathVariable String userId) {
+    public ResponseEntity<List<RelationshipResponse>> getFriends(
+            @PathVariable String userId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        if (page != null && size != null) {
+            org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+            return ResponseEntity.ok(relationshipService.getFriends(userId, pageable));
+        }
         return ResponseEntity.ok(relationshipService.getFriends(userId));
     }
 
     /* ─── Lời mời nhận được (PENDING) ────────────────────── */
     @GetMapping("/pending/{userId}")
-    public ResponseEntity<List<RelationshipResponse>> getPendingRequests(@PathVariable String userId) {
+    public ResponseEntity<List<RelationshipResponse>> getPendingRequests(
+            @PathVariable String userId,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size
+    ) {
+        if (page != null && size != null) {
+            org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page, size);
+            return ResponseEntity.ok(relationshipService.getPendingRequests(userId, pageable));
+        }
         return ResponseEntity.ok(relationshipService.getPendingRequests(userId));
     }
 

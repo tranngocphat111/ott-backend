@@ -62,6 +62,9 @@ const MessageSchema = new mongoose.Schema(
     // Poll fields
     poll_question: { type: String, default: null },
     poll_multiple_choice: { type: Boolean, default: false },
+    poll_locked: { type: Boolean, default: false },
+    poll_locked_at: { type: Date, default: null },
+    poll_locked_by: { type: String, ref: "User", default: null },
     poll_options: [
       {
         id: { type: String },

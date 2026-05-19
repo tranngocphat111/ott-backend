@@ -122,6 +122,11 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    public TopicExchange postEventsExchange() {
+        return new TopicExchange("post.events", true, false);
+    }
+
+    @Bean
     public Queue relationshipMediaQueue() {
         return new Queue("media_service_relationship_updates", true);
     }
@@ -131,6 +136,18 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(relationshipMediaQueue)
                 .to(relationshipEventsExchange)
                 .with("relationship.#");
+    }
+
+    @Bean
+    public Queue postMediaQueue() {
+        return new Queue("media_service_post_updates", true);
+    }
+
+    @Bean
+    public Binding postMediaBinding(Queue postMediaQueue, TopicExchange postEventsExchange) {
+        return BindingBuilder.bind(postMediaQueue)
+                .to(postEventsExchange)
+                .with("post.#");
     }
 
     @Bean

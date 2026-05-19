@@ -14,6 +14,7 @@ import mediaservice.realtime.NotificationPublisher;
 import mediaservice.services.CommentService;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -35,7 +36,12 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "comments", key = "#request.contentId")
+    @Caching(evict = {
+        @CacheEvict(value = "comments", key = "#request.contentId"),
+        @CacheEvict(value = "posts", key = "#request.contentId", condition = "#request.contentId != null"),
+        @CacheEvict(value = "allPosts", allEntries = true),
+        @CacheEvict(value = "userPosts", allEntries = true)
+    })
     public CommentResponse createComment(CommentRequest request) {
         Comment comment = new Comment();
         comment.setText(request.getText());
@@ -95,7 +101,12 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "comments", allEntries = true)
+    @Caching(evict = {
+        @CacheEvict(value = "comments", allEntries = true),
+        @CacheEvict(value = "posts", allEntries = true),
+        @CacheEvict(value = "allPosts", allEntries = true),
+        @CacheEvict(value = "userPosts", allEntries = true)
+    })
     public CommentResponse updateComment(String id, CommentRequest request) {
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Comment not found with id: " + id));
@@ -113,7 +124,12 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "comments", allEntries = true)
+    @Caching(evict = {
+        @CacheEvict(value = "comments", allEntries = true),
+        @CacheEvict(value = "posts", allEntries = true),
+        @CacheEvict(value = "allPosts", allEntries = true),
+        @CacheEvict(value = "userPosts", allEntries = true)
+    })
     public void deleteComment(String id) {
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Comment not found with id: " + id));

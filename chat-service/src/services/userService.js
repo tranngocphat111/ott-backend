@@ -1,5 +1,6 @@
 const User = require("../models/User");
 const UserCacheService = require("./userCacheService");
+const mongoose = require("mongoose");
 
 const extractAvatarPath = (avatarUrl) => {
   if (!avatarUrl) return "";
@@ -103,7 +104,7 @@ exports.getUser = async (user_id) => {
   }
 
   let user = await User.findOne({ user_id: user_id });
-  if (!user) {
+  if (!user && mongoose.Types.ObjectId.isValid(String(user_id || ""))) {
     user = await User.findById(user_id);
   }
   if (user) {

@@ -94,7 +94,7 @@ public class PostServiceImpl implements PostService {
         response.setTotalReactions(
                 (int) reactionRepository.countByTargetIdAndTargetType(postId, ReactionTargetType.POST));
         response.setTotalComments(
-                (int) commentRepository.countByContent_Id(postId));
+                (int) commentRepository.countByContent_IdAndIsDeletedFalse(postId));
         // totalShares has no backing model yet → stays 0
         return response;
     }
@@ -113,6 +113,7 @@ public class PostServiceImpl implements PostService {
         Post savedPost = postRepository.save(post);
         String userId = savedPost.getAccount() != null ? savedPost.getAccount().getId() : null;
         analyticsEventPublisher.publishPostCreated(savedPost.getId(), userId);
+        publishAfterCommit(savedPost.getId(), "POST", "CREATE");
         return enrichCounts(postMapper.toResponse(savedPost), savedPost.getId());
     }
 
@@ -265,6 +266,7 @@ public class PostServiceImpl implements PostService {
                 .orElseThrow(() -> new RuntimeException("Post not found with id: " + id));
         postMapper.updateEntity(request, post);
         Post updatedPost = postRepository.save(post);
+        publishAfterCommit(updatedPost.getId(), "POST", "UPDATE");
         return enrichCounts(postMapper.toResponse(updatedPost), updatedPost.getId());
     }
 

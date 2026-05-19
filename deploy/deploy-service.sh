@@ -9,6 +9,9 @@ RUNTIME_ENV_FILE="$APP_DIR/.env"
 IMAGES_FILE="$APP_DIR/.env.images"
 AWS_REGION="${AWS_REGION:-ap-southeast-1}"
 LOCK_FILE="/tmp/ott-deploy.lock"
+DOCKER_IMAGE_PRUNE_UNTIL="${DOCKER_IMAGE_PRUNE_UNTIL:-72h}"
+DOCKER_BUILDER_PRUNE_UNTIL="${DOCKER_BUILDER_PRUNE_UNTIL:-72h}"
+DOCKER_LOG_TRUNCATE_OVER="${DOCKER_LOG_TRUNCATE_OVER:-200M}"
 
 case "$SERVICE" in
   api-gateway) IMAGE_KEY="API_GATEWAY_IMAGE" ;;
@@ -82,6 +85,25 @@ touch "$IMAGES_FILE"
     exit 1
   fi
 
-  docker image prune -f
+  echo "Disk usage before Docker cleanup:"
+  df -h / || true
+  docker system df || true
+
+  echo "Pruning unused Docker images and build cache older than ${DOCKER_IMAGE_PRUNE_UNTIL}. Volumes are kept."
+  docker image prune -af --filter "until=${DOCKER_IMAGE_PRUNE_UNTIL}" || true
+  docker builder prune -af --filter "until=${DOCKER_BUILDER_PRUNE_UNTIL}" || true
+  docker container prune -f --filter "until=24h" || true
+  if [[ -d /var/lib/docker/containers ]]; then
+    find /var/lib/docker/containers -type f -name "*-json.log" -size +"${DOCKER_LOG_TRUNCATE_OVER}" -exec truncate -s 0 {} \; || true
+  fi
+
+  if command -v journalctl >/dev/null 2>&1; then
+    journalctl --vacuum-time=7d || true
+  fi
+
+  echo "Disk usage after Docker cleanup:"
+  df -h / || true
+  docker system df || true
+
   docker compose --env-file "$RUNTIME_ENV_FILE" --env-file "$IMAGES_FILE" -f "$COMPOSE_FILE" ps "$SERVICE"
 ) 200>"$LOCK_FILE"
