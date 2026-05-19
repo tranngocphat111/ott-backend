@@ -1794,6 +1794,10 @@ exports.votePoll = async ({ conversationId, msgId, userId, optionIds }) => {
     throw new Error("Khảo sát đã bị xóa hoặc thu hồi");
   }
 
+  if (message.poll_locked) {
+    throw new Error("Khảo sát đã bị khóa");
+  }
+
   const voter = await User.findOne({ user_id: userId }).select("name").lean();
   const voterName = voter?.name || "Một thành viên";
 
@@ -1870,4 +1874,53 @@ exports.votePoll = async ({ conversationId, msgId, userId, optionIds }) => {
     ...cachedMessage,
     systemMessage,
   };
+};
+
+// Lock a poll so nobody can vote or change their vote anymore
+exports.lockPoll = async ({ conversationId, msgId, userId }) => {
+  const message = await Message.findOne({
+    msg_id: msgId,
+    conversation_id: conversationId,
+  });
+
+  if (!message) {
+    throw new Error("Tin nhắn không tồn tại");
+  }
+
+  if (message.type !== "poll") {
+    throw new Error("Tin nhắn không phải là khảo sát");
+  }
+
+  if (message.is_deleted || message.is_revoked) {
+    throw new Error("Khảo sát đã bị xóa hoặc thu hồi");
+  }
+
+  if (String(message.sender_id) !== String(userId)) {
+    throw new Error("Chỉ người tạo khảo sát mới có thể khóa bình chọn");
+  }
+
+  if (message.poll_locked) {
+    throw new Error("Khảo sát đã bị khóa");
+  }
+
+  message.poll_locked = true;
+  message.poll_locked_at = new Date();
+  message.poll_locked_by = userId;
+
+  const updatedMessage = await message.save();
+  const sender = await User.findOne({ user_id: updatedMessage.sender_id })
+    .select("name avatar")
+    .lean();
+
+  const cachedMessage = {
+    ...updatedMessage.toObject(),
+    sender_name: sender?.name || updatedMessage.sender_name || "",
+    sender_avatar: sanitizeAvatarValue(
+      sender?.avatar || updatedMessage.sender_avatar || "",
+    ),
+  };
+
+  await messageCacheService.updateMessage(conversationId, msgId, cachedMessage);
+
+  return cachedMessage;
 };

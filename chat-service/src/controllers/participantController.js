@@ -10,6 +10,31 @@ const {
   publishMessageSeen,
 } = require("../events/chatEvents");
 
+const normalizeMessageId = (value) => {
+  const normalized = String(value || "0").trim();
+  return /^\d+$/.test(normalized) ? normalized : "0";
+};
+
+const maxMessageId = (left, right) => {
+  const safeLeft = normalizeMessageId(left);
+  const safeRight = normalizeMessageId(right);
+  try {
+    return BigInt(safeLeft) >= BigInt(safeRight) ? safeLeft : safeRight;
+  } catch {
+    return safeLeft >= safeRight ? safeLeft : safeRight;
+  }
+};
+
+const isMessageIdAfter = (left, right) => {
+  const safeLeft = normalizeMessageId(left);
+  const safeRight = normalizeMessageId(right);
+  try {
+    return BigInt(safeLeft) > BigInt(safeRight);
+  } catch {
+    return safeLeft > safeRight;
+  }
+};
+
 const buildConversationPreviewContent = (message) => {
   if (!message) return "";
 
@@ -50,12 +75,9 @@ exports.getConversationsByUserId = async (req, res) => {
           // Nếu conversation không tồn tại, bỏ qua
           if (!conversation) return null;
 
-          const lastReadMsgId = participant.last_read_message_id || "0";
-          const deletedMsgId = participant.deleted_msg_id || "0";
-          const anchorMsgId =
-            BigInt(lastReadMsgId) > BigInt(deletedMsgId)
-              ? lastReadMsgId
-              : deletedMsgId;
+          const lastReadMsgId = normalizeMessageId(participant.last_read_message_id);
+          const deletedMsgId = normalizeMessageId(participant.deleted_msg_id);
+          const anchorMsgId = maxMessageId(lastReadMsgId, deletedMsgId);
 
           // Last message hiển thị ở sidebar phải theo phạm vi nhìn thấy của chính user.
           const visibleLastMessage = await Message.findOne({
@@ -71,27 +93,16 @@ exports.getConversationsByUserId = async (req, res) => {
           try {
             if (
               visibleLastMessage?.msg_id &&
-              BigInt(visibleLastMessage.msg_id) > BigInt(anchorMsgId)
+              isMessageIdAfter(visibleLastMessage.msg_id, anchorMsgId)
             ) {
-              // For numeric comparison with large numbers in MongoDB, we need to use $where or numeric operators
-              // Since msg_id is a string, we need to compare them as BigInt in JavaScript
-              const messages = await Message.find({
+              unread_count = await Message.countDocuments({
                 conversation_id: conversation._id,
+                msg_id: { $gt: anchorMsgId },
                 is_deleted: { $ne: true },
                 is_revoked: { $ne: true },
                 sender_id: { $ne: userId },
                 deleted_for: { $ne: userId },
-              })
-                .select("msg_id")
-                .lean();
-
-              unread_count = messages.filter((m) => {
-                try {
-                  return BigInt(m.msg_id) > BigInt(anchorMsgId);
-                } catch {
-                  return false;
-                }
-              }).length;
+              });
             }
           } catch (error) {
             console.error("Error calculating unread count:", error);

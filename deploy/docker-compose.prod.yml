@@ -1,8 +1,15 @@
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "${DOCKER_LOG_MAX_SIZE:-20m}"
+    max-file: "${DOCKER_LOG_MAX_FILE:-3}"
+
 services:
   analytic-postgres:
     image: postgres:15-alpine
     container_name: analytic-postgres
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_DB: ${ANALYTIC_DB_NAME:-admin_analytic_db}
       POSTGRES_USER: ${ANALYTIC_DB_USERNAME:-postgres}
@@ -21,6 +28,7 @@ services:
     image: redis:7-alpine
     container_name: ott-redis
     restart: unless-stopped
+    logging: *default-logging
     command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     volumes:
       - redis_data:/data
@@ -36,6 +44,7 @@ services:
     image: rabbitmq:3.12-management-alpine
     container_name: ott-rabbitmq
     restart: unless-stopped
+    logging: *default-logging
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USERNAME:-admin}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
@@ -53,6 +62,7 @@ services:
     image: ${NOTIFICATION_SERVICE_IMAGE:?NOTIFICATION_SERVICE_IMAGE is required}
     container_name: ott-notification
     restart: unless-stopped
+    logging: *default-logging
     environment:
       JAVA_TOOL_OPTIONS: -XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:InitialRAMPercentage=20.0
       NOTIF_DB_URL: ${NOTIF_DB_URL:?NOTIF_DB_URL is required}
@@ -82,6 +92,7 @@ services:
     image: ${USER_SERVICE_IMAGE:?USER_SERVICE_IMAGE is required}
     container_name: ott-user
     restart: unless-stopped
+    logging: *default-logging
     environment:
       JAVA_TOOL_OPTIONS: -XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:InitialRAMPercentage=20.0
       USER_DB_URL: ${USER_DB_URL:?USER_DB_URL is required}
@@ -118,6 +129,7 @@ services:
     image: ${AUTH_SERVICE_IMAGE:?AUTH_SERVICE_IMAGE is required}
     container_name: ott-auth
     restart: unless-stopped
+    logging: *default-logging
     environment:
       JAVA_TOOL_OPTIONS: -XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:InitialRAMPercentage=20.0
       AUTH_DB_URL: ${AUTH_DB_URL:?AUTH_DB_URL is required}
@@ -148,6 +160,7 @@ services:
     image: ${MEDIA_SERVICE_IMAGE:?MEDIA_SERVICE_IMAGE is required}
     container_name: ott-media
     restart: unless-stopped
+    logging: *default-logging
     environment:
       JAVA_TOOL_OPTIONS: -XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:InitialRAMPercentage=20.0
       SOCIAL_DB_URL: ${SOCIAL_DB_URL:?SOCIAL_DB_URL is required}
@@ -164,6 +177,7 @@ services:
       USER_SERVICE_URL: http://user-service:8082
       RELATIONSHIP_SOCKET_HOST: ${RELATIONSHIP_SOCKET_HOST:-0.0.0.0}
       RELATIONSHIP_SOCKET_PORT: ${RELATIONSHIP_SOCKET_PORT:-8091}
+      RELATIONSHIP_SOCKET_ORIGIN: ${RELATIONSHIP_SOCKET_ORIGIN:-*}
       AWS_SOCIAL_ACCESS_KEY_ID: ${AWS_SOCIAL_ACCESS_KEY_ID:?AWS_SOCIAL_ACCESS_KEY_ID is required}
       AWS_SOCIAL_SECRET_ACCESS_KEY: ${AWS_SOCIAL_SECRET_ACCESS_KEY:?AWS_SOCIAL_SECRET_ACCESS_KEY is required}
       AWS_SOCIAL_REGION: ${AWS_SOCIAL_REGION:-ap-southeast-1}
@@ -184,10 +198,14 @@ services:
     image: ${CHAT_SERVICE_IMAGE:?CHAT_SERVICE_IMAGE is required}
     container_name: ott-chat
     restart: unless-stopped
+    logging: *default-logging
     environment:
       NODE_ENV: production
       PORT: 5000
       FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL is required}
+      FRONTEND_URL_ALT: ${FRONTEND_URL_ALT:-http://localhost:3000}
+      FRONTEND_URL_DEPLOYED: ${FRONTEND_URL_DEPLOYED:-https://*.vercel.app}
+      CHAT_ALLOWED_ORIGINS: ${CHAT_ALLOWED_ORIGINS:-}
       MONGO_URI: ${MONGO_URI:?MONGO_URI is required}
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -223,6 +241,7 @@ services:
     image: ${ANALYTIC_SERVICE_IMAGE:?ANALYTIC_SERVICE_IMAGE is required}
     container_name: ott-analytic
     restart: unless-stopped
+    logging: *default-logging
     environment:
       JAVA_TOOL_OPTIONS: -XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:InitialRAMPercentage=20.0
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
@@ -272,6 +291,7 @@ services:
     image: ${API_GATEWAY_IMAGE:?API_GATEWAY_IMAGE is required}
     container_name: ott-gateway
     restart: unless-stopped
+    logging: *default-logging
     environment:
       JAVA_TOOL_OPTIONS: -XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:InitialRAMPercentage=20.0
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
@@ -283,7 +303,7 @@ services:
       MEDIA_SERVICE_URL: http://media-service:8090
       CHAT_SERVICE_URL: http://chat-service:5000
       ANALYTIC_SERVICE_URL: http://analytic-service:8092
-      FRONTEND_URL_DEPLOYED: ${FRONTEND_URL_DEPLOYED:-https://riff-iuh.vercel.app}
+      FRONTEND_URL_DEPLOYED: ${FRONTEND_URL_DEPLOYED:-https://*.vercel.app}
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:

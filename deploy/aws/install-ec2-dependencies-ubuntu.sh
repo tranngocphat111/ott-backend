@@ -3,6 +3,7 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/ott}"
 SWAP_SIZE="${SWAP_SIZE:-2G}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 sudo apt-get update
 sudo apt-get upgrade -y
@@ -14,6 +15,10 @@ fi
 
 sudo systemctl enable --now docker
 sudo usermod -aG docker "${SUDO_USER:-ubuntu}" || true
+
+if [[ -f "$SCRIPT_DIR/configure-ec2-disk-guardrails.sh" ]]; then
+  sudo bash "$SCRIPT_DIR/configure-ec2-disk-guardrails.sh"
+fi
 
 if ! command -v aws >/dev/null 2>&1; then
   ARCH="$(uname -m)"
