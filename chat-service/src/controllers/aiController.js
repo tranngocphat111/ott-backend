@@ -4,7 +4,7 @@ const participantService = require("../services/participantService");
 const User = require("../models/User");
 const fs = require("fs/promises");
 
-const SMART_REPLY_TYPES = new Set(["text", "link"]);
+const SMART_REPLY_TYPES = new Set(["text"]);
 const SUMMARY_TYPES = new Set(["text"]);
 
 const toPositiveInt = (value, fallback, max) => {
@@ -46,6 +46,17 @@ const isVisibleMessage = (message) =>
   !message.is_revoked &&
   !message.deleted_at;
 
+const isVisibleToRequester = (message, requesterId) => {
+  if (!isVisibleMessage(message)) return false;
+  if (!requesterId) return true;
+
+  const deletedFor = Array.isArray(message.deleted_for)
+    ? message.deleted_for.map((userId) => String(userId))
+    : [];
+
+  return !deletedFor.includes(String(requesterId));
+};
+
 const getSenderNameMap = async (messages, requesterId) => {
   const senderIds = [
     ...new Set(
@@ -67,7 +78,7 @@ const getSenderNameMap = async (messages, requesterId) => {
 
 const buildContextMessages = async (rawMessages, { requesterId, allowedTypes }) => {
   const visibleMessages = (rawMessages || [])
-    .filter(isVisibleMessage)
+    .filter((message) => isVisibleToRequester(message, requesterId))
     .filter((message) => !allowedTypes || allowedTypes.has(message.type))
     .filter((message) => extractContent(message).trim());
 
@@ -114,6 +125,9 @@ exports.getSmartReplies = async (req, res) => {
     if (!conversationId) {
       return res.status(400).json({ error: "conversationId is required" });
     }
+    if (!requesterId) {
+      return res.status(400).json({ error: "userId is required" });
+    }
 
     await ensureConversationAccess(conversationId, requesterId);
 
@@ -121,6 +135,7 @@ exports.getSmartReplies = async (req, res) => {
     const messages = await messageService.getMessages(conversationId, {
       limit,
       types: SMART_REPLY_TYPES,
+      userId: requesterId,
     });
     const contextMessages = await buildContextMessages(messages, {
       requesterId,
@@ -154,6 +169,9 @@ exports.summarizeConversation = async (req, res) => {
     if (!conversationId) {
       return res.status(400).json({ error: "conversationId is required" });
     }
+    if (!requesterId) {
+      return res.status(400).json({ error: "userId is required" });
+    }
 
     await ensureConversationAccess(conversationId, requesterId);
 
@@ -161,6 +179,7 @@ exports.summarizeConversation = async (req, res) => {
     const messages = await messageService.getMessages(conversationId, {
       limit,
       types: SUMMARY_TYPES,
+      userId: requesterId,
     });
     const contextMessages = await buildContextMessages(messages, {
       requesterId,
