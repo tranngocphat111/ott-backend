@@ -351,8 +351,25 @@ const copyS3Object = async (sourceKey) => {
   return newKey;
 };
 
-exports.getMessages = async (conversationId, { limit = 20, skip = 0 } = {}) => {
-  const messages = await Message.find({ conversation_id: conversationId })
+const normalizeMessageTypes = (types) => {
+  if (!types) return [];
+  const rawTypes = types instanceof Set ? Array.from(types) : types;
+  return (Array.isArray(rawTypes) ? rawTypes : [rawTypes])
+    .map((type) => String(type || "").trim())
+    .filter(Boolean);
+};
+
+exports.getMessages = async (
+  conversationId,
+  { limit = 20, skip = 0, types } = {},
+) => {
+  const messageTypes = normalizeMessageTypes(types);
+  const query = {
+    conversation_id: conversationId,
+    ...(messageTypes.length ? { type: { $in: messageTypes } } : {}),
+  };
+
+  const messages = await Message.find(query)
     .sort({ msg_id: -1 })
     .skip(skip)
     .limit(limit)
