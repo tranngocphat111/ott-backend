@@ -186,6 +186,7 @@ services:
       - notification-service
       - media-service
       - analytic-service
+      - moderation-service
 
 volumes:
   redis_data:
