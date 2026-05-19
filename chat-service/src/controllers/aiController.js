@@ -5,26 +5,7 @@ const User = require("../models/User");
 const fs = require("fs/promises");
 
 const SMART_REPLY_TYPES = new Set(["text", "link"]);
-const SUMMARY_TYPES = new Set([
-  "text",
-  "link",
-  "poll",
-  "system_add",
-  "system_block",
-  "system_leave",
-  "system_pin",
-  "system_unpin",
-  "system_poll",
-  "system_transfer_owner",
-  "system_role_change",
-  "system_friend_request",
-  "call_start",
-  "call_join",
-  "call_end",
-  "call_missed",
-  "call_cancel",
-  "call_no_answer",
-]);
+const SUMMARY_TYPES = new Set(["text"]);
 
 const toPositiveInt = (value, fallback, max) => {
   const parsed = Number(value);
@@ -137,7 +118,10 @@ exports.getSmartReplies = async (req, res) => {
     await ensureConversationAccess(conversationId, requesterId);
 
     const limit = toPositiveInt(req.query.limit, 12, 20);
-    const messages = await messageService.getMessages(conversationId, { limit });
+    const messages = await messageService.getMessages(conversationId, {
+      limit,
+      types: SMART_REPLY_TYPES,
+    });
     const contextMessages = await buildContextMessages(messages, {
       requesterId,
       allowedTypes: SMART_REPLY_TYPES,
@@ -174,7 +158,10 @@ exports.summarizeConversation = async (req, res) => {
     await ensureConversationAccess(conversationId, requesterId);
 
     const limit = toPositiveInt(req.query.limit, 60, 120);
-    const messages = await messageService.getMessages(conversationId, { limit });
+    const messages = await messageService.getMessages(conversationId, {
+      limit,
+      types: SUMMARY_TYPES,
+    });
     const contextMessages = await buildContextMessages(messages, {
       requesterId,
       allowedTypes: SUMMARY_TYPES,
