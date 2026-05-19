@@ -1,6 +1,7 @@
 const Relationship = require("../models/Relationship");
 const { publishRelationshipEvent } = require("../events/relationshipEvents");
 const { publishNotification } = require("../events/notificationEvents");
+const mongoose = require("mongoose");
 
 const getUserDisplayName = async (userId) => {
   const User = require("../models/User");
@@ -15,6 +16,18 @@ exports.getRelationshipBetween = async (userId1, userId2) => {
       { requester_id: userId2, receiver_id: userId1 },
     ],
   });
+};
+
+const findRelationshipByAnyId = async (relationshipId) => {
+  const normalizedId = String(relationshipId || "").trim();
+  if (!normalizedId) return null;
+
+  if (mongoose.Types.ObjectId.isValid(normalizedId)) {
+    const relationship = await Relationship.findById(normalizedId);
+    if (relationship) return relationship;
+  }
+
+  return Relationship.findOne({ relationship_id: normalizedId });
 };
 
 const ensureFriendRequestSentMessage = async (
@@ -166,7 +179,7 @@ exports.sendFriendRequest = async (requesterId, receiverId) => {
 };
 
 exports.acceptFriendRequest = async (relationshipId) => {
-  const relationship = await Relationship.findById(relationshipId);
+  const relationship = await findRelationshipByAnyId(relationshipId);
   if (!relationship) throw new Error("Không tìm thấy quan hệ.");
 
   relationship.status = "ACCEPTED";
@@ -210,7 +223,23 @@ exports.acceptFriendRequest = async (relationshipId) => {
 };
 
 exports.updateRelationshipFromEvent = async (payload) => {
-  const { requesterId, receiverId, status, relationshipId } = payload;
+  const { requesterId, receiverId, status, relationshipId, source } = payload;
+  if (!requesterId || !receiverId || !status) return null;
+
+  const existing = await exports.getRelationshipBetween(requesterId, receiverId);
+  if (!existing && status === "REMOVED") {
+    return null;
+  }
+
+  const update = {
+    requester_id: requesterId,
+    receiver_id: receiverId,
+    status: status,
+  };
+
+  if (relationshipId && source !== "chat-service") {
+    update.relationship_id = relationshipId;
+  }
 
   const relationship = await Relationship.findOneAndUpdate(
     {
@@ -219,12 +248,7 @@ exports.updateRelationshipFromEvent = async (payload) => {
         { requester_id: receiverId, receiver_id: requesterId },
       ],
     },
-    {
-      requester_id: requesterId,
-      receiver_id: receiverId,
-      status: status,
-      relationship_id: relationshipId,
-    },
+    update,
     { upsert: true, new: true }
   );
 
@@ -232,7 +256,7 @@ exports.updateRelationshipFromEvent = async (payload) => {
 };
 
 exports.rejectFriendRequest = async (relationshipId) => {
-  const relationship = await Relationship.findById(relationshipId);
+  const relationship = await findRelationshipByAnyId(relationshipId);
   if (!relationship) throw new Error("Không tìm thấy quan hệ.");
 
   relationship.status = "REMOVED";
@@ -247,7 +271,7 @@ exports.rejectFriendRequest = async (relationshipId) => {
 };
 
 exports.cancelFriendRequest = async (relationshipId) => {
-  const relationship = await Relationship.findById(relationshipId);
+  const relationship = await findRelationshipByAnyId(relationshipId);
   if (!relationship) throw new Error("Không tìm thấy quan hệ.");
 
   relationship.status = "REMOVED";

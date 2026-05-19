@@ -165,7 +165,7 @@ const initUserConsumer = async (channel, io) => {
     console.log(
       ` [*] UserConsumer: Listening for events on queue: ${qCreated.queue}`,
     );
-    channel.consume(qCreated.queue, (msg) => handleUserCreated(channel, msg), {
+    channel.consume(qCreated.queue, (msg) => handleUserEvent(channel, msg), {
       noAck: false,
     });
 
@@ -180,6 +180,19 @@ const initUserConsumer = async (channel, io) => {
     channel.consume(
       qUpdated.queue,
       (msg) => handleUserUpdated(channel, msg, io),
+      { noAck: false },
+    );
+
+    const qLogout = await channel.assertQueue(QUEUE_LOGOUT, {
+      durable: true,
+    });
+    await channel.bindQueue(qLogout.queue, EXCHANGE_NAME, ROUTING_KEY_LOGOUT);
+    console.log(
+      ` [*] UserConsumer: Listening for events on queue: ${qLogout.queue}`,
+    );
+    channel.consume(
+      qLogout.queue,
+      (msg) => handleUserLogout(channel, msg, io),
       { noAck: false },
     );
   } catch (error) {

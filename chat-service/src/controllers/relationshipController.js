@@ -1,6 +1,42 @@
 const relationshipService = require("../services/relationshipService");
 const ConversationService = require("../services/conversationService");
 
+const buildRelationshipUpdatePayload = (relationship, typeOverride = null, actorId = null) => {
+  if (!relationship) return null;
+  const raw =
+    typeof relationship.toObject === "function"
+      ? relationship.toObject()
+      : relationship;
+  const relationshipId = raw._id || raw.id || raw.relationship_id;
+  const requesterId = raw.requester_id || raw.requesterId;
+  const receiverId = raw.receiver_id || raw.receiverId;
+  const status = raw.status ? String(raw.status).toUpperCase() : raw.status;
+
+  return {
+    ...raw,
+    _id: raw._id,
+    id: raw.id || raw._id,
+    relationshipId,
+    relationship_id: raw.relationship_id,
+    requesterId,
+    receiverId,
+    requester_id: requesterId,
+    receiver_id: receiverId,
+    status,
+    type: typeOverride || status,
+    actorId,
+    timestamp: new Date().toISOString(),
+  };
+};
+
+const emitRelationshipUpdate = (io, relationship, typeOverride = null, actorId = null) => {
+  const payload = buildRelationshipUpdatePayload(relationship, typeOverride, actorId);
+  if (!io || !payload?.requesterId || !payload?.receiverId) return;
+
+  io.to(`user:${payload.requesterId}`).emit("cap_nhat_quan_he", payload);
+  io.to(`user:${payload.receiverId}`).emit("cap_nhat_quan_he", payload);
+};
+
 exports.sendRequest = async (req, res) => {
   try {
     const { requesterId, receiverId } = req.body;
@@ -20,6 +56,7 @@ exports.sendRequest = async (req, res) => {
       req.io.to(`user:${receiverId}`).emit("tin_nhan", message);
       req.io.to(`user:${requesterId}`).emit("tin_nhan", message);
     }
+    emitRelationshipUpdate(req.io, relationship, "REQUEST_SENT", requesterId);
 
     res.status(200).json(relationship);
   } catch (error) {
@@ -37,6 +74,7 @@ exports.acceptRequest = async (req, res) => {
       req.io.to(`user:${relationship.requester_id}`).emit("tin_nhan", message);
       req.io.to(`user:${relationship.receiver_id}`).emit("tin_nhan", message);
     }
+    emitRelationshipUpdate(req.io, relationship, "REQUEST_ACCEPTED", relationship.receiver_id);
 
     res.status(200).json(relationship);
   } catch (error) {
@@ -49,6 +87,7 @@ exports.rejectRequest = async (req, res) => {
   try {
     const { relationshipId } = req.params;
     const relationship = await relationshipService.rejectFriendRequest(relationshipId);
+    emitRelationshipUpdate(req.io, relationship, "REQUEST_REJECTED", relationship.receiver_id);
     
     res.status(200).json(relationship);
   } catch (error) {
@@ -60,6 +99,7 @@ exports.cancelRequest = async (req, res) => {
   try {
     const { relationshipId } = req.params;
     const relationship = await relationshipService.cancelFriendRequest(relationshipId);
+    emitRelationshipUpdate(req.io, relationship, "REQUEST_CANCELLED", relationship.requester_id);
 
     res.status(200).json(relationship);
   } catch (error) {
@@ -92,6 +132,7 @@ exports.unfriend = async (req, res) => {
     const { userId, friendId } = req.body;
     console.log(`[RelationshipController] Unfriend request from ${userId} for friend ${friendId}`);
     const relationship = await relationshipService.unfriend(userId, friendId);
+    emitRelationshipUpdate(req.io, relationship, "UNFRIENDED", userId);
 
     res.status(200).json(relationship);
   } catch (error) {
@@ -104,24 +145,7 @@ exports.blockUser = async (req, res) => {
   try {
     const { userId, targetId } = req.body;
     const relationship = await relationshipService.blockUser(userId, targetId);
-
-    // Notify both users via socket
-    req.io.to(`user:${userId}`).emit("cap_nhat_quan_he", {
-      type: "BLOCKED",
-      relationshipId: relationship._id,
-      requesterId: userId,
-      receiverId: targetId,
-      status: "BLOCKED",
-      actorId: userId
-    });
-    req.io.to(`user:${targetId}`).emit("cap_nhat_quan_he", {
-      type: "BLOCKED",
-      relationshipId: relationship._id,
-      requesterId: userId,
-      receiverId: targetId,
-      status: "BLOCKED",
-      actorId: userId
-    });
+    emitRelationshipUpdate(req.io, relationship, "BLOCKED", userId);
 
     res.status(200).json(relationship);
   } catch (error) {
@@ -133,24 +157,7 @@ exports.unblockUser = async (req, res) => {
   try {
     const { userId, targetId } = req.body;
     const relationship = await relationshipService.unblockUser(userId, targetId);
-
-    // Notify both users via socket
-    req.io.to(`user:${userId}`).emit("cap_nhat_quan_he", {
-      type: "UNFRIENDED", // UNFRIENDED is used for clearing status
-      relationshipId: relationship._id,
-      requesterId: userId,
-      receiverId: targetId,
-      status: relationship.status,
-      actorId: userId
-    });
-    req.io.to(`user:${targetId}`).emit("cap_nhat_quan_he", {
-      type: "UNFRIENDED",
-      relationshipId: relationship._id,
-      requesterId: userId,
-      receiverId: targetId,
-      status: relationship.status,
-      actorId: userId
-    });
+    emitRelationshipUpdate(req.io, relationship, "UNFRIENDED", userId);
 
     res.status(200).json(relationship);
   } catch (error) {
