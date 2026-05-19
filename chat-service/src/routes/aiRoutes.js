@@ -61,6 +61,10 @@ const uploadAudio = (req, res, next) => {
   });
 };
 
+router.get('/health', (req, res) => {
+  res.json({ ok: true, service: 'chat-ai' });
+});
+
 router.get('/smart-replies', aiController.getSmartReplies);
 router.get('/summarize', aiController.summarizeConversation);
 router.post('/translate', aiController.translateText);

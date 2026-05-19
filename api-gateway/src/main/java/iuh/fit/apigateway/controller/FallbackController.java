@@ -52,6 +52,16 @@ public class FallbackController {
                         .build());
     }
 
+    @RequestMapping("/chat")
+    public ResponseEntity<ApiResponse<Void>> chatFallback() {
+        log.warn("Circuit breaker triggered for chat-service or ai-service");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.<Void>builder()
+                        .code(5005)
+                        .message("CHAT_SERVICE_UNAVAILABLE")
+                        .build());
+    }
+
     @RequestMapping("/analytic")
     public ResponseEntity<ApiResponse<Void>> analyticFallback() {
         log.warn("Circuit breaker triggered for analytic-service");

@@ -60,6 +60,8 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
 
             "/actuator/**",
             "/riff/api/actuator/**",
+            "/riff/api/ai/health",
+            "/riff/api/chat/ai/health",
             "/socket.io/**",
             "/riff/api/chat/socket.io/**"   
     );
