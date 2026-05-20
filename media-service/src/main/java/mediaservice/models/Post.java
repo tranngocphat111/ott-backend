@@ -22,5 +22,7 @@ import lombok.ToString;
 public class Post extends Content{
     private String caption;
 
-
+    @jakarta.persistence.ManyToOne(fetch = jakarta.persistence.FetchType.LAZY)
+    @jakarta.persistence.JoinColumn(name = "shared_post_id")
+    private Post sharedPost;
 }

@@ -15,6 +15,7 @@ public interface PostService {
                             List<MultipartFile> files, List<String> captions,
                             List<mediaservice.dtos.requests.AccessControlRequest> accessControls);
     PostResponse getPostById(String id);
+    PostResponse getPostById(String id, String viewerId);
 
 
     List<PostResponse> getAllPosts();
@@ -34,5 +35,7 @@ public interface PostService {
                             List<mediaservice.dtos.requests.MediaRequest> existingMedias);
     void deletePost(String id);
     List<PostResponse> getPostsByUserId(String userId);
+    List<PostResponse> getPostsByUserId(String userId, String viewerId);
+    PostResponse sharePost(String postId, String accountId, String caption, VisibilityType visibility);
 }
 

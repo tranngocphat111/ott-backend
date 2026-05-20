@@ -40,4 +40,14 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Stri
     List<Relationship> findFriendsByUserId(@Param("userId") String userId,
                                            @Param("status") RelationshipStatusType status,
                                            org.springframework.data.domain.Pageable pageable);
+
+    @Query("SELECT COUNT(r) > 0 FROM Relationship r WHERE r.status = 'BLOCKED' AND " +
+           "((r.requester.id = :userId1 AND r.receiver.id = :userId2) OR " +
+           "(r.requester.id = :userId2 AND r.receiver.id = :userId1))")
+    boolean existsBlockBetween(@Param("userId1") String userId1, @Param("userId2") String userId2);
+
+    @Query("SELECT COUNT(r) > 0 FROM Relationship r WHERE r.status = 'ACCEPTED' AND " +
+           "((r.requester.id = :userId1 AND r.receiver.id = :userId2) OR " +
+           "(r.requester.id = :userId2 AND r.receiver.id = :userId1))")
+    boolean isFriend(@Param("userId1") String userId1, @Param("userId2") String userId2);
 }

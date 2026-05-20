@@ -98,5 +98,7 @@ public interface PostRepository extends JpaRepository<Post, String> {
         @Param("accountId") String accountId,
         Pageable pageable
     );
+
+    long countBySharedPost_Id(String originalPostId);
 }
 

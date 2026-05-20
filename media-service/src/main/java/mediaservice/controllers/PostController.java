@@ -60,6 +60,17 @@ public class PostController {
         return ResponseEntity.ok(postService.createPost(accountId, caption, vis, files, captions, accessControls));
     }
 
+    /** POST /posts/{postId}/share – chia sẻ bài post */
+    @PostMapping("/{postId}/share")
+    public ResponseEntity<PostResponse> sharePost(
+            @PathVariable String postId,
+            @RequestParam String accountId,
+            @RequestParam(required = false) String caption,
+            @RequestParam(defaultValue = "PUBLIC") String visibility) {
+        VisibilityType vis = VisibilityType.valueOf(visibility.toUpperCase());
+        return ResponseEntity.ok(postService.sharePost(postId, accountId, caption, vis));
+    }
+
     /** GET /posts – tất cả bài post */
     @GetMapping
     public ResponseEntity<List<PostResponse>> getAllPosts() {
@@ -83,14 +94,18 @@ public class PostController {
 
     /** GET /posts/{id} */
     @GetMapping("/{id}")
-    public ResponseEntity<PostResponse> getPostById(@PathVariable String id) {
-        return ResponseEntity.ok(postService.getPostById(id));
+    public ResponseEntity<PostResponse> getPostById(
+            @PathVariable String id,
+            @RequestParam(required = false) String viewerId) {
+        return ResponseEntity.ok(postService.getPostById(id, viewerId));
     }
 
     /** GET /posts/user/{userId} */
     @GetMapping("/user/{userId}")
-    public ResponseEntity<List<PostResponse>> getPostsByUser(@PathVariable String userId) {
-        return ResponseEntity.ok(postService.getPostsByUserId(userId));
+    public ResponseEntity<List<PostResponse>> getPostsByUser(
+            @PathVariable String userId,
+            @RequestParam(required = false) String viewerId) {
+        return ResponseEntity.ok(postService.getPostsByUserId(userId, viewerId));
     }
 
     /** PUT /posts/{id} – cập nhật bài post */

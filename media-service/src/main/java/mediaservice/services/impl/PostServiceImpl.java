@@ -42,11 +42,13 @@ import mediaservice.models.enums.RuleType;
 import mediaservice.models.enums.VisibilityType;
 import mediaservice.realtime.MediaRealtimePublisher;
 import mediaservice.realtime.MediaRealtimeUpdate;
+import mediaservice.realtime.PostActivityPublisher;
 import mediaservice.repositories.CommentRepository;
 import mediaservice.repositories.ContentAccessControlRepository;
 import mediaservice.repositories.MediaRepository;
 import mediaservice.repositories.PostRepository;
 import mediaservice.repositories.ReactionRepository;
+import mediaservice.repositories.RelationshipRepository;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.AnalyticsEventPublisher;
 import mediaservice.services.MediaCompressionJobPublisher;
@@ -66,6 +68,7 @@ public class PostServiceImpl implements PostService {
     private final PostMapper postMapper;
     private final ReactionRepository reactionRepository;
     private final CommentRepository commentRepository;
+    private final RelationshipRepository relationshipRepository;
     private final UserAccountRepository userAccountRepository;
     private final MediaRepository mediaRepository;
     private final S3Service s3Service;
@@ -76,6 +79,7 @@ public class PostServiceImpl implements PostService {
     private final MediaDeleteJobPublisher mediaDeleteJobPublisher;
     private final MediaUploadJobPublisher mediaUploadJobPublisher;
     private final MediaRealtimePublisher mediaRealtimePublisher;
+    private final PostActivityPublisher postActivityPublisher;
 
     private final mediaservice.services.UserSyncService userSyncService;
     private final mediaservice.mappers.ContentAccessControlMapper contentAccessControlMapper;
@@ -91,12 +95,86 @@ public class PostServiceImpl implements PostService {
 
     /* ─── helper: fill totalReactions / totalComments from DB ─ */
     private PostResponse enrichCounts(PostResponse response, String postId) {
+        return enrichCounts(response, postId, null);
+    }
+
+    private PostResponse enrichCounts(PostResponse response, String postId, String viewerAccountId) {
+        if (response == null) return null;
         response.setTotalReactions(
                 (int) reactionRepository.countByTargetIdAndTargetType(postId, ReactionTargetType.POST));
         response.setTotalComments(
                 (int) commentRepository.countByContent_IdAndIsDeletedFalse(postId));
-        // totalShares has no backing model yet → stays 0
+        response.setTotalShares(
+                (int) postRepository.countBySharedPost_Id(postId));
+        
+        if (response.getSharedPost() != null) {
+            Post originalPost = postRepository.findById(response.getSharedPost().getId()).orElse(null);
+            if (originalPost == null || originalPost.getStatus() == ContentStatusType.DELETED) {
+                response.setSharedPostDeleted(true);
+                response.setSharedPost(null);
+            } else if (!canUserViewPost(originalPost, viewerAccountId)) {
+                response.setSharedPostRestricted(true);
+                response.setSharedPost(null);
+            } else {
+                enrichCounts(response.getSharedPost(), originalPost.getId(), viewerAccountId);
+            }
+        }
         return response;
+    }
+
+    private boolean canUserViewPost(Post post, String viewerAccountId) {
+        if (post == null) return false;
+        if (post.getStatus() == ContentStatusType.DELETED) return false;
+
+        String authorId = post.getAccount() != null ? post.getAccount().getId() : null;
+        if (authorId == null) return false;
+
+        // If viewer is anonymous/null, only public posts are visible
+        if (viewerAccountId == null || viewerAccountId.isBlank()) {
+            return post.getVisibility() == VisibilityType.PUBLIC;
+        }
+
+        // 1. Check if user is blocked
+        boolean isBlocked = relationshipRepository.existsBlockBetween(authorId, viewerAccountId);
+        if (isBlocked) return false;
+
+        // 2. Author can always see their own posts
+        if (authorId.equals(viewerAccountId)) return true;
+
+        // 3. Check visibility rules
+        if (post.getVisibility() == VisibilityType.PUBLIC) {
+            return true;
+        }
+
+        if (post.getVisibility() == VisibilityType.PRIVATE) {
+            return authorId.equals(viewerAccountId);
+        }
+
+        if (post.getVisibility() == VisibilityType.FRIENDS) {
+            return relationshipRepository.isFriend(authorId, viewerAccountId);
+        }
+
+        if (post.getVisibility() == VisibilityType.CUSTOM) {
+            List<ContentAccessControl> controls = contentAccessControlRepository.findByContent(post);
+            if (controls == null || controls.isEmpty()) {
+                return false;
+            }
+
+            boolean hasIncludeRules = controls.stream().anyMatch(c -> c.getRuleType() == RuleType.INCLUDE);
+            if (hasIncludeRules) {
+                return controls.stream()
+                        .anyMatch(c -> c.getRuleType() == RuleType.INCLUDE && 
+                                       c.getAccount() != null && 
+                                       c.getAccount().getId().equals(viewerAccountId));
+            }
+
+            return controls.stream()
+                    .noneMatch(c -> c.getRuleType() == RuleType.EXCLUDE && 
+                                    c.getAccount() != null && 
+                                    c.getAccount().getId().equals(viewerAccountId));
+        }
+
+        return false;
     }
 
     @Override
@@ -224,7 +302,14 @@ public class PostServiceImpl implements PostService {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = "allPosts", unless = "#result == null || #result.isEmpty()")
+    public PostResponse getPostById(String id, String viewerId) {
+        Post post = postRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Post not found with id: " + id));
+        return enrichCounts(postMapper.toResponse(post), post.getId(), viewerId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<PostResponse> getAllPosts() {
         return postRepository.findAll().stream()
                 .map(p -> enrichCounts(postMapper.toResponse(p), p.getId()))
@@ -254,7 +339,7 @@ public class PostServiceImpl implements PostService {
                         RuleType.EXCLUDE,
                         accountId,
                         pageable
-                ).map(p -> enrichCounts(postMapper.toResponse(p), p.getId()));
+                ).map(p -> enrichCounts(postMapper.toResponse(p), p.getId(), accountId));
     }
 
 
@@ -649,5 +734,45 @@ public class PostServiceImpl implements PostService {
         return postRepository.findByAccount_Id(userId).stream()
                 .map(p -> enrichCounts(postMapper.toResponse(p), p.getId()))
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PostResponse> getPostsByUserId(String userId, String viewerId) {
+        return postRepository.findByAccount_Id(userId).stream()
+                .map(p -> enrichCounts(postMapper.toResponse(p), p.getId(), viewerId))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {"posts", "allPosts", "userPosts"}, allEntries = true)
+    public PostResponse sharePost(String postId, String accountId, String caption, VisibilityType visibility) {
+        Post originalPost = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("Original post not found with id: " + postId));
+
+        UserAccount account = ensureUserSynced(accountId);
+        if (account == null) {
+            throw new RuntimeException("User not found or sync failed for id: " + accountId);
+        }
+
+        Post share = new Post();
+        share.setAccount(account);
+        share.setCaption(caption);
+        share.setVisibility(visibility != null ? visibility : VisibilityType.PUBLIC);
+        share.setStatus(ContentStatusType.ACTIVE);
+        share.setSharedPost(originalPost);
+
+        Post savedShare = postRepository.save(share);
+
+        // Publish events for realtime socket updates:
+        // 1. For the new share post
+        publishAfterCommit(savedShare.getId(), "POST", "CREATE");
+
+        // 2. For the original post (to broadcast that its share count has updated)
+        postActivityPublisher.publish(originalPost.getId(), "SHARE", "CREATE", 
+            java.util.Map.of("shares", postRepository.countBySharedPost_Id(originalPost.getId())));
+
+        return enrichCounts(postMapper.toResponse(savedShare), savedShare.getId());
     }
 }

@@ -18,5 +18,8 @@ public class PostResponse extends BaseContentResponse {
     private int totalReactions;
     private int totalComments;
     private int totalShares;
+    private PostResponse sharedPost;
+    private boolean sharedPostRestricted;
+    private boolean sharedPostDeleted;
 }
 

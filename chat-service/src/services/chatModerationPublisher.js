@@ -18,7 +18,7 @@ const ensureChannel = async () => {
   }
 
   if (!topologyReady) {
-    await channel.assertExchange(MODERATION_EXCHANGE, "topic", {
+    await channel.assertExchange(MODERATION_EXCHANGE, "direct", {
       durable: true,
     });
     topologyReady = true;
