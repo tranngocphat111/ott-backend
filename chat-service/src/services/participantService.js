@@ -266,15 +266,14 @@ exports.updateConversationCategory = async (conversationId, userId, categoryId) 
 };
 
 exports.updateNotificationStatus = async (conversationId, userId, status, muteUntil) => {
-  const updateData = { "settings.notification_status": status };
-
-  if (muteUntil) {
-    updateData["settings.mute_until"] = muteUntil;
-  }
+  const updateData = {
+    "settings.notification_status": status,
+    "settings.mute_until": status === "mute" ? (muteUntil || null) : null,
+  };
 
   return await Participant.findOneAndUpdate(
     { conversation_id: conversationId, user_id: userId },
-    updateData,
+    { $set: updateData },
     { new: true }
   );
 };
