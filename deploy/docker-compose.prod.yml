@@ -17,7 +17,11 @@ services:
     volumes:
       - analytic_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${ANALYTIC_DB_USERNAME:-postgres} -d ${ANALYTIC_DB_NAME:-admin_analytic_db}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${ANALYTIC_DB_USERNAME:-postgres} -d ${ANALYTIC_DB_NAME:-admin_analytic_db}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -260,7 +264,7 @@ services:
       JAVA_TOOL_OPTIONS: -XX:+UseContainerSupport -XX:MaxRAMPercentage=60.0 -XX:InitialRAMPercentage=20.0
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       ANALYTIC_SERVER_PORT: 8092
-      ANALYTIC_DB_URL: jdbc:postgresql://analytic-postgres:5432/${ANALYTIC_DB_NAME:-admin_analytic_db}
+      ANALYTIC_DB_URL: ${ANALYTIC_DB_URL:?ANALYTIC_DB_URL is required}
       ANALYTIC_DB_USERNAME: ${ANALYTIC_DB_USERNAME:-postgres}
       ANALYTIC_DB_PASSWORD: ${ANALYTIC_DB_PASSWORD:?ANALYTIC_DB_PASSWORD is required}
       ANALYTIC_RABBITMQ_HOST: rabbitmq
