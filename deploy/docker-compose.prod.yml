@@ -5,29 +5,6 @@ x-logging: &default-logging
     max-file: "${DOCKER_LOG_MAX_FILE:-3}"
 
 services:
-  analytic-postgres:
-    image: postgres:15-alpine
-    container_name: analytic-postgres
-    restart: unless-stopped
-    logging: *default-logging
-    environment:
-      POSTGRES_DB: ${ANALYTIC_DB_NAME:-admin_analytic_db}
-      POSTGRES_USER: ${ANALYTIC_DB_USERNAME:-postgres}
-      POSTGRES_PASSWORD: ${ANALYTIC_DB_PASSWORD:?ANALYTIC_DB_PASSWORD is required}
-    volumes:
-      - analytic_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${ANALYTIC_DB_USERNAME:-postgres} -d ${ANALYTIC_DB_NAME:-admin_analytic_db}",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - ott-network
-
   redis:
     image: redis:7-alpine
     container_name: ott-redis
@@ -265,7 +242,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       ANALYTIC_SERVER_PORT: 8092
       ANALYTIC_DB_URL: ${ANALYTIC_DB_URL:?ANALYTIC_DB_URL is required}
-      ANALYTIC_DB_USERNAME: ${ANALYTIC_DB_USERNAME:-postgres}
+      ANALYTIC_DB_USERNAME: ${ANALYTIC_DB_USERNAME:?ANALYTIC_DB_USERNAME is required}
       ANALYTIC_DB_PASSWORD: ${ANALYTIC_DB_PASSWORD:?ANALYTIC_DB_PASSWORD is required}
       ANALYTIC_RABBITMQ_HOST: rabbitmq
       ANALYTIC_RABBITMQ_PORT: 5672
@@ -274,8 +251,6 @@ services:
       USER_SERVICE_URL: http://user-service:8082
       ANALYTIC_ALLOWED_ORIGINS: ${ANALYTIC_ALLOWED_ORIGINS:-}
     depends_on:
-      analytic-postgres:
-        condition: service_healthy
       rabbitmq:
         condition: service_healthy
     networks:
@@ -336,7 +311,6 @@ services:
       - ott-network
 
 volumes:
-  analytic_postgres_data:
   redis_data:
   rabbitmq_data:
 
