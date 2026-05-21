@@ -21,7 +21,7 @@ public enum ErrorCode {
     ACCOUNT_CAN_BE_RESTORED(1009, "Tài khoản này có thể được khôi phục. Vui lòng liên hệ hỗ trợ.", HttpStatus.CONFLICT),
 
     // Auth
-    INCORRECT_PASSWORD(2001, "Mật khẩu không chính xác.", HttpStatus.BAD_REQUEST),
+    INCORRECT_PASSWORD(2001, "Tài khoản hoặc mật khẩu không chính xác.", HttpStatus.BAD_REQUEST),
     PASSWORD_ALREADY_SET(2002, "Tài khoản này đã được đặt mật khẩu từ trước.", HttpStatus.CONFLICT),
     INVALID_PASSWORD_FORMAT(2003, "Mật khẩu không hợp lệ. Vui lòng kiểm tra lại.", HttpStatus.BAD_REQUEST),
     NEW_PASSWORD_SAME_AS_OLD(2004, "Mật khẩu mới phải khác với mật khẩu cũ.", HttpStatus.BAD_REQUEST),

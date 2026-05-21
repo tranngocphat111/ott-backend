@@ -76,6 +76,34 @@ public class AuthController {
                 .build();
     }
 
+    @PostMapping("/login/google/token")
+    public ApiResponse<AuthenticationResponse> googleLoginWithToken(
+            @Valid @RequestBody GoogleAuthWithTokenRequest request,
+            HttpServletRequest httpRequest) {
+
+        controllerUtils.enrichWithClientInfo(request, httpRequest);
+        AuthenticationResponse response = authService.googleAuthWithToken(request);
+
+        if (response.getRequiresPhoneSetup()) {
+            return ApiResponse.<AuthenticationResponse>builder()
+                    .result(response)
+                    .message("Please provide your phone number to complete registration")
+                    .build();
+        }
+
+        if (response.getRequires2FA()) {
+            return ApiResponse.<AuthenticationResponse>builder()
+                    .result(response)
+                    .message("Two-factor authentication required. Please enter OTP sent to your email.")
+                    .build();
+        }
+
+        return ApiResponse.<AuthenticationResponse>builder()
+                .result(response)
+                .message("Google login successful")
+                .build();
+    }
+
     @PostMapping("/login/google/complete")
     public ApiResponse<AuthenticationResponse> completeGoogleRegistration(
             @Valid @RequestBody CompleteGoogleRegistrationRequest request,

@@ -269,4 +269,19 @@ public class SessionService {
 
         log.info("Token invalidated - jwtId: {}", jwtId);
     }
+
+    public Optional<UserSession> findActiveSessionByRefreshToken(String refreshToken) {
+        return userSessionRepository.findByRefreshTokenAndIsActive(refreshToken, true);
+    }
+
+    @Transactional
+    public void updateSessionTokensByRefreshToken(UserSession session, String newToken, String newRefreshToken) {
+        session.setSessionToken(newToken);
+        session.setRefreshToken(newRefreshToken);
+        session.setExpiresAt(LocalDateTime.now().plusSeconds(jwtService.getExpiration()));
+        session.setRefreshExpiresAt(LocalDateTime.now().plusSeconds(jwtService.getRefreshExpiration()));
+        session.setLastActiveAt(LocalDateTime.now());
+        userSessionRepository.save(session);
+        log.info("Session tokens updated via refresh for userId: {}", session.getUserId());
+    }
 }

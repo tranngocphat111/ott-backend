@@ -83,14 +83,31 @@ public class AuthService {
                 log.warn("Invalid email format: {}", identifier);
                 throw new AppException(ErrorCode.INVALID_EMAIL_FORMAT);
             }
-            user = userServiceClient.getUserByEmail(identifier);
+            try {
+                user = userServiceClient.getUserByEmail(identifier);
+            } catch (AppException e) {
+                if (e.getErrorCode() == ErrorCode.USER_NOT_EXISTED) {
+                    log.warn("User not found by email: {}", identifier);
+                    throw new AppException(ErrorCode.INCORRECT_PASSWORD);
+                }
+                throw e;
+            }
         } else {
             if (!validationUtils.isValidPhone(identifier)) {
                 log.warn("Invalid phone format: {}", identifier);
                 throw new AppException(ErrorCode.INVALID_PHONE_FORMAT);
             }
-            user = userServiceClient.getUserByPhone(identifier);
+            try {
+                user = userServiceClient.getUserByPhone(identifier);
+            } catch (AppException e) {
+                if (e.getErrorCode() == ErrorCode.USER_NOT_EXISTED) {
+                    log.warn("User not found by phone: {}", identifier);
+                    throw new AppException(ErrorCode.INCORRECT_PASSWORD);
+                }
+                throw e;
+            }
         }
+
 
         String passwordHash = userServiceClient.getPasswordHash(user.getId());
         if (passwordHash == null) {
@@ -223,6 +240,78 @@ public class AuthService {
             throw e;
         } catch (Exception e) {
             log.error("Unexpected error in googleAuth", e);
+            throw new AppException(ErrorCode.GOOGLE_AUTH_FAILED);
+        }
+    }
+
+    @Transactional
+    public AuthenticationResponse googleAuthWithToken(GoogleAuthWithTokenRequest request) {
+        log.info("Google auth with token started (mobile implicit flow)");
+
+        try {
+            String googleAccessToken = request.getAccessToken();
+
+            if (googleAccessToken == null || googleAccessToken.isBlank()) {
+                log.error("No access token provided for Google auth");
+                throw new AppException(ErrorCode.GOOGLE_AUTH_FAILED);
+            }
+
+            // Use the access token to get user info from Google
+            var userInfo = googleUserClient.getUserInfo("json", googleAccessToken);
+
+            log.info("Google User Info (token flow) - googleId: {}, email: {}, name: {}",
+                    userInfo.getGoogleId(), userInfo.getEmail(), userInfo.getName());
+
+            if (userInfo.getEmail() == null || !validationUtils.isValidEmail(userInfo.getEmail())) {
+                log.warn("Invalid email from Google");
+                throw new AppException(ErrorCode.GOOGLE_AUTH_FAILED);
+            }
+
+            UserServiceClient.UserDto user = null;
+
+            try {
+                user = userServiceClient.getUserByGoogleId(userInfo.getGoogleId());
+            } catch (AppException e) {
+                user = null;
+            }
+
+            if (user == null) {
+                log.info("User not found by googleId, trying email: {}", userInfo.getEmail());
+                try {
+                    user = userServiceClient.getUserByEmail(userInfo.getEmail());
+                } catch (AppException e) {
+                    user = null;
+                }
+            }
+
+            if (user == null) {
+                log.info("User not found, generating temp token for phone setup");
+                String tempToken = jwtService.generateGoogleTempToken(userInfo);
+
+                return AuthenticationResponse.builder()
+                        .authenticated(false)
+                        .requires2FA(false)
+                        .requiresPhoneSetup(true)
+                        .tempToken(tempToken)
+                        .googleUserInfo(GoogleUserInfo.builder()
+                                .googleId(userInfo.getGoogleId())
+                                .email(userInfo.getEmail())
+                                .name(userInfo.getName())
+                                .picture(userInfo.getPicture())
+                                .build())
+                        .build();
+            }
+
+            validateUserStatus(user, request.getIpAddress(), request.getDeviceInfo());
+
+            log.info("Creating auth response for Google token login");
+            return createAuthResponse(user, request, LoginMethod.GOOGLE);
+
+        } catch (AppException e) {
+            log.error("AppException in googleAuthWithToken: {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("Unexpected error in googleAuthWithToken", e);
             throw new AppException(ErrorCode.GOOGLE_AUTH_FAILED);
         }
     }
@@ -380,54 +469,74 @@ public class AuthService {
     public AuthenticationResponse refreshToken(RefreshRequest request) throws ParseException, JOSEException {
         log.info("Token refresh requested");
 
-        try {
-            var signJWT = jwtService.verifyToken(request.getToken(), true);
-
-            var jit = signJWT.getJWTClaimsSet().getJWTID();
-            var expiryTime = signJWT.getJWTClaimsSet().getExpirationTime();
-            var userId = signJWT.getJWTClaimsSet().getStringClaim("userId");
-
-            jwtService.invalidateToken(
-                    jit,
-                    LocalDateTime.ofInstant(expiryTime.toInstant(), java.time.ZoneId.systemDefault()),
-                    null,
-                    "REFRESH",
-                    "Token refreshed"
-            );
-
-            UserServiceClient.UserDto user = userServiceClient.getUserById(userId);
-
-            if (!Boolean.TRUE.equals(user.getIsActive()) || user.getDeletedAt() != null) {
-                throw new AppException(ErrorCode.USER_NOT_ACTIVE);
-            }
-
-            if (Boolean.TRUE.equals(user.getIsBlocked())) {
-                if (user.getBlockedUntil() != null && user.getBlockedUntil().isAfter(LocalDateTime.now())) {
-                    throw new AppException(ErrorCode.USER_BLOCKED);
-                }
-            }
-
-            String token = jwtService.generateToken(user);
-            String refreshToken = jwtService.generateRefreshToken();
-
-            if (request.getDeviceId() != null) {
-                sessionService.updateSessionTokens(request.getDeviceId(), userId, token, refreshToken);
-            }
-
-            log.info("Token refreshed successfully for userId: {}", userId);
-
-            return AuthenticationResponse.builder()
-                    .token(token)
-                    .refreshToken(refreshToken)
-                    .authenticated(true)
-                    .requires2FA(false)
-                    .requiresPhoneSetup(false)
-                    .build();
-
-        } catch (ParseException | JOSEException e) {
-            log.warn("Token refresh failed");
+        String incomingRefreshToken = request.getToken();
+        if (incomingRefreshToken == null || incomingRefreshToken.isBlank()) {
+            log.warn("Refresh token is empty");
             throw new AppException(ErrorCode.UNAUTHENTICATED);
         }
+
+        // Refresh token is an opaque random string, look it up in user_sessions
+        var sessionOpt = sessionService.findActiveSessionByRefreshToken(incomingRefreshToken);
+
+        if (sessionOpt.isEmpty()) {
+            log.warn("No active session found for the provided refresh token");
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        var session = sessionOpt.get();
+
+        // Check if refresh token has expired
+        if (session.getRefreshExpiresAt() != null && session.getRefreshExpiresAt().isBefore(LocalDateTime.now())) {
+            log.warn("Refresh token has expired for userId: {}", session.getUserId());
+            session.revoke("Refresh token expired");
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        String userId = session.getUserId();
+        UserServiceClient.UserDto user = userServiceClient.getUserById(userId);
+
+        if (!Boolean.TRUE.equals(user.getIsActive()) || user.getDeletedAt() != null) {
+            throw new AppException(ErrorCode.USER_NOT_ACTIVE);
+        }
+
+        if (Boolean.TRUE.equals(user.getIsBlocked())) {
+            if (user.getBlockedUntil() != null && user.getBlockedUntil().isAfter(LocalDateTime.now())) {
+                throw new AppException(ErrorCode.USER_BLOCKED);
+            }
+        }
+
+        // Invalidate old access token
+        try {
+            if (session.getSessionToken() != null) {
+                com.nimbusds.jwt.SignedJWT oldJwt = com.nimbusds.jwt.SignedJWT.parse(session.getSessionToken());
+                String oldJwtId = oldJwt.getJWTClaimsSet().getJWTID();
+                jwtService.invalidateToken(
+                        oldJwtId,
+                        session.getExpiresAt(),
+                        userId,
+                        "ACCESS",
+                        "Token refreshed"
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Could not invalidate old access token: {}", e.getMessage());
+        }
+
+        String token = jwtService.generateToken(user);
+        String refreshToken = jwtService.generateRefreshToken();
+
+        // Update session with new tokens
+        sessionService.updateSessionTokensByRefreshToken(session, token, refreshToken);
+
+        log.info("Token refreshed successfully for userId: {}", userId);
+
+        return AuthenticationResponse.builder()
+                .token(token)
+                .refreshToken(refreshToken)
+                .authenticated(true)
+                .requires2FA(false)
+                .requiresPhoneSetup(false)
+                .build();
     }
 
     @Transactional

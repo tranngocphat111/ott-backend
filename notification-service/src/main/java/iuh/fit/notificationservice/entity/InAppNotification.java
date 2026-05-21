@@ -1,5 +1,6 @@
 package iuh.fit.notificationservice.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -34,9 +35,11 @@ public class InAppNotification {
     private String referenceId; // e.g. postId, commentId, relationshipId
 
     @Column(name = "is_read", nullable = false)
+    @JsonProperty("isRead")
     private boolean isRead = false;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 }
+

@@ -34,4 +34,6 @@ public interface UserSessionRepository extends JpaRepository<UserSession, String
     List<UserSession> findByUserIdAndIsActiveTrueOrderByLastActiveAtDesc(String userId);
 
     List<UserSession> findByExpiresAtBeforeAndIsActiveTrue(LocalDateTime expiryTime);
+
+    Optional<UserSession> findByRefreshTokenAndIsActive(String refreshToken, Boolean isActive);
 }

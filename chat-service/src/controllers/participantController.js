@@ -224,6 +224,19 @@ exports.updateNotificationStatus = async (req, res) => {
       status,
       muteUntil,
     );
+
+    if (!participant) {
+      return res.status(404).json({ error: "Participant not found" });
+    }
+
+    req.io.to(`user:${userId}`).emit("cap_nhat_thong_bao", {
+      conversationId,
+      userId,
+      status: participant.settings?.notification_status,
+      muteUntil: participant.settings?.mute_until || null,
+      participant,
+    });
+
     res.status(200).json(participant);
   } catch (error) {
     res.status(500).json({ error: error.message });

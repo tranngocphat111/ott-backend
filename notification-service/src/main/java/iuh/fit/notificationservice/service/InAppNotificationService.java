@@ -65,4 +65,10 @@ public class InAppNotificationService {
         unread.forEach(n -> n.setRead(true));
         repository.saveAll(unread);
     }
+
+    @Transactional
+    public void deleteNotification(Long notificationId) {
+        repository.deleteById(notificationId);
+    }
 }
+

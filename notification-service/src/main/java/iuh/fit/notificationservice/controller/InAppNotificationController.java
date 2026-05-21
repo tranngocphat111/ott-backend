@@ -36,4 +36,11 @@ public class InAppNotificationController {
         service.markAllAsRead(recipientId);
         return ResponseEntity.ok().build();
     }
+
+    @DeleteMapping("/{notificationId}")
+    public ResponseEntity<Void> deleteNotification(@PathVariable Long notificationId) {
+        service.deleteNotification(notificationId);
+        return ResponseEntity.ok().build();
+    }
 }
+

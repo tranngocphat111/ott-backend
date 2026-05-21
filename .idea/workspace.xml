@@ -5,17 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="1bb96e93-77b6-4b77-b543-9908f50ffd65" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/api-gateway/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/api-gateway/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/chat-service/src/consumers/index.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/consumers/index.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/chat-service/src/consumers/userConsumer.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/consumers/userConsumer.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/chat-service/src/services/relationshipService.js" beforeDir="false" afterPath="$PROJECT_DIR$/chat-service/src/services/relationshipService.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/impl/CommentServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/impl/CommentServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/impl/ReactionServiceImpl.java" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/java/mediaservice/services/impl/ReactionServiceImpl.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/media-service/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/media-service/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/config/RabbitMQConfig.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/config/RabbitMQConfig.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/consumer/NotificationConsumer.java" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/java/iuh/fit/notificationservice/consumer/NotificationConsumer.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/src/main/resources/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/src/main/resources/application.properties" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/notification-service/target/classes/application.properties" beforeDir="false" afterPath="$PROJECT_DIR$/notification-service/target/classes/application.properties" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -355,6 +345,10 @@
       <workItem from="1777965002833" duration="1648000" />
       <workItem from="1777999745346" duration="76000" />
       <workItem from="1778078000607" duration="15963000" />
+      <workItem from="1778763097181" duration="2383000" />
+      <workItem from="1778929971067" duration="327000" />
+      <workItem from="1779267605715" duration="2541000" />
+      <workItem from="1779302330985" duration="1411000" />
     </task>
     <servers />
   </component>

@@ -50,6 +50,7 @@ public class SecurityConfig {
             "/auth/login/local",
             "/auth/login/google",
             "/auth/login/google/complete",
+            "/auth/login/google/token",
             "/auth/login/email-otp/request",
             "/auth/login/email-otp/verify",
             "/auth/2fa/otp/request",
