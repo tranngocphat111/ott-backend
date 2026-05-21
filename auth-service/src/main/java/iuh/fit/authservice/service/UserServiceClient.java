@@ -13,6 +13,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
@@ -195,6 +196,7 @@ public class UserServiceClient {
         }
     }
 
+    @Async
     public void updateLastLogin(String userId) {
         log.debug("Updating last login time for userId: {}", userId);
 
@@ -312,6 +314,7 @@ public class UserServiceClient {
         return response.getBody().getResult();
     }
 
+    @Async
     public void createSession(String userId, String deviceId, String deviceName,
                               String ipAddress, String userAgent,
                               String sessionToken, String refreshToken,
