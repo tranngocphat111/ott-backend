@@ -13,6 +13,7 @@ import mediaservice.mappers.UserAccountMapper;
 import mediaservice.dtos.messages.MediaDeleteJob;
 import mediaservice.realtime.MediaRealtimePublisher;
 import mediaservice.realtime.MediaRealtimeUpdate;
+import mediaservice.realtime.PostActivityPublisher;
 import mediaservice.models.*;
 import mediaservice.models.enums.*;
 import mediaservice.repositories.StoryItemRepository;
@@ -65,6 +66,7 @@ public class StoryServiceImpl implements StoryService {
     private final MediaDeleteJobPublisher mediaDeleteJobPublisher;
     private final MediaUrlBuilder mediaUrlBuilder;
     private final MediaRealtimePublisher mediaRealtimePublisher;
+    private final PostActivityPublisher postActivityPublisher;
     private final MediaCompressionJobPublisher mediaCompressionJobPublisher;
     private final MediaUploadJobPublisher mediaUploadJobPublisher;
     private final ContentAccessControlMapper accessControlMapper;
@@ -629,7 +631,7 @@ public class StoryServiceImpl implements StoryService {
         view.setAccount(account);
         storyViewRepository.save(view);
 
-        mediaRealtimePublisher.publishPostActivity(storyId, "VIEW", "CREATE", null);
+        postActivityPublisher.publish(storyId, "VIEW", "CREATE", null);
     }
 
     @Override
