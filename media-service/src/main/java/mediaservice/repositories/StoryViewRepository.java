@@ -13,5 +13,8 @@ public interface StoryViewRepository extends JpaRepository<StoryView, String> {
     boolean existsByStoryIdAndAccountId(String storyId, String accountId);
     Optional<StoryView> findByStoryIdAndAccountId(String storyId, String accountId);
     List<StoryView> findByStoryIdOrderByViewedAtDesc(String storyId);
-    void deleteByStoryId(String storyId);
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM StoryView s WHERE s.story.id = :storyId")
+    void deleteByStoryId(@org.springframework.data.repository.query.Param("storyId") String storyId);
 }

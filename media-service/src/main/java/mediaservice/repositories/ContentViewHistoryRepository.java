@@ -16,4 +16,9 @@ public interface ContentViewHistoryRepository extends JpaRepository<ContentViewH
 
     @Transactional
     void deleteByAccountId(String accountId);
+
+    @Transactional
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM ContentViewHistory c WHERE c.content.id = :contentId")
+    void deleteByContentId(@org.springframework.data.repository.query.Param("contentId") String contentId);
 }

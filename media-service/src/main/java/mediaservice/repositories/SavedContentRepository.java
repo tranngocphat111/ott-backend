@@ -13,4 +13,9 @@ public interface SavedContentRepository extends JpaRepository<SavedContent, Stri
     Page<SavedContent> findByAccountIdOrderBySavedAtDesc(String accountId, Pageable pageable);
     Optional<SavedContent> findByAccountIdAndContentId(String accountId, String contentId);
     boolean existsByAccountIdAndContentId(String accountId, String contentId);
+
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM SavedContent s WHERE s.content.id = :contentId")
+    void deleteByContentId(@org.springframework.data.repository.query.Param("contentId") String contentId);
 }

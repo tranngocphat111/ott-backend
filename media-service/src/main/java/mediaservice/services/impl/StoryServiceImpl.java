@@ -60,12 +60,15 @@ public class StoryServiceImpl implements StoryService {
     private final UserAccountRepository userAccountRepository;
     private final UserAccountMapper userAccountMapper;
     private final StoryViewRepository storyViewRepository;
+    private final mediaservice.repositories.ContentViewHistoryRepository contentViewHistoryRepository;
+    private final mediaservice.repositories.SavedContentRepository savedContentRepository;
     private final MediaDeleteJobPublisher mediaDeleteJobPublisher;
     private final MediaUrlBuilder mediaUrlBuilder;
     private final MediaRealtimePublisher mediaRealtimePublisher;
     private final MediaCompressionJobPublisher mediaCompressionJobPublisher;
     private final MediaUploadJobPublisher mediaUploadJobPublisher;
     private final ContentAccessControlMapper accessControlMapper;
+    private final mediaservice.repositories.ReactionRepository reactionRepository;
 
     @Override
     @Transactional
@@ -369,8 +372,10 @@ public class StoryServiceImpl implements StoryService {
 
         List<String> deleteKeys = collectStoryMediaKeys(story);
         
-        // Delete related data first
         storyViewRepository.deleteByStoryId(id);
+        contentViewHistoryRepository.deleteByContentId(id);
+        savedContentRepository.deleteByContentId(id);
+        reactionRepository.deleteByTargetId(id);
         
         storyRepository.delete(story);
 
@@ -623,6 +628,8 @@ public class StoryServiceImpl implements StoryService {
         view.setStory(story);
         view.setAccount(account);
         storyViewRepository.save(view);
+
+        mediaRealtimePublisher.publishPostActivity(storyId, "VIEW", "CREATE", null);
     }
 
     @Override

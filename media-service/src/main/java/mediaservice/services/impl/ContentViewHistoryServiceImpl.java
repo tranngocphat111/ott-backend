@@ -29,6 +29,7 @@ public class ContentViewHistoryServiceImpl implements ContentViewHistoryService 
     private final AccountRepository accountRepository;
     private final PostMapper postMapper;
     private final StoryMapper storyMapper;
+    private final mediaservice.realtime.PostActivityPublisher postActivityPublisher;
 
     @Override
     @Transactional
@@ -51,6 +52,7 @@ public class ContentViewHistoryServiceImpl implements ContentViewHistoryService 
                                     .content(content)
                                     .build();
                             historyRepository.save(newHistory);
+                            postActivityPublisher.publish(contentId, "VIEW", "CREATE", null);
                         }
                 );
     }

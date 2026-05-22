@@ -1,5 +1,6 @@
 package mediaservice.controllers;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import mediaservice.dtos.requests.StoryRequest;
 import mediaservice.dtos.responses.StoryUploadResponse;
@@ -17,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
@@ -28,6 +30,7 @@ public class StoryController {
     private final StoryService storyService;
     private final MediaCompressionJobPublisher mediaCompressionJobPublisher;
     private final MediaUploadJobPublisher mediaUploadJobPublisher;
+    private final ObjectMapper objectMapper;
 
     /** POST /stories - tao story moi */
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -35,12 +38,20 @@ public class StoryController {
         return ResponseEntity.ok(storyService.createStory(request));
     }
 
-    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<StoryResponse> updateStory(
+    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<StoryResponse> updateStoryJson(
             @PathVariable String id,
-            @RequestPart("request") StoryRequest request,
+            @RequestBody StoryRequest request) {
+        return ResponseEntity.ok(storyService.updateStory(id, request, null, null));
+    }
+
+    @PutMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<StoryResponse> updateStoryMultipart(
+            @PathVariable String id,
+            @RequestPart("request") String requestJson,
             @RequestPart(value = "files", required = false) List<MultipartFile> files,
-            @RequestPart(value = "captions", required = false) List<String> captions) {
+            @RequestPart(value = "captions", required = false) List<String> captions) throws IOException {
+        StoryRequest request = objectMapper.readValue(requestJson, StoryRequest.class);
         return ResponseEntity.ok(storyService.updateStory(id, request, files, captions));
     }
 
