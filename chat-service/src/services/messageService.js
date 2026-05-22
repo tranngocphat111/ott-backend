@@ -21,6 +21,7 @@ const {
 const { s3Client, bucketName } = require("../config/s3");
 const { publishMessageSentEvent } = require("./analyticsPublisher");
 const { publishMessageForReview } = require("./chatModerationPublisher");
+const { publishNotification } = require("../events/notificationEvents");
 
 const fs = require("fs/promises");
 const path = require("path");
@@ -31,6 +32,15 @@ const crypto = require("crypto");
 
 const REVOKED_PLACEHOLDER = "Tin nhắn đã được thu hồi";
 const S3_CACHE_CONTROL = "public, max-age=31536000, immutable";
+const PUSH_NOTIFICATION_MESSAGE_TYPES = new Set([
+  "text",
+  "image",
+  "video",
+  "audio",
+  "file",
+  "link",
+  "poll",
+]);
 const S3_POLICY_SIGNAL_PATTERN =
   /(violation|moderation|unsafe|malware|virus|infected|blocked|denied|explicit.?deny|quarantine|sensitive|nsfw|adult|explicit)/i;
 const S3_POLICY_CLEAN_VALUE_PATTERN =
@@ -60,6 +70,93 @@ const sanitizeS3FileName = (fileName) => {
       .replace(/^_+|_+$/g, "") || "file";
 
   return baseName.slice(0, 160) || "file";
+};
+
+const isParticipantNotificationEnabled = (participant) => {
+  const settings = participant?.settings || {};
+  const status = settings.notification_status || "on";
+
+  if (status === "off") return false;
+  if (status !== "mute") return true;
+
+  if (!settings.mute_until) return false;
+  const muteUntil = new Date(settings.mute_until).getTime();
+  return Number.isNaN(muteUntil) || muteUntil <= Date.now();
+};
+
+const getMessageNotificationBody = ({ message, senderName, conversation }) => {
+  const senderLabel = senderName || "Ai đó";
+  const groupSuffix =
+    conversation?.type === "group" && conversation?.name
+      ? ` trong ${conversation.name}`
+      : "";
+  const content = Array.isArray(message.content)
+    ? message.content.filter(Boolean)
+    : [message.content].filter(Boolean);
+  const firstContent = String(content[0] || "");
+
+  switch (message.type) {
+    case "image":
+      return `${senderLabel}${groupSuffix} đã gửi ${content.length > 1 ? `${content.length} hình ảnh` : "một hình ảnh"}`;
+    case "video":
+      return `${senderLabel}${groupSuffix} đã gửi một video`;
+    case "audio":
+      return `${senderLabel}${groupSuffix} đã gửi một tin nhắn thoại`;
+    case "file":
+      return `${senderLabel}${groupSuffix} đã gửi một tệp`;
+    case "poll":
+      return `${senderLabel}${groupSuffix} đã tạo một cuộc bình chọn`;
+    default: {
+      const preview = firstContent.length > 90 ? `${firstContent.slice(0, 90)}...` : firstContent;
+      return `${senderLabel}${groupSuffix}: ${preview || "Tin nhắn mới"}`;
+    }
+  }
+};
+
+const publishMessageNotificationsBestEffort = async ({
+  conversationId,
+  senderId,
+  message,
+  senderName,
+  conversation,
+}) => {
+  if (!PUSH_NOTIFICATION_MESSAGE_TYPES.has(String(message?.type || ""))) return;
+
+  try {
+    const recipients = await Participant.find({
+      conversation_id: conversationId,
+      user_id: { $ne: senderId },
+      status: "joined",
+      "settings.removed_from_group_at": null,
+    })
+      .select("user_id settings")
+      .lean();
+
+    const content = getMessageNotificationBody({
+      message,
+      senderName,
+      conversation,
+    });
+
+    await Promise.allSettled(
+      recipients
+        .filter(isParticipantNotificationEnabled)
+        .map((recipient) =>
+          publishNotification({
+            recipientId: recipient.user_id,
+            senderId,
+            type: "CHAT_MESSAGE",
+            content,
+            referenceId: String(conversationId),
+          }),
+        ),
+    );
+  } catch (error) {
+    console.warn(
+      "[notification] publish chat message notification failed:",
+      error?.message || error,
+    );
+  }
 };
 
 const resolveS3ContentDisposition = (fileCategory, fileName) => {
@@ -760,6 +857,13 @@ exports.sendMessage = async ({
   };
 
   await messageCacheService.addMessage(conversationId, enrichedMessage);
+  await publishMessageNotificationsBestEffort({
+    conversationId,
+    senderId,
+    message: enrichedMessage,
+    senderName: enrichedMessage.sender_name,
+    conversation,
+  });
 
   // Gửi kèm sender_name để FE cập nhật conversation list mà không cần query thêm
   return enrichedMessage;
