@@ -43,6 +43,13 @@ public class PushNotificationService {
         pushToken.setActive(true);
 
         pushTokenRepository.save(pushToken);
+        log.info(
+                "Registered Expo push token for userId={}, platform={}, deviceId={}, tokenPrefix={}",
+                request.getUserId(),
+                normalize(request.getPlatform()),
+                normalize(request.getDeviceId()),
+                token.substring(0, Math.min(token.length(), 24))
+        );
     }
 
     @Transactional
@@ -53,6 +60,7 @@ public class PushNotificationService {
         pushTokenRepository.findByExpoPushToken(token).ifPresent(pushToken -> {
             pushToken.setActive(false);
             pushTokenRepository.save(pushToken);
+            log.info("Unregistered Expo push token for userId={}", pushToken.getUserId());
         });
     }
 
