@@ -858,12 +858,17 @@ exports.sendMessage = async ({
   };
 
   await messageCacheService.addMessage(conversationId, enrichedMessage);
-  await publishMessageNotificationsBestEffort({
+  publishMessageNotificationsBestEffort({
     conversationId,
     senderId,
     message: enrichedMessage,
     senderName: enrichedMessage.sender_name,
     conversation,
+  }).catch((error) => {
+    console.warn(
+      "[notification] async chat message notification failed:",
+      error?.message || error,
+    );
   });
 
   // Gửi kèm sender_name để FE cập nhật conversation list mà không cần query thêm
