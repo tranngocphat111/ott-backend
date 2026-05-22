@@ -1,12 +1,25 @@
 const { publishToQueue } = require("../config/rabbitmq");
 
-const publishNotification = async ({ recipientId, senderId, type, content, referenceId, pushOnly = false }) => {
+const publishNotification = async ({
+  recipientId,
+  senderId,
+  type,
+  content,
+  title,
+  body,
+  imageUrl,
+  referenceId,
+  pushOnly = false,
+}) => {
   try {
     const payload = {
       recipientId,
       senderId,
       type,
       content,
+      title,
+      body,
+      imageUrl,
       referenceId,
       pushOnly,
     };

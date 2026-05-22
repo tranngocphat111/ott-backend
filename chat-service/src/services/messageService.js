@@ -84,31 +84,51 @@ const isParticipantNotificationEnabled = (participant) => {
   return Number.isNaN(muteUntil) || muteUntil <= Date.now();
 };
 
-const getMessageNotificationBody = ({ message, senderName, conversation }) => {
+const resolvePublicMediaUrl = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw || /^data:image\//i.test(raw)) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (!bucketName) return "";
+
+  const region = process.env.AWS_REGION || "ap-southeast-1";
+  const key = raw
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return key ? `https://${bucketName}.s3.${region}.amazonaws.com/${key}` : "";
+};
+
+const getMessageNotificationPayload = ({ message, senderName, conversation }) => {
   const senderLabel = senderName || "Ai đó";
-  const groupSuffix =
-    conversation?.type === "group" && conversation?.name
-      ? ` trong ${conversation.name}`
-      : "";
+  const groupName = conversation?.type === "group" ? String(conversation?.name || "").trim() : "";
   const content = Array.isArray(message.content)
     ? message.content.filter(Boolean)
     : [message.content].filter(Boolean);
   const firstContent = String(content[0] || "");
+  const title = groupName ? `${senderLabel} trong ${groupName}` : senderLabel;
 
   switch (message.type) {
     case "image":
-      return `${senderLabel}${groupSuffix} đã gửi ${content.length > 1 ? `${content.length} hình ảnh` : "một hình ảnh"}`;
+      return {
+        title,
+        body: `Đã gửi ${content.length > 1 ? `${content.length} hình ảnh` : "một hình ảnh"}`,
+      };
     case "video":
-      return `${senderLabel}${groupSuffix} đã gửi một video`;
+      return { title, body: "Đã gửi một video" };
     case "audio":
-      return `${senderLabel}${groupSuffix} đã gửi một tin nhắn thoại`;
+      return { title, body: "Đã gửi một tin nhắn thoại" };
     case "file":
-      return `${senderLabel}${groupSuffix} đã gửi một tệp`;
+      return { title, body: "Đã gửi một tệp" };
     case "poll":
-      return `${senderLabel}${groupSuffix} đã tạo một cuộc bình chọn`;
+      return { title, body: "Đã tạo một cuộc bình chọn" };
     default: {
       const preview = firstContent.length > 90 ? `${firstContent.slice(0, 90)}...` : firstContent;
-      return `${senderLabel}${groupSuffix}: ${preview || "Tin nhắn mới"}`;
+      return {
+        title,
+        body: preview || "Tin nhắn mới",
+      };
     }
   }
 };
@@ -132,11 +152,13 @@ const publishMessageNotificationsBestEffort = async ({
       .select("user_id settings")
       .lean();
 
-    const content = getMessageNotificationBody({
+    const notificationPayload = getMessageNotificationPayload({
       message,
       senderName,
       conversation,
     });
+    const senderAvatarUrl = resolvePublicMediaUrl(message.sender_avatar);
+    const content = `${notificationPayload.title}: ${notificationPayload.body}`;
 
     await Promise.allSettled(
       recipients
@@ -147,6 +169,9 @@ const publishMessageNotificationsBestEffort = async ({
             senderId,
             type: "CHAT_MESSAGE",
             content,
+            title: notificationPayload.title,
+            body: notificationPayload.body,
+            imageUrl: senderAvatarUrl,
             referenceId: String(conversationId),
             pushOnly: true,
           }),

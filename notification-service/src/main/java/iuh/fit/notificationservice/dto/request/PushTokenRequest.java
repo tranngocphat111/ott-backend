@@ -8,7 +8,6 @@ public class PushTokenRequest {
     @NotBlank
     private String userId;
 
-    @NotBlank
     private String token;
 
     private String platform;
