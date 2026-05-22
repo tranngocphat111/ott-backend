@@ -6,6 +6,7 @@ import iuh.fit.userservice.dto.event.UserStatusChangedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -44,6 +45,7 @@ public class UserEventPublisher {
         }
     }
 
+    @Async
     public void publishUserLogout(iuh.fit.userservice.dto.event.UserLogoutEvent event) {
         try {
             rabbitTemplate.convertAndSend(

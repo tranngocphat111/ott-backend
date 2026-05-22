@@ -385,6 +385,15 @@ public class AuthService {
         String token = jwtService.generateToken(user);
         String refreshToken = jwtService.generateRefreshToken();
 
+        sessionService.createUserSession(
+                user.getId(), deviceId,
+                deviceType != null ? deviceType : DeviceType.UNKNOWN,
+                null,
+                ipAddress, deviceInfo,
+                token, refreshToken,
+                loginMethod
+        );
+
         userSyncService.ensureUserExists(user);
         userServiceClient.createSession(
                 user.getId(), deviceId, null,
@@ -484,6 +493,14 @@ public class AuthService {
         }
 
         var session = sessionOpt.get();
+
+        if (request.getDeviceId() != null
+                && session.getDeviceId() != null
+                && !request.getDeviceId().equals(session.getDeviceId())) {
+            log.warn("Refresh token device mismatch for userId: {}", session.getUserId());
+            sessionService.revokeSessionByDevice(session.getUserId(), session.getDeviceId());
+            throw new AppException(ErrorCode.UNAUTHENTICATED);
+        }
 
         // Check if refresh token has expired
         if (session.getRefreshExpiresAt() != null && session.getRefreshExpiresAt().isBefore(LocalDateTime.now())) {
@@ -667,6 +684,15 @@ public class AuthService {
         DeviceType deviceType = extractDeviceType(request);
 
         userSyncService.ensureUserExists(user);
+
+        sessionService.createUserSession(
+                user.getId(), deviceId,
+                deviceType != null ? deviceType : DeviceType.UNKNOWN,
+                deviceName,
+                ipAddress, deviceInfo,
+                token, refreshToken,
+                loginMethod
+        );
 
         userServiceClient.createSession(
                 user.getId(), deviceId, deviceName,

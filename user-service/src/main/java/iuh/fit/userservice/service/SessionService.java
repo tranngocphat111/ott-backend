@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -41,15 +42,7 @@ public class SessionService {
         log.info("Creating new session for userId: {} | DeviceId: {} | LoginMethod: {}",
                 user.getId(), deviceId, loginMethod);
 
-        if (deviceId != null) {
-            userSessionRepository.findByDeviceIdAndUserAndIsActive(deviceId, user, true)
-                    .ifPresent(existing -> {
-                        existing.revoke("New login from same device");
-                        userSessionRepository.save(existing);
-                        log.info("Replaced old session for same device - userId: {}, deviceId: {}",
-                                user.getId(), deviceId);
-                    });
-        }
+        revokeSessionsInSameDeviceSlot(user, deviceId, deviceType);
 
         UserSession session = UserSession.builder()
                 .user(user)
@@ -71,6 +64,58 @@ public class SessionService {
                 savedSession.getId(), user.getId(), deviceId);
 
         return savedSession;
+    }
+
+    private void revokeSessionsInSameDeviceSlot(User user, String currentDeviceId, DeviceType currentDeviceType) {
+        List<UserSession> activeSessions = userSessionRepository.findByUserIdAndIsActiveTrue(user.getId());
+        if (activeSessions.isEmpty()) return;
+
+        List<UserSession> revokedSessions = new ArrayList<>();
+        List<String> revokedOtherDeviceIds = new ArrayList<>();
+
+        for (UserSession session : activeSessions) {
+            if (!isSameDeviceSlot(session.getDeviceType(), currentDeviceType)) {
+                continue;
+            }
+
+            session.revoke("Replaced by new login on same device slot");
+            authSessionClient.revokeSession(session.getSessionToken(), user.getId());
+            revokedSessions.add(session);
+
+            boolean samePhysicalDevice = currentDeviceId != null
+                    && currentDeviceId.equals(session.getDeviceId());
+            if (!samePhysicalDevice && session.getDeviceId() != null) {
+                revokedOtherDeviceIds.add(session.getDeviceId());
+            }
+        }
+
+        if (revokedSessions.isEmpty()) return;
+
+        userSessionRepository.saveAll(revokedSessions);
+
+        if (!revokedOtherDeviceIds.isEmpty()) {
+            userEventPublisher.publishUserLogout(
+                    iuh.fit.userservice.dto.event.UserLogoutEvent.builder()
+                            .userId(user.getId())
+                            .action("OTHERS")
+                            .revokedDeviceIds(revokedOtherDeviceIds)
+                            .build()
+            );
+        }
+
+        log.info("Revoked {} user-service sessions in same device slot for userId: {}",
+                revokedSessions.size(), user.getId());
+    }
+
+    private boolean isSameDeviceSlot(DeviceType existingType, DeviceType incomingType) {
+        return normalizeDeviceSlot(existingType).equals(normalizeDeviceSlot(incomingType));
+    }
+
+    private String normalizeDeviceSlot(DeviceType deviceType) {
+        if (deviceType == DeviceType.MOBILE || deviceType == DeviceType.TABLET) {
+            return "MOBILE";
+        }
+        return "COMPUTER";
     }
 
     public UserSessionsResponse getUserSessions(String userId, String currentToken) {

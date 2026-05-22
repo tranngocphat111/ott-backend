@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 
 import java.text.ParseException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -47,19 +48,7 @@ public class SessionService {
         log.info("Creating new session for userId: {}, deviceId: {}, loginMethod: {}",
                 userId, deviceId, loginMethod);
 
-        if (deviceId != null && userId != null) {
-            Optional<UserSession> existingSession = userSessionRepository
-                    .findByDeviceIdAndUserIdAndIsActive(deviceId, userId, true);
-
-            if (existingSession.isPresent()) {
-                UserSession oldSession = existingSession.get();
-                qrLoginSessionRepository.nullifySessionReference(oldSession);
-                entityManager.flush();
-                userSessionRepository.delete(oldSession);
-                entityManager.flush();
-                log.info("Replaced old session for deviceId: {}, userId: {}", deviceId, userId);
-            }
-        }
+        revokeSessionsInSameDeviceSlot(userId, deviceId, deviceType);
 
         UserSession session = UserSession.builder()
                 .userId(userId)
@@ -81,6 +70,56 @@ public class SessionService {
         log.info("Session created successfully - sessionId: {}, userId: {}", savedSession.getId(), userId);
 
         return savedSession;
+    }
+
+    private void revokeSessionsInSameDeviceSlot(String userId, String currentDeviceId, DeviceType currentDeviceType) {
+        if (userId == null) return;
+
+        List<UserSession> activeSessions = userSessionRepository.findByUserIdAndIsActiveTrue(userId);
+        if (activeSessions.isEmpty()) return;
+
+        List<UserSession> revokedSessions = new ArrayList<>();
+        List<String> revokedOtherDeviceIds = new ArrayList<>();
+
+        for (UserSession session : activeSessions) {
+            if (!isSameDeviceSlot(session.getDeviceType(), currentDeviceType)) {
+                continue;
+            }
+
+            session.revoke("Replaced by new login on same device slot");
+            invalidateSessionTokens(session);
+            qrLoginSessionRepository.nullifySessionReference(session);
+            revokedSessions.add(session);
+
+            boolean samePhysicalDevice = currentDeviceId != null
+                    && currentDeviceId.equals(session.getDeviceId());
+            if (!samePhysicalDevice && session.getDeviceId() != null) {
+                revokedOtherDeviceIds.add(session.getDeviceId());
+            }
+        }
+
+        if (revokedSessions.isEmpty()) return;
+
+        userSessionRepository.saveAll(revokedSessions);
+        entityManager.flush();
+
+        if (!revokedOtherDeviceIds.isEmpty()) {
+            notificationPublisher.publishUserLogoutEvent(userId, null, null, "OTHERS", revokedOtherDeviceIds);
+        }
+
+        log.info("Revoked {} auth sessions in same device slot for userId: {}",
+                revokedSessions.size(), userId);
+    }
+
+    private boolean isSameDeviceSlot(DeviceType existingType, DeviceType incomingType) {
+        return normalizeDeviceSlot(existingType).equals(normalizeDeviceSlot(incomingType));
+    }
+
+    private String normalizeDeviceSlot(DeviceType deviceType) {
+        if (deviceType == DeviceType.MOBILE || deviceType == DeviceType.TABLET) {
+            return "MOBILE";
+        }
+        return "COMPUTER";
     }
 
     public UserSessionsResponse getUserSessions(String userId, String currentToken) {

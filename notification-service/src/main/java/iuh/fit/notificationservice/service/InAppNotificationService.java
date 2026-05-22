@@ -20,12 +20,19 @@ public class InAppNotificationService {
 
     private final InAppNotificationRepository repository;
     private final RabbitTemplate rabbitTemplate;
+    private final PushNotificationService pushNotificationService;
 
     @Value("${rabbitmq.exchange.notification}")
     private String exchange;
 
     public void processNotificationEvent(InAppNotificationEvent event) {
         log.info("Processing in-app notification event for user: {}", event.getRecipientId());
+
+        if (Boolean.TRUE.equals(event.getPushOnly())) {
+            log.info("Sending push-only notification type={} to user={}", event.getType(), event.getRecipientId());
+            pushNotificationService.sendNotification(event);
+            return;
+        }
         
         // Save to DB
         InAppNotification notification = InAppNotification.builder()
@@ -41,6 +48,9 @@ public class InAppNotificationService {
 
         // Publish to realtime queue for chat-service to emit via socket.io
         rabbitTemplate.convertAndSend(exchange, "notification.realtime", savedNotification);
+
+        // Also deliver a native mobile push notification for background/closed apps.
+        pushNotificationService.sendNotification(savedNotification);
     }
 
     public List<InAppNotification> getNotifications(String recipientId) {
