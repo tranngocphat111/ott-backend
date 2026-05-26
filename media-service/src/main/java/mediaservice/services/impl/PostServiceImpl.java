@@ -190,7 +190,7 @@ public class PostServiceImpl implements PostService {
         
         Post savedPost = postRepository.save(post);
         String userId = savedPost.getAccount() != null ? savedPost.getAccount().getId() : null;
-        analyticsEventPublisher.publishPostCreated(savedPost.getId(), userId);
+        publishPostCreatedAnalyticsAfterCommit(savedPost.getId(), userId);
         publishAfterCommit(savedPost.getId(), "POST", "CREATE");
         return enrichCounts(postMapper.toResponse(savedPost), savedPost.getId());
     }
@@ -283,7 +283,7 @@ public class PostServiceImpl implements PostService {
         entityManager.flush();
         entityManager.refresh(savedPost);
 
-        analyticsEventPublisher.publishPostCreated(savedPost.getId(), accountId);
+        publishPostCreatedAnalyticsAfterCommit(savedPost.getId(), accountId);
         if (!hasAsyncJobs) {
             publishAfterCommit(savedPost.getId(), "POST", "CREATE");
         }
@@ -683,6 +683,20 @@ public class PostServiceImpl implements PostService {
             @Override
             public void afterCommit() {
                 mediaRealtimePublisher.publish(contentTargetType, contentId, operation, List.of(), List.of());
+            }
+        });
+    }
+
+    private void publishPostCreatedAnalyticsAfterCommit(String postId, String userId) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            analyticsEventPublisher.publishPostCreated(postId, userId);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                analyticsEventPublisher.publishPostCreated(postId, userId);
             }
         });
     }
