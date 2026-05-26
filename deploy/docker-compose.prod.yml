@@ -296,6 +296,7 @@ services:
       MEDIA_SERVICE_URL: http://media-service:8090
       CHAT_SERVICE_URL: http://chat-service:5000
       ANALYTIC_SERVICE_URL: http://analytic-service:8092
+      MODERATION_SERVICE_URL: http://moderation-service:8087
       FRONTEND_URL_DEPLOYED: ${FRONTEND_URL_DEPLOYED:-https://*.vercel.app}
     ports:
       - "127.0.0.1:8080:8080"

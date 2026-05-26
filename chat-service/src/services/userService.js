@@ -137,14 +137,31 @@ exports.getAllUsers = async () => {
   return await User.find();
 };
 
-exports.getUserByPhone = async (phone) => {
-  // Normalize phone formats for searching locally (handle 0 vs 84)
-  const variants = [phone];
-  if (phone.startsWith('0')) {
-    variants.push('84' + phone.substring(1));
-  } else if (phone.startsWith('84')) {
-    variants.push('0' + phone.substring(2));
+const getPhoneVariants = (phone) => {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return [];
+
+  const variants = new Set([digits]);
+
+  if (digits.startsWith("0")) {
+    variants.add(`84${digits.substring(1)}`);
+    variants.add(digits.substring(1));
+  } else if (digits.startsWith("84")) {
+    const withoutCountryCode = digits.substring(2);
+    variants.add(withoutCountryCode);
+    variants.add(withoutCountryCode.startsWith("0")
+      ? withoutCountryCode
+      : `0${withoutCountryCode}`);
+  } else if (digits.length === 9) {
+    variants.add(`0${digits}`);
+    variants.add(`84${digits}`);
   }
+
+  return Array.from(variants);
+};
+
+exports.getUserByPhone = async (phone) => {
+  const variants = getPhoneVariants(phone);
 
   return await User.findOne({
     phone: { $in: variants }

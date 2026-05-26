@@ -4,6 +4,7 @@ import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
@@ -15,6 +16,9 @@ import mediaservice.configs.MediaUploadProperties;
 
 @Configuration
 public class RabbitMQConfig {
+
+    private static final String ANALYTICS_DLX = "analytics.dlx";
+    private static final String POST_CREATED_DLQ = "analytics.post.created.dlq";
 
     @Bean
     public DirectExchange mediaCompressionExchange(MediaCompressionProperties properties) {
@@ -54,6 +58,34 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(mediaUploadQueue)
                 .to(mediaUploadExchange)
                 .with(properties.getRoutingKey());
+    }
+
+    @Bean
+    public DirectExchange analyticsDlx() {
+        return new DirectExchange(ANALYTICS_DLX, true, false);
+    }
+
+    @Bean
+    public Queue analyticsPostCreatedQueue(
+            @Value("${analytics.queue.post-created:analytics.post.created.queue}") String queueName) {
+        return QueueBuilder.durable(queueName)
+                .withArgument("x-dead-letter-exchange", ANALYTICS_DLX)
+                .withArgument("x-dead-letter-routing-key", POST_CREATED_DLQ)
+                .build();
+    }
+
+    @Bean
+    public Queue analyticsPostCreatedDlq() {
+        return QueueBuilder.durable(POST_CREATED_DLQ).build();
+    }
+
+    @Bean
+    public Binding analyticsPostCreatedDlqBinding(
+            Queue analyticsPostCreatedDlq,
+            DirectExchange analyticsDlx) {
+        return BindingBuilder.bind(analyticsPostCreatedDlq)
+                .to(analyticsDlx)
+                .with(POST_CREATED_DLQ);
     }
 
     @Bean

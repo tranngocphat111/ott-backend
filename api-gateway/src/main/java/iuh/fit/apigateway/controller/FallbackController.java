@@ -71,4 +71,14 @@ public class FallbackController {
                         .message("ANALYTIC_SERVICE_UNAVAILABLE")
                         .build());
     }
+
+    @RequestMapping("/moderation")
+    public ResponseEntity<ApiResponse<Void>> moderationFallback() {
+        log.warn("Circuit breaker triggered for moderation-service");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.<Void>builder()
+                        .code(5006)
+                        .message("MODERATION_SERVICE_UNAVAILABLE")
+                        .build());
+    }
 }

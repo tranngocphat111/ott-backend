@@ -60,7 +60,7 @@ public class ModerationRouter {
                     .decision(ModerationDecision.NEEDS_REVIEW)
                     .severity(ViolationSeverity.MEDIUM)
                     .violationType(IMAGE_VIOLATION_TYPE)
-                    .reason("Image moderation provider unavailable")
+                    .reason(buildProviderFailureReason(ex))
                     .matchedLabels(List.of("REKOGNITION_SCAN_FAILED"))
                     .build();
         }
@@ -115,5 +115,16 @@ public class ModerationRouter {
             throw new IllegalArgumentException("payload." + key + " must be a non-blank string");
         }
         return stringValue.trim();
+    }
+
+    private String buildProviderFailureReason(RuntimeException ex) {
+        String message = ex.getMessage();
+        if (message == null || message.isBlank()) {
+            message = "No provider error message";
+        }
+        return "Image moderation provider unavailable: "
+                + ex.getClass().getSimpleName()
+                + " - "
+                + message;
     }
 }
