@@ -1,7 +1,6 @@
 version: "3.8"
 
 services:
-
   redis:
     image: redis:7-alpine
     container_name: ott-redis
@@ -14,7 +13,7 @@ services:
     networks:
       - ott-network
     healthcheck:
-      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -34,7 +33,7 @@ services:
     networks:
       - ott-network
     healthcheck:
-      test: [ "CMD", "rabbitmq-diagnostics", "ping" ]
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -91,7 +90,7 @@ services:
       - "8090:8090"
       - "8091:8091"
     environment:
-      - TZ=Asia/Ho_Chi_Minh
+      - TZ=Asia/Singapore
     networks:
       - ott-network
     depends_on:

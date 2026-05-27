@@ -320,7 +320,6 @@ const createCallNotificationMessage = async ({
       senderId,
       content,
       type,
-      size: 0,
       systemMeta,
     });
 
@@ -455,7 +454,7 @@ const getRecentCallOutcomeMessage = async (conversationId, callId = null) => {
   return Message.findOne({
     conversation_id: conversationId,
     type: { $in: CALL_OUTCOME_TYPES },
-    is_deleted: false,
+    is_deleted: { $ne: true },
     ...(callId ? { "system_meta.callId": normalizeId(callId) } : {}),
     createdAt: { $gte: since },
   })
@@ -611,7 +610,7 @@ const emitCallOutcomeMessage = async ({
       conversation_id: conversationId,
       type: { $in: CALL_OUTCOME_TYPES },
       "system_meta.callId": normalizedCallId,
-      is_deleted: false,
+      is_deleted: { $ne: true },
     })
       .sort({ createdAt: -1 })
       .select("msg_id type")
