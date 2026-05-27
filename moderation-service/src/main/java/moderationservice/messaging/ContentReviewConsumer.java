@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -106,12 +107,28 @@ public class ContentReviewConsumer {
                 .severity(result.getSeverity())
                 .violationType(result.getViolationType())
                 .matchedLabels(result.getMatchedLabels())
-                .evidence(Map.of(
-                        "sourceService", request.getSourceService(),
-                        "contentRefId", request.getContentRefId()
-                ))
+                .evidence(buildViolationEvidence(request))
                 .detectedAt(Instant.now())
                 .build();
+    }
+
+    private Map<String, Object> buildViolationEvidence(ContentReviewRequest request) {
+        Map<String, Object> evidence = new HashMap<>();
+        evidence.put("sourceService", request.getSourceService());
+        evidence.put("contentRefId", request.getContentRefId());
+
+        if (request.getMetadata() != null) {
+            evidence.putAll(request.getMetadata());
+        }
+
+        if (request.getPayload() != null) {
+            Object objectKey = request.getPayload().get("objectKey");
+            if (objectKey != null) {
+                evidence.put("objectKey", objectKey);
+            }
+        }
+
+        return evidence;
     }
 
     private String buildEvidence(ContentReviewRequest request) {

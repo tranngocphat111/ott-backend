@@ -80,6 +80,74 @@ const publishMessageForReview = async (
   }
 };
 
+const publishMessageImageForReview = async ({
+  messageId,
+  senderId,
+  objectKey,
+  imageIndex,
+  conversationId,
+  bucketName,
+}) => {
+  try {
+    const normalizedMessageId = String(messageId || "").trim();
+    const normalizedObjectKey = String(objectKey || "").trim();
+    const normalizedBucketName = String(bucketName || "").trim();
+    const normalizedImageIndex = Number.isFinite(Number(imageIndex))
+      ? Number(imageIndex)
+      : 0;
+
+    if (
+      !normalizedMessageId ||
+      !senderId ||
+      !normalizedObjectKey ||
+      !normalizedBucketName
+    ) {
+      logger.warn(
+        `[moderation] skipped image review publish because messageId, senderId, objectKey, or bucketName is blank: messageId=${normalizedMessageId}`,
+      );
+      return;
+    }
+
+    const channel = await ensureChannel();
+    const event = ContentReviewRequest.build({
+      requestId: `chat-image:${normalizedMessageId}:${normalizedImageIndex}`,
+      sourceService: "chat-service",
+      eventType: "message.image.created",
+      contentType: "IMAGE",
+      contentRefId: normalizedMessageId,
+      userId: String(senderId),
+      tenantId: "default",
+      payload: {
+        bucket: normalizedBucketName,
+        objectKey: normalizedObjectKey,
+      },
+      metadata: {
+        conversationId: String(conversationId || ""),
+        messageId: normalizedMessageId,
+        imageIndex: normalizedImageIndex,
+      },
+      createdAt: new Date().toISOString(),
+    });
+
+    channel.publish(
+      MODERATION_EXCHANGE,
+      REVIEW_REQUEST_ROUTING_KEY,
+      Buffer.from(JSON.stringify(event)),
+      {
+        persistent: true,
+        contentType: "application/json",
+      },
+    );
+
+    logger.info(
+      `[moderation] image review request published: requestId=${event.requestId}, messageId=${normalizedMessageId}, imageIndex=${normalizedImageIndex}`,
+    );
+  } catch (error) {
+    logger.error("[moderation] publish image review request failed", error);
+  }
+};
+
 module.exports = {
   publishMessageForReview,
+  publishMessageImageForReview,
 };
