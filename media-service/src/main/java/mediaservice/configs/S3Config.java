@@ -4,6 +4,8 @@ import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.client.builder.AwsClientBuilder;
+import com.amazonaws.services.rekognition.AmazonRekognition;
+import com.amazonaws.services.rekognition.AmazonRekognitionClientBuilder;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.transfer.TransferManager;
@@ -55,6 +57,24 @@ public class S3Config {
             builder.withEndpointConfiguration(
                     new AwsClientBuilder.EndpointConfiguration(localEndpoint, region)
             ).withPathStyleAccessEnabled(true);
+        } else {
+            builder.withRegion(region);
+        }
+
+        return builder.build();
+    }
+
+    @Bean
+    public AmazonRekognition amazonRekognition() {
+        AWSCredentials credentials = new BasicAWSCredentials(accessKey, secretKey);
+        AmazonRekognitionClientBuilder builder = AmazonRekognitionClientBuilder
+                .standard()
+                .withCredentials(new AWSStaticCredentialsProvider(credentials));
+
+        if (useLocal) {
+            builder.withEndpointConfiguration(
+                    new AwsClientBuilder.EndpointConfiguration(localEndpoint, region)
+            );
         } else {
             builder.withRegion(region);
         }
