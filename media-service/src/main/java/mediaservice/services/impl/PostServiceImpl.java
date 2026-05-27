@@ -45,10 +45,12 @@ import mediaservice.realtime.MediaRealtimeUpdate;
 import mediaservice.realtime.PostActivityPublisher;
 import mediaservice.repositories.CommentRepository;
 import mediaservice.repositories.ContentAccessControlRepository;
+import mediaservice.repositories.ContentViewHistoryRepository;
 import mediaservice.repositories.MediaRepository;
 import mediaservice.repositories.PostRepository;
 import mediaservice.repositories.ReactionRepository;
 import mediaservice.repositories.RelationshipRepository;
+import mediaservice.repositories.SavedContentRepository;
 import mediaservice.repositories.UserAccountRepository;
 import mediaservice.services.AnalyticsEventPublisher;
 import mediaservice.services.MediaCompressionJobPublisher;
@@ -80,6 +82,8 @@ public class PostServiceImpl implements PostService {
     private final MediaUploadJobPublisher mediaUploadJobPublisher;
     private final MediaRealtimePublisher mediaRealtimePublisher;
     private final PostActivityPublisher postActivityPublisher;
+    private final ContentViewHistoryRepository contentViewHistoryRepository;
+    private final SavedContentRepository savedContentRepository;
 
     private final mediaservice.services.UserSyncService userSyncService;
     private final mediaservice.mappers.ContentAccessControlMapper contentAccessControlMapper;
@@ -190,7 +194,7 @@ public class PostServiceImpl implements PostService {
         
         Post savedPost = postRepository.save(post);
         String userId = savedPost.getAccount() != null ? savedPost.getAccount().getId() : null;
-        analyticsEventPublisher.publishPostCreated(savedPost.getId(), userId);
+        publishPostCreatedAnalyticsAfterCommit(savedPost.getId(), userId);
         publishAfterCommit(savedPost.getId(), "POST", "CREATE");
         return enrichCounts(postMapper.toResponse(savedPost), savedPost.getId());
     }
@@ -283,7 +287,7 @@ public class PostServiceImpl implements PostService {
         entityManager.flush();
         entityManager.refresh(savedPost);
 
-        analyticsEventPublisher.publishPostCreated(savedPost.getId(), accountId);
+        publishPostCreatedAnalyticsAfterCommit(savedPost.getId(), accountId);
         if (!hasAsyncJobs) {
             publishAfterCommit(savedPost.getId(), "POST", "CREATE");
         }
@@ -383,15 +387,15 @@ public class PostServiceImpl implements PostService {
             post.setStatus(ContentStatusType.ACTIVE);
         }
 
-        // Update access controls
-        List<ContentAccessControl> existingControls =
-                contentAccessControlRepository.findByContent(post);
-        if (existingControls != null && !existingControls.isEmpty()) {
-            contentAccessControlRepository.deleteAll(existingControls);
+        // Update access controls (mutate managed collection to keep orphanRemoval happy)
+        java.util.Set<ContentAccessControl> controls = post.getAccessControls();
+        if (controls == null) {
+            controls = new java.util.HashSet<>();
+            post.setAccessControls(controls);
         }
+        controls.clear();
 
         if (visibility == VisibilityType.CUSTOM && accessControls != null && !accessControls.isEmpty()) {
-            List<ContentAccessControl> controls = new java.util.ArrayList<>();
             for (AccessControlRequest req : accessControls) {
                 if (req == null || req.getAccountId() == null || req.getRuleType() == null) continue;
                 if (ownerId != null && req.getAccountId().equals(ownerId)) continue;
@@ -403,12 +407,6 @@ public class PostServiceImpl implements PostService {
                 control.setRuleType(req.getRuleType());
                 controls.add(control);
             }
-            if (!controls.isEmpty()) {
-                contentAccessControlRepository.saveAll(controls);
-                post.setAccessControls(new java.util.HashSet<>(controls));
-            }
-        } else {
-            post.setAccessControls(new java.util.HashSet<>());
         }
 
         // 3. Process Media items in the unified list (preserving order)
@@ -634,6 +632,8 @@ public class PostServiceImpl implements PostService {
                 .orElseThrow(() -> new RuntimeException("Post not found with id: " + id));
 
         List<String> deleteKeys = collectPostMediaKeys(post);
+        contentViewHistoryRepository.deleteByContentId(post.getId());
+        savedContentRepository.deleteByContentId(post.getId());
         postRepository.delete(post);
 
         if (deleteKeys.isEmpty()) {
@@ -683,6 +683,20 @@ public class PostServiceImpl implements PostService {
             @Override
             public void afterCommit() {
                 mediaRealtimePublisher.publish(contentTargetType, contentId, operation, List.of(), List.of());
+            }
+        });
+    }
+
+    private void publishPostCreatedAnalyticsAfterCommit(String postId, String userId) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            analyticsEventPublisher.publishPostCreated(postId, userId);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                analyticsEventPublisher.publishPostCreated(postId, userId);
             }
         });
     }

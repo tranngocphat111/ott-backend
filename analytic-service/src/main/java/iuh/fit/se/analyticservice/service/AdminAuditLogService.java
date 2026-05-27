@@ -9,10 +9,13 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import iuh.fit.se.analyticservice.dto.AuditLogDTO;
+import iuh.fit.se.analyticservice.dto.ContentViolationLogDTO;
 import iuh.fit.se.analyticservice.dto.ModerationDashboardResponse;
 import iuh.fit.se.analyticservice.dto.PaginatedAuditLogsResponse;
 import iuh.fit.se.analyticservice.entity.AdminAuditLog;
+import iuh.fit.se.analyticservice.entity.ContentViolationLog;
 import iuh.fit.se.analyticservice.repository.AdminAuditLogRepository;
+import iuh.fit.se.analyticservice.repository.ContentViolationLogRepository;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -20,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 public class AdminAuditLogService {
 
     private final AdminAuditLogRepository adminAuditLogRepository;
+    private final ContentViolationLogRepository contentViolationLogRepository;
 
     public void logAction(String adminId, String actionType, String targetUserId) {
         AdminAuditLog log = AdminAuditLog.builder()
@@ -56,8 +60,19 @@ public class AdminAuditLogService {
         List<AuditLogDTO> recentLogs = adminAuditLogRepository.findTop10ByOrderByCreatedAtDesc().stream()
                 .map(this::toAuditLogDTO)
                 .toList();
+        long totalContentViolations = contentViolationLogRepository.count();
+        List<ContentViolationLogDTO> recentContentViolations = contentViolationLogRepository
+                .findTop10ByOrderByDetectedAtDesc()
+                .stream()
+                .map(this::toContentViolationLogDTO)
+                .toList();
 
-        return new ModerationDashboardResponse(totalBannedUsers, recentLogs);
+        return new ModerationDashboardResponse(
+                totalBannedUsers,
+                recentLogs,
+                totalContentViolations,
+                recentContentViolations
+        );
     }
 
     private AuditLogDTO toAuditLogDTO(AdminAuditLog log) {
@@ -70,6 +85,22 @@ public class AdminAuditLogService {
                 log.getReason(),
                 log.getDurationMinutes(),
                 log.getCreatedAt()
+        );
+    }
+
+    private ContentViolationLogDTO toContentViolationLogDTO(ContentViolationLog log) {
+        return new ContentViolationLogDTO(
+                log.getId(),
+                log.getViolationId(),
+                log.getSourceService(),
+                log.getContentType(),
+                log.getContentRefId(),
+                log.getUserId(),
+                log.getSeverity(),
+                log.getViolationType(),
+                log.getMatchedLabels(),
+                log.getDetectedAt(),
+                log.getLoggedAt()
         );
     }
 }

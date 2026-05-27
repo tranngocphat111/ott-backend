@@ -8,7 +8,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -23,7 +22,7 @@ public class AnalyticsEventPublisher {
     public void publishPostCreated(String postId, String userId) {
         try {
             PostCreatedAnalyticsEvent event = PostCreatedAnalyticsEvent.builder()
-                    .event_id(UUID.randomUUID().toString())
+                    .event_id("post.created:" + postId)
                     .post_id(postId)
                     .user_id(userId)
                     .timestamp(Instant.now())

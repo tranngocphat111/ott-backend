@@ -12,4 +12,6 @@ import lombok.NoArgsConstructor;
 public class ModerationDashboardResponse {
     private long totalBannedUsers;
     private List<AuditLogDTO> recentLogs;
+    private long totalContentViolations;
+    private List<ContentViolationLogDTO> recentContentViolations;
 }

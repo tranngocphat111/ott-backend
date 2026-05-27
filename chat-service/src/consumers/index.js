@@ -5,6 +5,7 @@ const { initPublisher: initRelationshipPublisher } = require("../events/relation
 const { initPublisher: initChatPublisher } = require("../events/chatEvents");
 const { initChatMessageConsumers } = require("./chatMessageConsumer");
 const { startNotificationConsumer } = require("./notificationConsumer");
+const { initModerationViolationConsumer } = require("./moderationViolationConsumer");
 
 const initAllConsumers = async (io) => {
   try {
@@ -19,6 +20,7 @@ const initAllConsumers = async (io) => {
     await initRelationshipPublisher(channel);
     await initChatPublisher(channel);
     await initChatMessageConsumers(channel, io);
+    await initModerationViolationConsumer(channel, io);
     
     console.log(" [✓] All RabbitMQ consumers and publishers initialized successfully");
   } catch (error) {

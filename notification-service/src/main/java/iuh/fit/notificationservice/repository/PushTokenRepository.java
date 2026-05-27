@@ -10,4 +10,8 @@ public interface PushTokenRepository extends JpaRepository<PushToken, Long> {
     Optional<PushToken> findByExpoPushToken(String expoPushToken);
 
     List<PushToken> findByUserIdAndActiveTrue(String userId);
+
+    List<PushToken> findByUserIdAndDeviceIdAndActiveTrue(String userId, String deviceId);
+
+    List<PushToken> findByDeviceIdAndPlatformAndActiveTrue(String deviceId, String platform);
 }

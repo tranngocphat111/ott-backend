@@ -6,6 +6,7 @@ import mediaservice.dtos.responses.UserAccountResponse;
 import mediaservice.mappers.UserAccountMapper;
 import mediaservice.models.UserAccount;
 import mediaservice.repositories.UserAccountRepository;
+import mediaservice.services.ProfileImageModerationService;
 import mediaservice.services.S3Service;
 import mediaservice.services.UserAccountService;
 import mediaservice.services.UserEventPublisher;
@@ -31,6 +32,7 @@ public class UserAccountServiceImpl implements UserAccountService {
     private final S3Service s3Service;
     private final UserEventPublisher userEventPublisher;
     private final UserSyncService userSyncService;
+    private final ProfileImageModerationService profileImageModerationService;
 
     @Override
     @Transactional
@@ -138,6 +140,7 @@ public class UserAccountServiceImpl implements UserAccountService {
         UserAccount userAccount = userAccountRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User account not found with id: " + id));
         String s3Key = s3Service.uploadFile(file, "avatars");
+        profileImageModerationService.assertSafeProfileImage(s3Key);
         String avatarUrl = s3Service.getFullUrl(s3Key);
         userAccount.setAvatarUrl(avatarUrl);
         UserAccount updated = userAccountRepository.saveAndFlush(userAccount);
@@ -164,6 +167,7 @@ public class UserAccountServiceImpl implements UserAccountService {
         UserAccount userAccount = userAccountRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User account not found with id: " + id));
         String s3Key = s3Service.uploadFile(file, "covers");
+        profileImageModerationService.assertSafeProfileImage(s3Key);
         String coverUrl = s3Service.getFullUrl(s3Key);
         userAccount.setCoverUrl(coverUrl);
         UserAccount updated = userAccountRepository.saveAndFlush(userAccount);

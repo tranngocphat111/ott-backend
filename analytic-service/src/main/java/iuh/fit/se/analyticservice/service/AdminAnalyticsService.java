@@ -11,9 +11,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TreeSet;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import iuh.fit.se.analyticservice.client.UserServiceClient;
+import iuh.fit.se.analyticservice.dto.ApiResponseDTO;
 import iuh.fit.se.analyticservice.dto.DailyActivityResponse;
 import iuh.fit.se.analyticservice.dto.DailyPostCountResponse;
 import iuh.fit.se.analyticservice.dto.DailyUserTrendResponse;
@@ -41,6 +43,9 @@ public class AdminAnalyticsService {
     private final RawMessageEventRepository rawMessageEventRepository;
     private final RawPostEventRepository rawPostEventRepository;
     private final UserServiceClient userServiceClient;
+
+    @Value("${internal.api.key:}")
+    private String internalApiKey;
 
     public OverviewResponse getOverview(String timeRange) {
         Instant from = resolveFrom(timeRange);
@@ -110,7 +115,9 @@ public class AdminAnalyticsService {
             RecentNewUserDTO dto = new RecentNewUserDTO(
                     event.getUserId(),
                     user != null ? user.getEmail() : null,
-                    user != null ? user.getFullName() : null
+                    user != null ? user.getFullName() : null,
+                    event.getTimestamp(),
+                    hasProfileDetails(user)
             );
 
             if (matchesQuery(dto, normalizedQuery)) {
@@ -283,13 +290,31 @@ public class AdminAnalyticsService {
     }
 
     private UserDetailDTO fetchUserDetail(String userId) {
+        if (internalApiKey == null || internalApiKey.isBlank()) {
+            log.warn("INTERNAL_API_KEY is not configured, returning analytics event without profile details");
+            return null;
+        }
+
         try {
-            return userServiceClient.getUserById(userId);
+            ApiResponseDTO<UserDetailDTO> response = userServiceClient.getUserById(userId, internalApiKey);
+            return response != null ? response.getResult() : null;
         } catch (RuntimeException ex) {
             log.warn("user-service unavailable for userId={}, returning analytics event without profile details",
                     userId, ex);
             return null;
         }
+    }
+
+    private boolean hasProfileDetails(UserDetailDTO user) {
+        if (user == null) {
+            return false;
+        }
+
+        return !isBlank(user.getEmail()) || !isBlank(user.getFullName()) || !isBlank(user.getPhone());
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     private List<LocalDate> buildDateRange(Instant from, java.util.Set<LocalDate> firstDates, java.util.Set<LocalDate> secondDates) {

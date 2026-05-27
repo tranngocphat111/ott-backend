@@ -14,13 +14,12 @@ const {
   HeadObjectCommand,
 } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
-const {
-  RekognitionClient,
-  DetectModerationLabelsCommand,
-} = require("@aws-sdk/client-rekognition");
 const { s3Client, bucketName } = require("../config/s3");
 const { publishMessageSentEvent } = require("./analyticsPublisher");
-const { publishMessageForReview } = require("./chatModerationPublisher");
+const {
+  publishMessageForReview,
+  publishMessageImageForReview,
+} = require("./chatModerationPublisher");
 const { publishNotification } = require("../events/notificationEvents");
 
 const fs = require("fs/promises");
@@ -45,19 +44,6 @@ const S3_POLICY_SIGNAL_PATTERN =
   /(violation|moderation|unsafe|malware|virus|infected|blocked|denied|explicit.?deny|quarantine|sensitive|nsfw|adult|explicit)/i;
 const S3_POLICY_CLEAN_VALUE_PATTERN =
   /^(clean|ok|pass|passed|safe|allowed|false|0|no|none)$/i;
-const MODERATION_MIN_CONFIDENCE = Number(
-  process.env.REKOGNITION_MIN_CONFIDENCE || 65,
-);
-const MODERATION_FAIL_CLOSED =
-  String(process.env.MODERATION_FAIL_CLOSED || "false").toLowerCase() === "true";
-const rekognitionClient = new RekognitionClient({
-  region: process.env.AWS_REGION || "ap-southeast-1",
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
-});
-
 const sanitizeS3FileName = (fileName) => {
   const baseName =
     String(fileName || "file")
@@ -84,31 +70,51 @@ const isParticipantNotificationEnabled = (participant) => {
   return Number.isNaN(muteUntil) || muteUntil <= Date.now();
 };
 
-const getMessageNotificationBody = ({ message, senderName, conversation }) => {
+const resolvePublicMediaUrl = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw || /^data:image\//i.test(raw)) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (!bucketName) return "";
+
+  const region = process.env.AWS_REGION || "ap-southeast-1";
+  const key = raw
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return key ? `https://${bucketName}.s3.${region}.amazonaws.com/${key}` : "";
+};
+
+const getMessageNotificationPayload = ({ message, senderName, conversation }) => {
   const senderLabel = senderName || "Ai đó";
-  const groupSuffix =
-    conversation?.type === "group" && conversation?.name
-      ? ` trong ${conversation.name}`
-      : "";
+  const groupName = conversation?.type === "group" ? String(conversation?.name || "").trim() : "";
   const content = Array.isArray(message.content)
     ? message.content.filter(Boolean)
     : [message.content].filter(Boolean);
   const firstContent = String(content[0] || "");
+  const title = groupName ? `${senderLabel} trong ${groupName}` : senderLabel;
 
   switch (message.type) {
     case "image":
-      return `${senderLabel}${groupSuffix} đã gửi ${content.length > 1 ? `${content.length} hình ảnh` : "một hình ảnh"}`;
+      return {
+        title,
+        body: `Đã gửi ${content.length > 1 ? `${content.length} hình ảnh` : "một hình ảnh"}`,
+      };
     case "video":
-      return `${senderLabel}${groupSuffix} đã gửi một video`;
+      return { title, body: "Đã gửi một video" };
     case "audio":
-      return `${senderLabel}${groupSuffix} đã gửi một tin nhắn thoại`;
+      return { title, body: "Đã gửi một tin nhắn thoại" };
     case "file":
-      return `${senderLabel}${groupSuffix} đã gửi một tệp`;
+      return { title, body: "Đã gửi một tệp" };
     case "poll":
-      return `${senderLabel}${groupSuffix} đã tạo một cuộc bình chọn`;
+      return { title, body: "Đã tạo một cuộc bình chọn" };
     default: {
       const preview = firstContent.length > 90 ? `${firstContent.slice(0, 90)}...` : firstContent;
-      return `${senderLabel}${groupSuffix}: ${preview || "Tin nhắn mới"}`;
+      return {
+        title,
+        body: preview || "Tin nhắn mới",
+      };
     }
   }
 };
@@ -132,11 +138,13 @@ const publishMessageNotificationsBestEffort = async ({
       .select("user_id settings")
       .lean();
 
-    const content = getMessageNotificationBody({
+    const notificationPayload = getMessageNotificationPayload({
       message,
       senderName,
       conversation,
     });
+    const senderAvatarUrl = resolvePublicMediaUrl(message.sender_avatar);
+    const content = `${notificationPayload.title}: ${notificationPayload.body}`;
 
     await Promise.allSettled(
       recipients
@@ -147,6 +155,9 @@ const publishMessageNotificationsBestEffort = async ({
             senderId,
             type: "CHAT_MESSAGE",
             content,
+            title: notificationPayload.title,
+            body: notificationPayload.body,
+            imageUrl: senderAvatarUrl,
             referenceId: String(conversationId),
             pushOnly: true,
           }),
@@ -234,65 +245,7 @@ const getS3MediaWarning = async (rawKey, index) => {
   }
 };
 
-const buildModerationWarning = ({
-  index,
-  key,
-  source,
-  reason,
-  confidence,
-  labels,
-}) => ({
-  index,
-  key,
-  source,
-  reason: String(reason || "moderation_required"),
-  ...(typeof confidence === "number" ? { confidence } : {}),
-  ...(Array.isArray(labels) ? { labels } : {}),
-});
-
-const getRekognitionMediaWarning = async (rawKey, index) => {
-  const key = extractS3ObjectKey(rawKey);
-  if (!key) return null;
-
-  try {
-    const result = await rekognitionClient.send(
-      new DetectModerationLabelsCommand({
-        Image: {
-          S3Object: {
-            Bucket: bucketName,
-            Name: key,
-          },
-        },
-        MinConfidence: MODERATION_MIN_CONFIDENCE,
-      }),
-    );
-
-    const labels = result.ModerationLabels || [];
-    if (!labels.length) return null;
-
-    const normalizedLabels = labels.map((label) => ({
-      name: label.Name,
-      parentName: label.ParentName,
-      confidence: label.Confidence,
-    }));
-
-    return buildModerationWarning({
-      index,
-      key,
-      source: "rekognition",
-      reason:
-        labels
-          .slice(0, 3)
-          .map((label) => label.Name)
-          .filter(Boolean)
-          .join(", ") || "moderation_label",
-      confidence: Math.max(
-        ...labels.map((label) => Number(label.Confidence || 0)),
-      ),
-      labels: normalizedLabels,
-    });
-  } catch (error) {
-    console.warn(
+/*
       "Không thể kiểm tra Rekognition moderation:",
       error?.message || error,
     );
@@ -308,6 +261,7 @@ const getRekognitionMediaWarning = async (rawKey, index) => {
   }
 };
 
+*/
 const buildMediaPolicyMeta = async (type, contentArray) => {
   if (!["image", "video"].includes(type)) return null;
 
@@ -316,10 +270,6 @@ const buildMediaPolicyMeta = async (type, contentArray) => {
       contentArray.map(async (key, index) => {
         const s3Warning = await getS3MediaWarning(key, index);
         if (s3Warning) return s3Warning;
-
-        if (type === "image") {
-          return getRekognitionMediaWarning(key, index);
-        }
 
         return null;
       }),
@@ -740,7 +690,8 @@ exports.sendMessage = async ({
     );
   }
 
-  const mediaPolicyMeta = await buildMediaPolicyMeta(type, normalizedContent);
+  const mediaPolicyMeta =
+    type === "image" ? null : await buildMediaPolicyMeta(type, normalizedContent);
 
   let replyMessage = null;
   let replySender = null;
@@ -824,6 +775,19 @@ exports.sendMessage = async ({
       normalizedContent[0],
       conversationId,
     );
+  }
+
+  if (type === "image") {
+    normalizedContent.forEach((objectKey, imageIndex) => {
+      publishMessageImageForReview({
+        messageId: savedMessage.msg_id,
+        senderId,
+        objectKey,
+        imageIndex,
+        conversationId,
+        bucketName,
+      });
+    });
   }
 
   const updatedConversation = await ConversationService.updateLastMessage(

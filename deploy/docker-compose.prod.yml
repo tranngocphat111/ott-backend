@@ -167,6 +167,11 @@ services:
       AWS_SOCIAL_S3_BUCKET_NAME: ${AWS_SOCIAL_S3_BUCKET_NAME:?AWS_SOCIAL_S3_BUCKET_NAME is required}
       AWS_SOCIAL_S3_BASE_URL: ${AWS_SOCIAL_S3_BASE_URL:?AWS_SOCIAL_S3_BASE_URL is required}
       AWS_SOCIAL_S3_USE_LOCAL: ${AWS_SOCIAL_S3_USE_LOCAL:-false}
+      MODERATION_RABBITMQ_EXCHANGE: ${MODERATION_RABBITMQ_EXCHANGE:-moderation.events}
+      MODERATION_REVIEW_REQUEST_ROUTING_KEY: ${MODERATION_REVIEW_REQUEST_ROUTING_KEY:-moderation.review.requests.queue}
+      MODERATION_VIOLATION_DETECTED_ROUTING_KEY: ${MODERATION_VIOLATION_DETECTED_ROUTING_KEY:-moderation.violation.detected}
+      MEDIA_MODERATION_VIOLATION_QUEUE: ${MEDIA_MODERATION_VIOLATION_QUEUE:-media.moderation.violation.queue}
+      MEDIA_MODERATION_VIOLATION_DLQ: ${MEDIA_MODERATION_VIOLATION_DLQ:-media.moderation.violation.dlq}
     ports:
       - "127.0.0.1:8091:8091"
     depends_on:
@@ -248,7 +253,8 @@ services:
       ANALYTIC_RABBITMQ_PORT: 5672
       ANALYTIC_RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-admin}
       ANALYTIC_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD is required}
-      USER_SERVICE_URL: http://user-service:8082
+      USER_SERVICE_URL: http://user-service:8082/riff/api
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?INTERNAL_API_KEY is required}
       ANALYTIC_ALLOWED_ORIGINS: ${ANALYTIC_ALLOWED_ORIGINS:-}
     depends_on:
       rabbitmq:
@@ -296,6 +302,7 @@ services:
       MEDIA_SERVICE_URL: http://media-service:8090
       CHAT_SERVICE_URL: http://chat-service:5000
       ANALYTIC_SERVICE_URL: http://analytic-service:8092
+      MODERATION_SERVICE_URL: http://moderation-service:8087
       FRONTEND_URL_DEPLOYED: ${FRONTEND_URL_DEPLOYED:-https://*.vercel.app}
     ports:
       - "127.0.0.1:8080:8080"

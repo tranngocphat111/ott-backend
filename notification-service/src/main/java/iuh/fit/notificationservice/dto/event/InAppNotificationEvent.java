@@ -16,6 +16,9 @@ public class InAppNotificationEvent implements Serializable {
     private String senderId;
     private String type; // FRIEND_REQUEST, POST_REACTION, PROFILE_UPDATE, etc.
     private String content;
+    private String title;
+    private String body;
+    private String imageUrl;
     private String referenceId;
     private Boolean pushOnly;
 }

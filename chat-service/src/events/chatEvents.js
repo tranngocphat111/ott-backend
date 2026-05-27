@@ -14,7 +14,6 @@ const QUEUES = {
   DELIVERY: "chat.message.delivery.queue",
   RECEIPT: "chat.message.receipt.queue",
   STATUS: "chat.message.status.queue",
-  NOTIFICATION: "chat.notification.queue",
 };
 
 let channel = null;
@@ -54,12 +53,6 @@ const assertTopology = async (ch) => {
     ROUTING_KEYS.MESSAGE_STATUS_CHANGED,
   );
 
-  await ch.assertQueue(QUEUES.NOTIFICATION, { durable: true });
-  await ch.bindQueue(
-    QUEUES.NOTIFICATION,
-    CHAT_EVENTS_EXCHANGE,
-    ROUTING_KEYS.MESSAGE_CREATED,
-  );
 };
 
 const ensureChannel = async () => {

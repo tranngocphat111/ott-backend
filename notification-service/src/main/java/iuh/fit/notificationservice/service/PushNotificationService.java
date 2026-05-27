@@ -33,6 +33,8 @@ public class PushNotificationService {
             return;
         }
 
+        deactivateTokensForDevice(request.getUserId(), normalize(request.getDeviceId()), normalize(request.getPlatform()), token);
+
         PushToken pushToken = pushTokenRepository.findByExpoPushToken(token)
                 .orElseGet(PushToken::new);
 
@@ -55,13 +57,55 @@ public class PushNotificationService {
     @Transactional
     public void unregisterToken(PushTokenRequest request) {
         String token = normalize(request.getToken());
-        if (token == null) return;
+        String deviceId = normalize(request.getDeviceId());
+        String platform = normalize(request.getPlatform());
+        boolean touched = false;
 
-        pushTokenRepository.findByExpoPushToken(token).ifPresent(pushToken -> {
-            pushToken.setActive(false);
-            pushTokenRepository.save(pushToken);
-            log.info("Unregistered Expo push token for userId={}", pushToken.getUserId());
-        });
+        if (token != null) {
+            pushTokenRepository.findByExpoPushToken(token).ifPresent(pushToken -> {
+                pushToken.setActive(false);
+                pushTokenRepository.save(pushToken);
+                log.info("Unregistered Expo push token for userId={}", pushToken.getUserId());
+            });
+            touched = true;
+        }
+
+        if (deviceId != null) {
+            List<PushToken> sameUserDeviceTokens =
+                    pushTokenRepository.findByUserIdAndDeviceIdAndActiveTrue(request.getUserId(), deviceId);
+            sameUserDeviceTokens.forEach(pushToken -> {
+                pushToken.setActive(false);
+                pushTokenRepository.save(pushToken);
+            });
+            touched = touched || !sameUserDeviceTokens.isEmpty();
+        }
+
+        if (!touched) {
+            log.warn("No Expo push token was unregistered for userId={}, deviceId={}, platform={}",
+                    request.getUserId(), deviceId, platform);
+        }
+    }
+
+    private void deactivateTokensForDevice(String userId, String deviceId, String platform, String exceptToken) {
+        if (deviceId != null) {
+            List<PushToken> sameUserDeviceTokens =
+                    pushTokenRepository.findByUserIdAndDeviceIdAndActiveTrue(userId, deviceId);
+            sameUserDeviceTokens.forEach(pushToken -> {
+                if (exceptToken.equals(pushToken.getExpoPushToken())) return;
+                pushToken.setActive(false);
+                pushTokenRepository.save(pushToken);
+            });
+        }
+
+        if (deviceId != null && platform != null) {
+            List<PushToken> samePhysicalDeviceTokens =
+                    pushTokenRepository.findByDeviceIdAndPlatformAndActiveTrue(deviceId, platform);
+            samePhysicalDeviceTokens.forEach(pushToken -> {
+                if (exceptToken.equals(pushToken.getExpoPushToken())) return;
+                pushToken.setActive(false);
+                pushTokenRepository.save(pushToken);
+            });
+        }
     }
 
     public void sendNotification(InAppNotification notification) {
@@ -70,6 +114,9 @@ public class PushNotificationService {
                 String.valueOf(notification.getId()),
                 notification.getType(),
                 notification.getContent(),
+                null,
+                null,
+                null,
                 notification.getReferenceId(),
                 notification.getSenderId(),
                 false
@@ -82,6 +129,9 @@ public class PushNotificationService {
                 null,
                 event.getType(),
                 event.getContent(),
+                event.getTitle(),
+                event.getBody(),
+                event.getImageUrl(),
                 event.getReferenceId(),
                 event.getSenderId(),
                 true
@@ -93,6 +143,9 @@ public class PushNotificationService {
             String notificationId,
             String type,
             String content,
+            String title,
+            String body,
+            String imageUrl,
             String referenceId,
             String senderId,
             boolean pushOnly
@@ -109,6 +162,9 @@ public class PushNotificationService {
                         notificationId,
                         type,
                         content,
+                        title,
+                        body,
+                        imageUrl,
                         referenceId,
                         senderId,
                         pushOnly
@@ -144,6 +200,9 @@ public class PushNotificationService {
             String notificationId,
             String type,
             String content,
+            String title,
+            String body,
+            String imageUrl,
             String referenceId,
             String senderId,
             boolean pushOnly
@@ -156,14 +215,20 @@ public class PushNotificationService {
         data.put("referenceId", referenceId);
         data.put("senderId", senderId);
         data.put("pushOnly", pushOnly);
+        if (imageUrl != null) {
+            data.put("imageUrl", imageUrl);
+        }
 
         Map<String, Object> message = new HashMap<>();
         message.put("to", token);
-        message.put("title", resolveTitle(type));
-        message.put("body", content);
+        message.put("title", normalize(title) != null ? normalize(title) : resolveTitle(type));
+        message.put("body", normalize(body) != null ? normalize(body) : content);
         message.put("sound", "default");
         message.put("priority", "high");
         message.put("channelId", "riff-notifications");
+        if (isHttpUrl(imageUrl)) {
+            message.put("richContent", Map.of("image", imageUrl));
+        }
         message.put("data", data);
         return message;
     }
@@ -182,6 +247,12 @@ public class PushNotificationService {
     private boolean isExpoPushToken(String token) {
         return token != null
                 && (token.startsWith("ExpoPushToken[") || token.startsWith("ExponentPushToken["));
+    }
+
+    private boolean isHttpUrl(String value) {
+        String normalized = normalize(value);
+        return normalized != null
+                && (normalized.startsWith("http://") || normalized.startsWith("https://"));
     }
 
     private String normalize(String value) {
