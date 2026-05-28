@@ -7,6 +7,7 @@ import mediaservice.models.Content;
 import mediaservice.models.ContentViewHistory;
 import mediaservice.models.Post;
 import mediaservice.models.Story;
+import mediaservice.models.enums.ContentStatusType;
 import mediaservice.repositories.AccountRepository;
 import mediaservice.repositories.ContentRepository;
 import mediaservice.repositories.ContentViewHistoryRepository;
@@ -45,6 +46,10 @@ public class ContentViewHistoryServiceImpl implements ContentViewHistoryService 
                                     .orElseThrow(() -> new RuntimeException("Account not found: " + accountId));
                             Content content = contentRepository.findById(contentId)
                                     .orElseThrow(() -> new RuntimeException("Content not found: " + contentId));
+
+                                if (content.getStatus() != ContentStatusType.ACTIVE) {
+                                return;
+                                }
 
                             ContentViewHistory newHistory = ContentViewHistory.builder()
                                     .account(account)

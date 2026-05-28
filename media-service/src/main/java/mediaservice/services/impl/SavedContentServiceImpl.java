@@ -7,6 +7,7 @@ import mediaservice.models.Content;
 import mediaservice.models.Post;
 import mediaservice.models.Story;
 import mediaservice.models.SavedContent;
+import mediaservice.models.enums.ContentStatusType;
 import mediaservice.repositories.ContentRepository;
 import mediaservice.repositories.SavedContentRepository;
 import mediaservice.repositories.AccountRepository;
@@ -41,6 +42,10 @@ public class SavedContentServiceImpl implements SavedContentService {
                 .orElseThrow(() -> new RuntimeException("Account not found: " + accountId));
         Content content = contentRepository.findById(contentId)
                 .orElseThrow(() -> new RuntimeException("Content not found: " + contentId));
+
+        if (content.getStatus() != ContentStatusType.ACTIVE) {
+            return;
+        }
 
         SavedContent savedContent = SavedContent.builder()
                 .account(account)

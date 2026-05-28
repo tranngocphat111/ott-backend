@@ -632,19 +632,13 @@ public class PostServiceImpl implements PostService {
                 .orElseThrow(() -> new RuntimeException("Post not found with id: " + id));
 
         List<String> deleteKeys = collectPostMediaKeys(post);
-        contentViewHistoryRepository.deleteByContentId(post.getId());
-        savedContentRepository.deleteByContentId(post.getId());
 
-        if (postRepository.countBySharedPost_Id(post.getId()) > 0) {
-            // Keep the row to avoid self-referential FK violations, but mark as deleted.
-            post.setStatus(ContentStatusType.DELETED);
-            if (post.getMedias() != null) {
-                post.getMedias().clear();
-            }
-            postRepository.save(post);
-        } else {
-            postRepository.delete(post);
+        // Always soft delete so history/saved entries can still render the deleted state.
+        post.setStatus(ContentStatusType.DELETED);
+        if (post.getMedias() != null) {
+            post.getMedias().clear();
         }
+        postRepository.save(post);
 
         if (deleteKeys.isEmpty()) {
             publishAfterCommit(post.getId(), "POST", "DELETE");

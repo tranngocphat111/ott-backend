@@ -34,6 +34,7 @@ public abstract class PostMapper {
     @Mapping(target = "accountUsername", source = "account.username")
     @Mapping(target = "accountDisplayName", source = "account.displayName")
     @Mapping(target = "accountAvatarUrl", source = "account.avatarUrl")
+    @Mapping(target = "status", source = "status")
     @Mapping(target = "medias", source = "medias")
     @Mapping(target = "totalReactions", ignore = true)
     @Mapping(target = "totalComments", ignore = true)

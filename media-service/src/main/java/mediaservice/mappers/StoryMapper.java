@@ -25,6 +25,7 @@ public abstract class StoryMapper {
     @Mapping(target = "accountUsername", source = "account.username")
     @Mapping(target = "accountDisplayName", source = "account.displayName")
     @Mapping(target = "accountAvatarUrl", source = "account.avatarUrl")
+    @Mapping(target = "status", source = "status")
     @Mapping(target = "storyItems", source = "storyItems", qualifiedByName = "toResponseList")
     @Mapping(target = "musics", ignore = true)
     @Mapping(target = "totalViews", ignore = true)
