@@ -1270,6 +1270,7 @@ io.on("connection", (socket) => {
         io.to(`user:${callerId}`).emit("nguoi_dung_ban_goi", {
           conversationId,
           targetUserId: busyTargets[0],
+          reason: "target_busy",
         });
       } else {
         // Không ai bận → cho phép bắt đầu gọi
@@ -1366,6 +1367,7 @@ io.on("connection", (socket) => {
         io.to(`user:${callerId}`).emit("nguoi_dung_ban_goi", {
           conversationId,
           targetUserId: busyTargets[0],
+          reason: "target_busy",
         });
         acknowledge({ ok: false, reason: "busy", targetUserId: busyTargets[0] });
         return;
