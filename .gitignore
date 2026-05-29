@@ -45,3 +45,4 @@ deploy/*.secret
 *.map
 /scripts
 media_logs.txt
+ARCHITECTURE_MODERATION_ANALYTICS.html

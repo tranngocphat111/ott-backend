@@ -84,6 +84,8 @@ public class AdminAuditLogService {
                 log.getTargetUserId(),
                 log.getReason(),
                 log.getDurationMinutes(),
+                log.getOldValue(),
+                log.getNewValue(),
                 log.getCreatedAt()
         );
     }

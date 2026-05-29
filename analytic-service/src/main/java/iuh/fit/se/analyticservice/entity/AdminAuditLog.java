@@ -47,6 +47,12 @@ public class AdminAuditLog {
     @Column(name = "duration_minutes")
     private Long durationMinutes;
 
+    @Column(name = "old_value", columnDefinition = "TEXT")
+    private String oldValue;
+
+    @Column(name = "new_value", columnDefinition = "TEXT")
+    private String newValue;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

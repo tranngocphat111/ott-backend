@@ -14,7 +14,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -62,6 +64,7 @@ public class AdminUserStatusService {
 
         UserStatusSnapshot newStatus = snapshot(saved);
         UserStatusChangedEvent event = UserStatusChangedEvent.builder()
+                .eventId(UUID.randomUUID().toString())
                 .userId(saved.getId())
                 .actionType(actionType)
                 .actorId(actorId)
@@ -70,7 +73,7 @@ public class AdminUserStatusService {
                 .newStatus(newStatus)
                 .reason(reason)
                 .effectiveUntil(saved.getBlockedUntil())
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .build();
 
         outboxEventService.enqueueUserStatusChanged(event);
