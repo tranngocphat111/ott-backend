@@ -11,6 +11,7 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -32,6 +33,11 @@ public class ModerationEventListener {
     private final AdminAuditLogRepository adminAuditLogRepository;
     private final ObjectMapper objectMapper;
 
+    @PostConstruct
+    void logListenerMode() {
+        log.info("User status audit listener initialized with raw RabbitMQ Message handler");
+    }
+
     @RabbitListener(queues = RabbitMqConfig.USER_STATUS_CHANGED_QUEUE)
     public void handleUserStatusChangedEvent(Message message) {
         String payload = new String(message.getBody(), StandardCharsets.UTF_8);
@@ -39,6 +45,12 @@ public class ModerationEventListener {
             UserStatusChangedEvent event = objectMapper.readValue(payload, UserStatusChangedEvent.class);
             validateEvent(event);
             String eventId = resolveEventId(event);
+            log.info(
+                    "Received user.status.changed event: eventId={}, userId={}, actionType={}",
+                    eventId,
+                    event.getUserId(),
+                    event.getActionType()
+            );
             if (adminAuditLogRepository.existsByEventId(eventId)) {
                 log.warn("Duplicate event detected: eventId={}", eventId);
                 return;
@@ -57,6 +69,7 @@ public class ModerationEventListener {
                     .createdAt(resolveCreatedAt(event.getTimestamp()))
                     .build();
 
+            log.info("Saving admin audit log for user.status.changed: eventId={}, actionType={}", eventId, actionType);
             adminAuditLogRepository.save(auditLog);
 
             log.info(
