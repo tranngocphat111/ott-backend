@@ -12,6 +12,7 @@ import java.util.UUID;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -32,8 +33,10 @@ public class ModerationEventListener {
     private final ObjectMapper objectMapper;
 
     @RabbitListener(queues = RabbitMqConfig.USER_STATUS_CHANGED_QUEUE)
-    public void handleUserStatusChangedEvent(UserStatusChangedEvent event) {
+    public void handleUserStatusChangedEvent(Message message) {
+        String payload = new String(message.getBody(), StandardCharsets.UTF_8);
         try {
+            UserStatusChangedEvent event = objectMapper.readValue(payload, UserStatusChangedEvent.class);
             validateEvent(event);
             String eventId = resolveEventId(event);
             if (adminAuditLogRepository.existsByEventId(eventId)) {
@@ -64,10 +67,9 @@ public class ModerationEventListener {
                     auditLog.getActionType()
             );
         } catch (DataIntegrityViolationException duplicate) {
-            log.warn("Duplicate moderation status event ignored: eventId={}",
-                    event != null ? event.getEventId() : null);
+            log.warn("Duplicate moderation status event ignored. payload={}", payload);
         } catch (Exception ex) {
-            log.error("Failed to process user.status.changed event: {}", event, ex);
+            log.error("Failed to process user.status.changed event. payload={}", payload, ex);
             throw new AmqpRejectAndDontRequeueException("Invalid moderation analytics event", ex);
         }
     }

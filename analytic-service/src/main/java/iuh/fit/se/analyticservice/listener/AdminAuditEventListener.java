@@ -1,13 +1,16 @@
 package iuh.fit.se.analyticservice.listener;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
 import org.springframework.amqp.AmqpRejectAndDontRequeueException;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import iuh.fit.se.analyticservice.config.RabbitMqConfig;
 import iuh.fit.se.analyticservice.dto.AdminAuditEvent;
 import iuh.fit.se.analyticservice.entity.AdminAuditLog;
@@ -21,10 +24,13 @@ import lombok.extern.slf4j.Slf4j;
 public class AdminAuditEventListener {
 
     private final AdminAuditLogRepository adminAuditLogRepository;
+    private final ObjectMapper objectMapper;
 
     @RabbitListener(queues = RabbitMqConfig.ADMIN_AUDIT_QUEUE)
-    public void handleAdminAuditEvent(AdminAuditEvent event) {
+    public void handleAdminAuditEvent(Message message) {
+        String payload = new String(message.getBody(), StandardCharsets.UTF_8);
         try {
+            AdminAuditEvent event = objectMapper.readValue(payload, AdminAuditEvent.class);
             validateEvent(event);
             if (adminAuditLogRepository.existsByEventId(event.getEventId())) {
                 log.warn("Duplicate admin audit event ignored: eventId={}", event.getEventId());
@@ -46,10 +52,9 @@ public class AdminAuditEventListener {
 
             adminAuditLogRepository.save(auditLog);
         } catch (DataIntegrityViolationException duplicate) {
-            log.warn("Duplicate admin audit event ignored: eventId={}",
-                    event != null ? event.getEventId() : null);
+            log.warn("Duplicate admin audit event ignored. payload={}", payload);
         } catch (Exception ex) {
-            log.error("Failed to process admin audit event: {}", event, ex);
+            log.error("Failed to process admin audit event. payload={}", payload, ex);
             throw new AmqpRejectAndDontRequeueException("Invalid admin audit event", ex);
         }
     }
