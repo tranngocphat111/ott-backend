@@ -10,9 +10,9 @@ public interface ModerationRuleService {
 
     List<ModerationRuleResponse> getRules();
 
-    ModerationRuleResponse createRule(ModerationRuleRequest request);
+    ModerationRuleResponse createRule(ModerationRuleRequest request, String actorId);
 
-    ModerationRuleResponse updateRule(String id, ModerationRuleRequest request);
+    ModerationRuleResponse updateRule(String id, ModerationRuleRequest request, String actorId);
 
-    ModerationRuleResponse updateRuleStatus(String id, ModerationRuleStatusRequest request);
+    ModerationRuleResponse updateRuleStatus(String id, ModerationRuleStatusRequest request, String actorId);
 }

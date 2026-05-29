@@ -115,10 +115,20 @@ public class ModerationEventListener {
     }
 
     private String resolveActionType(UserStatusChangedEvent event) {
+        String actionType;
         if (!isBlank(event.getActionType())) {
-            return event.getActionType().trim().toUpperCase(Locale.ROOT);
+            actionType = event.getActionType().trim().toUpperCase(Locale.ROOT);
+        } else {
+            actionType = mapActionType(event.getNewStatus());
         }
-        return mapActionType(event.getNewStatus());
+
+        return switch (actionType) {
+            case "BLOCK" -> "USER_BLOCK";
+            case "UNBLOCK" -> "USER_UNBLOCK";
+            case "DEACTIVATE", "SOFT_DELETE" -> "USER_DEACTIVATE";
+            case "RESTORE" -> "USER_RESTORE";
+            default -> actionType;
+        };
     }
 
     private String mapActionType(String newStatus) {

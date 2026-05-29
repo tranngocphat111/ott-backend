@@ -5,11 +5,9 @@ import iuh.fit.userservice.dto.event.UserStatusChangedEvent;
 import iuh.fit.userservice.dto.event.UserStatusSnapshot;
 import iuh.fit.userservice.dto.response.AdminUserStatusResponse;
 import iuh.fit.userservice.entity.User;
-import iuh.fit.userservice.entity.enums.AccountType;
 import iuh.fit.userservice.exception.AppException;
 import iuh.fit.userservice.exception.ErrorCode;
 import iuh.fit.userservice.repository.UserRepository;
-import iuh.fit.userservice.service.OutboxEventService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,24 +36,17 @@ public class AdminUserStatusService {
         User user = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-        boolean actorIsModerator = "MODERATOR".equalsIgnoreCase(actorRole)
-                && !"SUPER_ADMIN".equalsIgnoreCase(actorRole);
-        boolean targetIsSuperAdmin = user.getAccountType() == AccountType.ADMIN;
-
-        if (actorIsModerator && targetIsSuperAdmin) {
-            throw new AppException(ErrorCode.UNAUTHORIZED);
-        }
-
         UserStatusSnapshot previousStatus = snapshot(user);
+        UserStatusAction effectiveAction = normalizeAction(actionType);
 
-        if (user.getDeletedAt() != null && actionType != UserStatusAction.RESTORE) {
+        if (user.getDeletedAt() != null) {
             throw new AppException(ErrorCode.ACCOUNT_DELETED);
         }
 
-        switch (actionType) {
+        switch (effectiveAction) {
             case BLOCK -> applyBlock(user, reason, durationMinutes, isPermanent);
             case UNBLOCK -> applyUnblock(user);
-            case SOFT_DELETE -> applySoftDelete(user);
+            case DEACTIVATE -> applyDeactivate(user);
             case RESTORE -> applyRestore(user);
             default -> throw new AppException(ErrorCode.INVALID_REQUEST);
         }
@@ -66,7 +57,7 @@ public class AdminUserStatusService {
         UserStatusChangedEvent event = UserStatusChangedEvent.builder()
                 .eventId(UUID.randomUUID().toString())
                 .userId(saved.getId())
-                .actionType(actionType)
+                .actionType(effectiveAction)
                 .actorId(actorId)
                 .actorRole(actorRole)
                 .previousStatus(previousStatus)
@@ -115,8 +106,7 @@ public class AdminUserStatusService {
         user.setBlockedReason(null);
     }
 
-    private void applySoftDelete(User user) {
-        user.setDeletedAt(LocalDateTime.now());
+    private void applyDeactivate(User user) {
         user.setIsActive(false);
         user.setIsBlocked(false);
         user.setBlockedUntil(null);
@@ -129,6 +119,16 @@ public class AdminUserStatusService {
         user.setIsBlocked(false);
         user.setBlockedUntil(null);
         user.setBlockedReason(null);
+    }
+
+    private UserStatusAction normalizeAction(UserStatusAction actionType) {
+        if (actionType == null) {
+            throw new AppException(ErrorCode.INVALID_REQUEST);
+        }
+        if (actionType == UserStatusAction.SOFT_DELETE) {
+            return UserStatusAction.DEACTIVATE;
+        }
+        return actionType;
     }
 
     private UserStatusSnapshot snapshot(User user) {
