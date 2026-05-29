@@ -51,7 +51,7 @@ public class ContentViolationLog {
     @Column(name = "violation_type")
     private String violationType;
 
-    @Column(name = "matched_labels")
+    @Column(name = "matched_labels", columnDefinition = "TEXT")
     private String matchedLabels;
 
     @Column(name = "detected_at")
