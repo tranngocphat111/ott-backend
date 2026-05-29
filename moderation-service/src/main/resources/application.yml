@@ -44,3 +44,4 @@ moderation:
     routing-key:
       review-requests: ${MODERATION_REVIEW_REQUEST_ROUTING_KEY:moderation.review.requests.queue}
       violation-detected: ${MODERATION_VIOLATION_DETECTED_ROUTING_KEY:moderation.violation.detected}
+      admin-audit: ${MODERATION_ADMIN_AUDIT_ROUTING_KEY:moderation.admin.audit}

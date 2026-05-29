@@ -117,7 +117,12 @@ public class AdminAnalyticsService {
                     user != null ? user.getEmail() : null,
                     user != null ? user.getFullName() : null,
                     event.getTimestamp(),
-                    hasProfileDetails(user)
+                    hasProfileDetails(user),
+                    user != null ? user.getIsActive() : null,
+                    user != null ? user.getIsBlocked() : null,
+                    user != null ? user.getBlockedUntil() : null,
+                    user != null ? user.getBlockedReason() : null,
+                    user != null ? user.getDeletedAt() : null
             );
 
             if (matchesQuery(dto, normalizedQuery)) {

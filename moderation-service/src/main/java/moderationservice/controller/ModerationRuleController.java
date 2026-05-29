@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,21 +33,25 @@ public class ModerationRuleController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ModerationRuleResponse createRule(@RequestBody ModerationRuleRequest request) {
-        return moderationRuleService.createRule(request);
+    public ModerationRuleResponse createRule(
+            @RequestBody ModerationRuleRequest request,
+            @RequestHeader(value = "X-Admin-Id", required = false) String actorId) {
+        return moderationRuleService.createRule(request, actorId);
     }
 
     @PutMapping("/{id}")
     public ModerationRuleResponse updateRule(
             @PathVariable String id,
-            @RequestBody ModerationRuleRequest request) {
-        return moderationRuleService.updateRule(id, request);
+            @RequestBody ModerationRuleRequest request,
+            @RequestHeader(value = "X-Admin-Id", required = false) String actorId) {
+        return moderationRuleService.updateRule(id, request, actorId);
     }
 
     @PatchMapping("/{id}/enabled")
     public ModerationRuleResponse updateRuleStatus(
             @PathVariable String id,
-            @RequestBody ModerationRuleStatusRequest request) {
-        return moderationRuleService.updateRuleStatus(id, request);
+            @RequestBody ModerationRuleStatusRequest request,
+            @RequestHeader(value = "X-Admin-Id", required = false) String actorId) {
+        return moderationRuleService.updateRuleStatus(id, request, actorId);
     }
 }

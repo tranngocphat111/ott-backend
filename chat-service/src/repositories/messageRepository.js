@@ -155,7 +155,7 @@ class MessageRepository {
   async getLatestVisibleMessageId(conversationId, userId) {
     const latest = await Message.findOne({
       conversation_id: conversationId,
-      is_deleted: false,
+      is_deleted: { $ne: true },
       ...(userId ? { deleted_for: { $ne: userId } } : {}),
     })
       .sort({ msg_id: -1 })
@@ -405,7 +405,7 @@ class MessageRepository {
 
       const query = {
         conversation_id: conversationId,
-        is_deleted: false,
+        is_deleted: { $ne: true },
         ...(userId ? { deleted_for: { $ne: userId } } : {}),
       };
 
@@ -467,7 +467,7 @@ class MessageRepository {
       const targetMessage = await Message.findOne({
         conversation_id: conversationId,
         msg_id: targetId,
-        is_deleted: false,
+        is_deleted: { $ne: true },
         ...(userId ? { deleted_for: { $ne: userId } } : {}),
       }).lean();
 
@@ -477,7 +477,7 @@ class MessageRepository {
 
       const visibilityFilter = {
         conversation_id: conversationId,
-        is_deleted: false,
+        is_deleted: { $ne: true },
         ...(userId ? { deleted_for: { $ne: userId } } : {}),
       };
 
@@ -556,7 +556,7 @@ class MessageRepository {
 
       const query = {
         conversation_id: conversationId,
-        is_deleted: false,
+        is_deleted: { $ne: true },
         ...(userId ? { deleted_for: { $ne: userId } } : {}),
         msg_id: { $lt: beforeId },
       };
@@ -635,7 +635,7 @@ class MessageRepository {
 
       const messages = await Message.find({
         conversation_id: conversationId,
-        is_deleted: false,
+        is_deleted: { $ne: true },
         ...(userId ? { deleted_for: { $ne: userId } } : {}),
         msg_id: { $gt: afterId },
       })
@@ -789,6 +789,10 @@ class MessageRepository {
       // Save to MongoDB
       await message.save();
       const updated = message.toObject();
+      const responseMessage = {
+        ...updated,
+        reactions: Array.isArray(updated.reactions) ? updated.reactions : [],
+      };
 
       logger.info(
         `😊 Reaction ${normalizedEmoji} updated on message ${messageId}`,
@@ -798,10 +802,10 @@ class MessageRepository {
       await messageCacheService.updateMessage(
         conversationId,
         messageId,
-        updated,
+        responseMessage,
       );
 
-      return updated;
+      return responseMessage;
     } catch (error) {
       logger.error("Error adding reaction:", error);
       throw error;

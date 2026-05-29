@@ -56,7 +56,8 @@ public class AdminAuditLogService {
     }
 
     public ModerationDashboardResponse getDashboardMetrics() {
-        long totalBannedUsers = adminAuditLogRepository.countByActionType("BLOCK");
+        long totalBannedUsers = adminAuditLogRepository.countByActionType("USER_BLOCK")
+                + adminAuditLogRepository.countByActionType("BLOCK");
         List<AuditLogDTO> recentLogs = adminAuditLogRepository.findTop10ByOrderByCreatedAtDesc().stream()
                 .map(this::toAuditLogDTO)
                 .toList();
@@ -84,6 +85,8 @@ public class AdminAuditLogService {
                 log.getTargetUserId(),
                 log.getReason(),
                 log.getDurationMinutes(),
+                log.getOldValue(),
+                log.getNewValue(),
                 log.getCreatedAt()
         );
     }

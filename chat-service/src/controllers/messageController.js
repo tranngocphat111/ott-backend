@@ -89,7 +89,6 @@ exports.sendMessage = async (req, res) => {
           senderId,
           content: `${savedMessage.sender_name} đã tạo cuộc bình chọn: ${pollQuestion}`,
           type: "system_poll",
-          size: 0,
         });
         await publishMessageCreatedBestEffort(req, {
           conversationId,

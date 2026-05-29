@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Data
@@ -13,6 +14,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserStatusChangedEvent {
+    private String eventId;
     private String userId;
     private UserStatusAction actionType;
     private String actorId;
@@ -21,5 +23,5 @@ public class UserStatusChangedEvent {
     private UserStatusSnapshot newStatus;
     private String reason;
     private LocalDateTime effectiveUntil;
-    private LocalDateTime timestamp;
+    private Instant timestamp;
 }
