@@ -7,6 +7,19 @@ const {
   publishMessageStatusChanged,
 } = require("../events/chatEvents");
 
+const parsePositiveInt = (value, fallback) => {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const deliveryParticipantsCacheTtlMs =
+  parsePositiveInt(
+    process.env.CHAT_DELIVERY_PARTICIPANTS_CACHE_TTL_SECONDS,
+    60,
+  ) * 1000;
+
+const participantsByConversation = new Map();
+
 const safeParse = (buffer) => {
   try {
     return JSON.parse(buffer.toString());
@@ -21,6 +34,48 @@ const isCursorAtLeast = (cursor, msgId) => {
   } catch {
     return String(cursor || "0") >= String(msgId || "0");
   }
+};
+
+const normalizeParticipantForCache = (participant) => ({
+  user_id: participant.user_id,
+  conversation_id: String(participant.conversation_id),
+  last_delivered_message_id: participant.last_delivered_message_id || "0",
+  last_delivered_at: participant.last_delivered_at || null,
+  last_read_message_id: participant.last_read_message_id || "0",
+  last_read_at: participant.last_read_at || null,
+});
+
+const getJoinedParticipantsCached = async (conversationId) => {
+  const key = String(conversationId || "");
+  const cached = participantsByConversation.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.participants;
+  }
+
+  const participants = await ParticipantService.getJoinedParticipants(
+    conversationId,
+  );
+  const normalized = participants.map(normalizeParticipantForCache);
+
+  participantsByConversation.set(key, {
+    expiresAt: Date.now() + deliveryParticipantsCacheTtlMs,
+    participants: normalized,
+  });
+
+  return normalized;
+};
+
+const hasActiveRoom = (io, roomName) => {
+  const room = io?.sockets?.adapter?.rooms?.get(roomName);
+  return Boolean(room?.size);
+};
+
+const getActiveSocketParticipants = (io, participants) => {
+  if (!io) return [];
+
+  return participants.filter((participant) =>
+    hasActiveRoom(io, `user:${participant.user_id}`),
+  );
 };
 
 const sanitizeAvatarValue = (value) => {
@@ -166,14 +221,17 @@ const handleMessageCreated = async (io, payload) => {
   const senderId = payload?.senderId;
   if (!conversationId || !msgId || !senderId) return;
 
+  const participants = await getJoinedParticipantsCached(
+    conversationId,
+  );
+  const activeParticipants = getActiveSocketParticipants(io, participants);
+
+  if (activeParticipants.length === 0) return;
+
   const message = payload.message || (await getMessageForDelivery(conversationId, msgId));
   if (!message) return;
 
-  const participants = await ParticipantService.getJoinedParticipants(
-    conversationId,
-  );
-
-  participants.forEach((participant) => {
+  activeParticipants.forEach((participant) => {
     io.to(`user:${participant.user_id}`).emit("tin_nhan", message);
   });
 };
@@ -217,11 +275,11 @@ const handleStatusChanged = async (io, payload) => {
 
   io.to(`user:${payload.senderId}`).emit("message_status_changed", payload);
 
-  const participants = await ParticipantService.getJoinedParticipants(
+  const participants = await getJoinedParticipantsCached(
     payload.conversationId,
   );
 
-  participants.forEach((participant) => {
+  getActiveSocketParticipants(io, participants).forEach((participant) => {
     io.to(`user:${participant.user_id}`).emit("participant_cursor_changed", {
       conversationId: payload.conversationId,
       userId: payload.changedUserId || payload.userId,
@@ -269,7 +327,8 @@ const consumeJson = (channel, queue, handler) =>
   );
 
 const initChatMessageConsumers = async (channel, io) => {
-  await channel.prefetch(20);
+  const prefetch = parsePositiveInt(process.env.CHAT_REALTIME_EVENT_PREFETCH, 5);
+  await channel.prefetch(prefetch);
 
   await consumeJson(channel, QUEUES.DELIVERY, (payload) =>
     handleMessageCreated(io, payload),
