@@ -5,7 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import mediaservice.models.enums.ContentStatusType;
-import mediaservice.models.enums.ContentTargetType;
 import mediaservice.models.enums.VisibilityType;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;

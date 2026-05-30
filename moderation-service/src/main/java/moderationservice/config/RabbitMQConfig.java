@@ -28,7 +28,14 @@ public class RabbitMQConfig {
     public MessageConverter jsonMessageConverter() {
         Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter();
         DefaultJackson2JavaTypeMapper typeMapper = new DefaultJackson2JavaTypeMapper();
-        typeMapper.setTrustedPackages("*");
+        typeMapper.setTrustedPackages(
+                "moderationservice",
+                "mediaservice",
+                "iuh.fit",
+                "java.lang",
+                "java.time",
+                "java.util"
+        );
         typeMapper.setTypePrecedence(Jackson2JavaTypeMapper.TypePrecedence.INFERRED);
         converter.setJavaTypeMapper(typeMapper);
         return converter;

@@ -42,7 +42,12 @@ public class RabbitMQConfig {
         Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter();
         org.springframework.amqp.support.converter.DefaultJackson2JavaTypeMapper typeMapper = 
             new org.springframework.amqp.support.converter.DefaultJackson2JavaTypeMapper();
-        typeMapper.setTrustedPackages("*");
+        typeMapper.setTrustedPackages(
+            "iuh.fit",
+            "java.lang",
+            "java.time",
+            "java.util"
+        );
         typeMapper.setTypePrecedence(org.springframework.amqp.support.converter.Jackson2JavaTypeMapper.TypePrecedence.INFERRED);
         converter.setJavaTypeMapper(typeMapper);
         return converter;
