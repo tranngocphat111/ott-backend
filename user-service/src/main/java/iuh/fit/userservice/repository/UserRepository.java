@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.List;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, String> {
@@ -31,4 +32,7 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     @Query("SELECT u FROM User u LEFT JOIN FETCH u.twoFactorAuth WHERE u.googleId = :googleId AND u.deletedAt IS NULL")
     Optional<User> findByGoogleIdWithTwoFactorAuth(@Param("googleId") String googleId);
+
+    @Query("SELECT u FROM User u WHERE u.deletedAt IS NULL AND (LOWER(u.fullName) LIKE LOWER(CONCAT('%', :query, '%')) OR LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%')) OR u.phone LIKE CONCAT('%', :query, '%'))")
+    List<User> searchUsers(@Param("query") String query);
 }

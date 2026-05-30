@@ -18,7 +18,7 @@ public class RelationshipEventPublisher {
     private final RabbitTemplate rabbitTemplate;
     private static final String EXCHANGE_NAME = "relationship.events";
 
-    public void publish(String type, Relationship relationship) {
+    public void publish(String type, Relationship relationship, String actorId) {
         try {
             Map<String, Object> payload = new HashMap<>();
             payload.put("type", type);
@@ -26,6 +26,11 @@ public class RelationshipEventPublisher {
             payload.put("requesterId", relationship.getRequester() != null ? relationship.getRequester().getId() : null);
             payload.put("receiverId", relationship.getReceiver() != null ? relationship.getReceiver().getId() : null);
             payload.put("status", relationship.getStatus() != null ? relationship.getStatus().name() : null);
+            payload.put("actorId", actorId);
+            payload.put("requesterDisplayName", relationship.getRequester() != null ? relationship.getRequester().getDisplayName() : null);
+            payload.put("receiverDisplayName", relationship.getReceiver() != null ? relationship.getReceiver().getDisplayName() : null);
+            payload.put("blockedById", relationship.getBlockedBy() != null ? relationship.getBlockedBy().getId() : null);
+            payload.put("blockedByDisplayName", relationship.getBlockedBy() != null ? relationship.getBlockedBy().getDisplayName() : null);
             payload.put("timestamp", Instant.now().toString());
 
             String routingKey = "relationship." + type.toLowerCase();

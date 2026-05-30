@@ -14,6 +14,8 @@ public interface UserAccountService {
     UserAccountResponse getUserAccountByUsername(String username);
     List<UserAccountResponse> getAllUserAccounts();
     Page<UserAccountResponse> getAllUserAccounts(Pageable pageable);
+    List<UserAccountResponse> searchUserAccounts(String query);
+    Page<UserAccountResponse> searchUserAccounts(String query, Pageable pageable);
     UserAccountResponse updateUserAccount(String id, UserAccountRequest request);
     void deleteUserAccount(String id);
     UserAccountResponse uploadAvatar(String id, MultipartFile file);

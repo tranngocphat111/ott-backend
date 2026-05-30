@@ -60,6 +60,10 @@ import mediaservice.services.PostService;
 import mediaservice.services.S3Service;
 import mediaservice.utils.MediaTempFileStore;
 import mediaservice.utils.MediaUrlBuilder;
+import mediaservice.utils.TextTagParser;
+import mediaservice.models.HashTag;
+import mediaservice.repositories.HashTagRepository;
+import mediaservice.realtime.NotificationPublisher;
 
 @Slf4j
 @Service
@@ -84,9 +88,11 @@ public class PostServiceImpl implements PostService {
     private final PostActivityPublisher postActivityPublisher;
     private final ContentViewHistoryRepository contentViewHistoryRepository;
     private final SavedContentRepository savedContentRepository;
+    private final HashTagRepository hashTagRepository;
 
     private final mediaservice.services.UserSyncService userSyncService;
     private final mediaservice.mappers.ContentAccessControlMapper contentAccessControlMapper;
+    private final NotificationPublisher notificationPublisher;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -193,6 +199,8 @@ public class PostServiceImpl implements PostService {
         }
         
         Post savedPost = postRepository.save(post);
+        // Process hashtags and @mentions in caption
+        processTagsAndMentions(savedPost);
         String userId = savedPost.getAccount() != null ? savedPost.getAccount().getId() : null;
         publishPostCreatedAnalyticsAfterCommit(savedPost.getId(), userId);
         publishAfterCommit(savedPost.getId(), "POST", "CREATE");
@@ -291,6 +299,9 @@ public class PostServiceImpl implements PostService {
         if (!hasAsyncJobs) {
             publishAfterCommit(savedPost.getId(), "POST", "CREATE");
         }
+
+        // Process hashtags and @mentions in caption (after media saved and refresh)
+        processTagsAndMentions(savedPost);
 
         return enrichCounts(postMapper.toResponse(savedPost), savedPost.getId());
     }
@@ -703,6 +714,41 @@ public class PostServiceImpl implements PostService {
                 analyticsEventPublisher.publishPostCreated(postId, userId);
             }
         });
+    }
+
+    private void processTagsAndMentions(Post post) {
+        if (post == null) return;
+        String caption = post.getCaption();
+        if (caption == null) caption = "";
+
+        // 1) Process hashtags
+        java.util.List<String> tags = TextTagParser.extractHashTags(caption);
+        if (tags != null && !tags.isEmpty()) {
+            java.util.Set<HashTag> tagEntities = post.getHashTags() != null ? new java.util.HashSet<>(post.getHashTags()) : new java.util.HashSet<>();
+            for (String t : tags) {
+                if (t == null || t.isBlank()) continue;
+                HashTag hashTag = hashTagRepository.findByName(t).orElseGet(() -> {
+                    HashTag h = new HashTag();
+                    h.setName(t);
+                    return hashTagRepository.save(h);
+                });
+                tagEntities.add(hashTag);
+            }
+            post.setHashTags(tagEntities);
+            postRepository.save(post);
+        }
+
+        // 2) Process mentions
+        java.util.List<String> mentions = TextTagParser.extractMentions(caption);
+        if (mentions != null && !mentions.isEmpty()) {
+            String senderId = post.getAccount() != null ? post.getAccount().getId() : null;
+            for (String uname : mentions) {
+                if (uname == null || uname.isBlank()) continue;
+                userAccountRepository.findByUsername(uname).ifPresent(target -> {
+                    notificationPublisher.publishNotification(target.getId(), senderId, "MENTION", "You were mentioned", post.getId());
+                });
+            }
+        }
     }
 
     private void addKey(java.util.Collection<String> keys, String key) {

@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 @RestController
 @RequestMapping("/users")
@@ -43,6 +44,15 @@ public class UserController {
         return ApiResponse.<UserResponse>builder()
                 .code(HttpStatus.CREATED.value())
                 .message("Account created successfully. Please login to continue.")
+                .result(response)
+                .build();
+    }
+
+    @GetMapping("/search")
+    public ApiResponse<List<UserResponse>> searchUsers(@RequestParam String q) {
+        List<UserResponse> response = userService.searchUsers(q);
+        return ApiResponse.<List<UserResponse>>builder()
+                .message("Users retrieved successfully")
                 .result(response)
                 .build();
     }

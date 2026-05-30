@@ -7,4 +7,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface HashTagRepository extends JpaRepository<HashTag, String> {
+	java.util.Optional<HashTag> findByName(String name);
 }

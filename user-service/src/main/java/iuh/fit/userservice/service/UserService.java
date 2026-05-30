@@ -29,6 +29,8 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -212,5 +214,12 @@ public class UserService {
                         .email(user.getEmail())
                         .phone(user.getPhone())
                         .build());
+    }
+
+    public List<UserResponse> searchUsers(String query) {
+        List<User> users = userRepository.searchUsers(query);
+        return users.stream()
+                .map(userMapper::toUserResponse)
+                .collect(Collectors.toList());
     }
 }

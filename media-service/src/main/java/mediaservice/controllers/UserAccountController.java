@@ -6,6 +6,8 @@ import mediaservice.dtos.responses.UserAccountResponse;
 import mediaservice.services.UserAccountService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -34,6 +36,22 @@ public class UserAccountController {
     @GetMapping("/username/{username}")
     public ResponseEntity<UserAccountResponse> getUserByUsername(@PathVariable String username) {
         return ResponseEntity.ok(userAccountService.getUserAccountByUsername(username));
+    }
+
+    /**
+     * GET /users/search?q=...&page=&size=
+     * Tìm user theo họ tên, username, email, hoặc số điện thoại.
+     */
+    @GetMapping("/search")
+    public ResponseEntity<?> searchUsers(
+            @RequestParam String q,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        if (page != null && size != null) {
+            Page<UserAccountResponse> results = userAccountService.searchUserAccounts(q, PageRequest.of(page, size));
+            return ResponseEntity.ok(results);
+        }
+        return ResponseEntity.ok(userAccountService.searchUserAccounts(q));
     }
 
     /**

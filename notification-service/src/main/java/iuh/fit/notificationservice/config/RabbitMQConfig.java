@@ -26,6 +26,9 @@ public class RabbitMQConfig {
     @Value("${rabbitmq.queue.alert}")
     private String alertQueue;
 
+    @Value("${rabbitmq.queue.relationship:notification.relationship.queue}")
+    private String relationshipQueue;
+
     @Value("${rabbitmq.queue.inapp}")
     private String inappQueue;
 
@@ -37,6 +40,9 @@ public class RabbitMQConfig {
 
     @Value("${rabbitmq.routing-key.alert}")
     private String alertRoutingKey;
+
+    @Value("${rabbitmq.routing-key.relationship:relationship.#}")
+    private String relationshipRoutingKey;
 
     @Value("${rabbitmq.routing-key.inapp}")
     private String inappRoutingKey;
@@ -65,6 +71,11 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    public Queue relationshipQueue() {
+        return QueueBuilder.durable(relationshipQueue).build();
+    }
+
+    @Bean
     public Queue inappQueue() {
         return QueueBuilder.durable(inappQueue).build();
     }
@@ -82,6 +93,11 @@ public class RabbitMQConfig {
     @Bean
     public Binding alertBinding() {
         return BindingBuilder.bind(alertQueue()).to(notificationExchange()).with(alertRoutingKey);
+    }
+
+    @Bean
+    public Binding relationshipBinding() {
+        return BindingBuilder.bind(relationshipQueue()).to(relationshipExchange()).with(relationshipRoutingKey);
     }
 
     @Bean
@@ -126,5 +142,10 @@ public class RabbitMQConfig {
         RabbitTemplate template = new RabbitTemplate(connectionFactory);
         template.setMessageConverter(jsonMessageConverter());
         return template;
+    }
+
+    @Bean
+    public TopicExchange relationshipExchange() {
+        return new TopicExchange("relationship.events", true, false);
     }
 }

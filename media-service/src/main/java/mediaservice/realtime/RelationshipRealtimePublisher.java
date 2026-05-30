@@ -53,17 +53,15 @@ public class RelationshipRealtimePublisher {
         payload.put("targetUserIds", targets.stream().toList());
 
         RelationshipSocketServer socketServer = socketServerProvider.getIfAvailable();
-        if (socketServer == null) {
-            return;
-        }
-
-        SocketIOServer server = socketServer.getServer();
-        if (server != null) {
-            server.getBroadcastOperations().sendEvent(EVENT_NAME, payload);
+        if (socketServer != null) {
+            SocketIOServer server = socketServer.getServer();
+            if (server != null) {
+                server.getBroadcastOperations().sendEvent(EVENT_NAME, payload);
+            }
         }
 
         // Publish to RabbitMQ for cross-service sync
-        eventPublisher.publish(type, relationship);
+        eventPublisher.publish(type, relationship, actorId);
     }
 
     public void publishToSocketOnly(String type, Relationship relationship, String actorId) {
