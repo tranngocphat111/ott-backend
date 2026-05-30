@@ -21,6 +21,7 @@ const {
   publishMessageImageForReview,
 } = require("./chatModerationPublisher");
 const { publishNotification } = require("../events/notificationEvents");
+const accountStatusService = require("./accountStatusService");
 
 const fs = require("fs/promises");
 const path = require("path");
@@ -771,7 +772,12 @@ exports.sendMessage = async ({
   pollMultipleChoice,
   pollOptions,
   systemMeta,
+  skipAccountStatusCheck = false,
 }) => {
+  if (!skipAccountStatusCheck) {
+    await accountStatusService.assertUserCanSendMessage(senderId);
+  }
+
   // Nếu content đã là array (image keys) thì dùng trực tiếp, không thì wrap
   const contentArray = Array.isArray(content) ? content : [content];
   const normalizedContent = [...contentArray];

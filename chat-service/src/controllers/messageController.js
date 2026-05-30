@@ -1,6 +1,7 @@
 const MessageService = require("../services/messageService");
 const ParticipantService = require("../services/participantService");
 const { publishMessageCreated } = require("../events/chatEvents");
+const accountStatusService = require("../services/accountStatusService");
 
 const emitMessageToParticipants = async (io, conversationId, message) => {
   if (!io || !conversationId || !message) return;
@@ -89,6 +90,7 @@ exports.sendMessage = async (req, res) => {
           senderId,
           content: `${savedMessage.sender_name} đã tạo cuộc bình chọn: ${pollQuestion}`,
           type: "system_poll",
+          skipAccountStatusCheck: true,
         });
         await publishMessageCreatedBestEffort(req, {
           conversationId,
@@ -105,6 +107,12 @@ exports.sendMessage = async (req, res) => {
   } catch (error) {
     if (error.message === "Tin nhắn trả lời không hợp lệ") {
       return res.status(400).json({ error: error.message });
+    }
+    if (accountStatusService.isAccountRestrictionError(error)) {
+      return res.status(error.statusCode || 403).json({
+        error: error.message,
+        code: error.code,
+      });
     }
     res.status(500).json({ error: error.message });
   }

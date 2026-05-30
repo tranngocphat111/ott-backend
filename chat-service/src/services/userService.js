@@ -2,6 +2,30 @@ const User = require("../models/User");
 const UserCacheService = require("./userCacheService");
 const mongoose = require("mongoose");
 
+const parseDate = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const applyAccountStatusFields = (target, source = {}) => {
+  if (source.isActive !== undefined) target.is_active = source.isActive !== false;
+  if (source.isBlocked !== undefined) target.is_blocked = source.isBlocked === true;
+  if (source.blockedUntil !== undefined) target.blocked_until = parseDate(source.blockedUntil);
+  if (source.blockedReason !== undefined) target.blocked_reason = source.blockedReason || "";
+  if (source.deletedAt !== undefined) target.deleted_at = parseDate(source.deletedAt);
+
+  if (
+    source.isActive !== undefined ||
+    source.isBlocked !== undefined ||
+    source.blockedUntil !== undefined ||
+    source.blockedReason !== undefined ||
+    source.deletedAt !== undefined
+  ) {
+    target.status_synced_at = new Date();
+  }
+};
+
 const extractAvatarPath = (avatarUrl) => {
   if (!avatarUrl) return "";
   const str = String(avatarUrl).trim();
@@ -33,6 +57,7 @@ exports.createUser = async (userData) => {
     is_online: false,
     last_active_at: new Date(),
   });
+  applyAccountStatusFields(newUser, userData);
 
   await newUser.save();
   await UserCacheService.setCachedUser(userId, newUser);
@@ -49,6 +74,7 @@ exports.updateUserInfo = async (userData) => {
   if (bio !== undefined) updatePayload.bio = bio;
   if (email !== undefined) updatePayload.email = email;
   if (phone !== undefined) updatePayload.phone = phone;
+  applyAccountStatusFields(updatePayload, userData);
 
   const updatedUser = await User.findOneAndUpdate(
     { user_id: userId },
@@ -84,6 +110,7 @@ exports.updateUser = async (userData) => {
   const updateData = {};
   if (avatar !== undefined) updateData.avatar = extractAvatarPath(avatar);
   if (displayName !== undefined) updateData.name = displayName;
+  applyAccountStatusFields(updateData, userData);
   
   const updatedUser = await User.findOneAndUpdate(
     { user_id: userId },

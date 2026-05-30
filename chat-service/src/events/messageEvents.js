@@ -5,6 +5,7 @@
 
 const messageRepository = require("../repositories/messageRepository");
 const MessageService = require("../services/messageService");
+const accountStatusService = require("../services/accountStatusService");
 const logger = require("../utils/logger");
 
 module.exports = (io) => {
@@ -104,6 +105,8 @@ module.exports = (io) => {
         logger.info(
           `📝 New message from ${userId} in ${conversationId}: "${text.substring(0, 50)}"`,
         );
+
+        await accountStatusService.assertUserCanSendMessage(userId);
 
         const message = await messageRepository.create(conversationId, userId, {
           text,
