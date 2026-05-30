@@ -1,6 +1,20 @@
 const MessageService = require("../services/messageService");
 const ParticipantService = require("../services/participantService");
 const { publishMessageCreated } = require("../events/chatEvents");
+const { publishMessageCommand } = require("../events/chatCommandEvents");
+
+const ASYNC_SEND_ENABLED =
+  String(process.env.CHAT_ASYNC_SEND_ENABLED || "true").toLowerCase() !==
+  "false";
+const ASYNC_SEND_RESPONSE_STATUS = Number(
+  process.env.CHAT_ASYNC_SEND_RESPONSE_STATUS || 202,
+);
+const getAsyncSendResponseStatus = () =>
+  Number.isInteger(ASYNC_SEND_RESPONSE_STATUS) &&
+  ASYNC_SEND_RESPONSE_STATUS >= 200 &&
+  ASYNC_SEND_RESPONSE_STATUS < 300
+    ? ASYNC_SEND_RESPONSE_STATUS
+    : 202;
 const accountStatusService = require("../services/accountStatusService");
 
 const runControllerBestEffort = (label, task) => {
@@ -72,7 +86,28 @@ exports.sendMessage = async (req, res) => {
       pollQuestion,
       pollMultipleChoice,
       pollOptions,
+      clientMessageId,
     } = req.body;
+
+    if (ASYNC_SEND_ENABLED) {
+      const { command, acceptedMessage } =
+        await MessageService.prepareQueuedMessage({
+          conversationId,
+          senderId,
+          content,
+          type,
+          size,
+          replyToMsgId,
+          pollQuestion,
+          pollMultipleChoice,
+          pollOptions,
+          clientMessageId,
+        });
+
+      await publishMessageCommand(command);
+
+      return res.status(getAsyncSendResponseStatus()).json(acceptedMessage);
+    }
 
     const savedMessage = await MessageService.sendMessage({
       conversationId,

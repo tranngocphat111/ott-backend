@@ -22,6 +22,7 @@ const {
 } = require("./chatModerationPublisher");
 const { publishNotification } = require("../events/notificationEvents");
 const accountStatusService = require("./accountStatusService");
+const { generateId } = require("../utils/snowflake");
 
 const fs = require("fs/promises");
 const path = require("path");
@@ -163,6 +164,22 @@ const getOtherPrivateParticipantForSend = (conversationId, senderId) =>
         .lean(),
   );
 
+const getRelationshipForSend = (senderId, otherUserId) => {
+  const pairKey = [String(senderId), String(otherUserId)].sort().join(":");
+  return getOrLoadSendCacheValue(
+    `relationship:${pairKey}`,
+    () =>
+      Relationship.findOne({
+        $or: [
+          { requester_id: senderId, receiver_id: otherUserId },
+          { requester_id: otherUserId, receiver_id: senderId },
+        ],
+      })
+        .select("status requester_id")
+        .lean(),
+  );
+};
+
 const sanitizeS3FileName = (fileName) => {
   const baseName =
     String(fileName || "file")
@@ -213,6 +230,7 @@ const normalizePollOptionsForStorage = (pollOptions) => {
 };
 
 const buildMessageCreatePayload = ({
+  msgId,
   conversationId,
   senderId,
   content,
@@ -231,6 +249,10 @@ const buildMessageCreatePayload = ({
     content,
     type: messageType,
   };
+
+  if (msgId) {
+    payload.msg_id = String(msgId);
+  }
 
   if (replyToMsgId) {
     payload.reply_to_msg_id = replyToMsgId;
@@ -878,7 +900,132 @@ exports.generatePresignedUrl = async (fileName, fileType) => {
   return { uploadUrl, fileCategory, key, fileUrl };
 };
 
+exports.prepareQueuedMessage = async ({
+  conversationId,
+  senderId,
+  content,
+  type,
+  size,
+  replyToMsgId,
+  pollQuestion,
+  pollMultipleChoice,
+  pollOptions,
+  systemMeta,
+  clientMessageId,
+}) => {
+  if (!conversationId || !senderId) {
+    throw new Error("Thiếu conversationId hoặc senderId");
+  }
+
+  const participant = await getParticipantForSend(conversationId, senderId);
+  if (!participant) {
+    throw new Error("Bạn không thuộc cuộc hội thoại này");
+  }
+
+  if (participant?.settings?.removed_from_group_at) {
+    throw new Error("Bạn đã bị đuổi khỏi nhóm");
+  }
+
+  if (participant?.settings?.group_dissolved_at) {
+    throw new Error("Nhóm đã được giải tán");
+  }
+
+  const conversation = await getConversationForSend(conversationId);
+  if (!conversation) {
+    throw new Error("Cuộc hội thoại không tồn tại");
+  }
+
+  if (conversation.is_dissolved || conversation.status === "dissolved") {
+    throw new Error("Nhóm đã được giải tán");
+  }
+
+  if (conversation.type === "private") {
+    const otherParticipant = await getOtherPrivateParticipantForSend(
+      conversationId,
+      senderId,
+    );
+
+    if (otherParticipant) {
+      const relationship = await getRelationshipForSend(
+        senderId,
+        otherParticipant.user_id,
+      );
+
+      if (relationship?.status === "BLOCKED") {
+        if (relationship.requester_id === senderId) {
+          throw new Error("Bạn đã chặn người này. Hãy bỏ chặn để tiếp tục trò chuyện.");
+        }
+        throw new Error("Bạn đã bị người này chặn.");
+      }
+    }
+  }
+
+  const contentArray = Array.isArray(content) ? content : [content];
+  const normalizedContent = [...contentArray];
+  const msgId = generateId();
+  const now = new Date();
+  const messageType = type || "text";
+  const numericSize = Number(size);
+
+  const command = {
+    msgId,
+    conversationId,
+    senderId,
+    content: normalizedContent,
+    type: messageType,
+    size,
+    replyToMsgId,
+    pollQuestion,
+    pollMultipleChoice,
+    pollOptions,
+    systemMeta,
+    clientMessageId,
+    queuedAt: now.toISOString(),
+  };
+
+  const acceptedMessage = {
+    _id: msgId,
+    msg_id: msgId,
+    conversation_id: conversationId,
+    sender_id: senderId,
+    content: normalizedContent,
+    type: messageType,
+    pending: true,
+    delivery_status: "queued",
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  if (clientMessageId) {
+    acceptedMessage.client_message_id = String(clientMessageId);
+  }
+
+  if (
+    MEDIA_MESSAGE_TYPES.has(messageType) &&
+    Number.isFinite(numericSize) &&
+    numericSize > 0
+  ) {
+    acceptedMessage.size = numericSize;
+  }
+
+  if (replyToMsgId) {
+    acceptedMessage.reply_to_msg_id = replyToMsgId;
+  }
+
+  if (messageType === "poll") {
+    acceptedMessage.poll_question = pollQuestion;
+    acceptedMessage.poll_multiple_choice = pollMultipleChoice === true;
+    acceptedMessage.poll_options = normalizePollOptionsForStorage(pollOptions);
+  }
+
+  return {
+    command,
+    acceptedMessage,
+  };
+};
+
 exports.sendMessage = async ({
+  msgId,
   conversationId,
   senderId,
   content,
@@ -943,14 +1090,10 @@ exports.sendMessage = async ({
     );
 
     if (otherParticipant) {
-      const relationship = await Relationship.findOne({
-        $or: [
-          { requester_id: senderId, receiver_id: otherParticipant.user_id },
-          { requester_id: otherParticipant.user_id, receiver_id: senderId },
-        ],
-      })
-        .select("status requester_id")
-        .lean();
+      const relationship = await getRelationshipForSend(
+        senderId,
+        otherParticipant.user_id,
+      );
 
       if (relationship && relationship.status === "BLOCKED") {
         if (relationship.requester_id === senderId) {
@@ -974,6 +1117,7 @@ exports.sendMessage = async ({
     buildMessageCreatePayload({
       conversationId,
       senderId,
+      msgId,
       content: normalizedContent,
       type,
       size,
