@@ -26,4 +26,11 @@ public class AdminAuditEventListener {
     public void handleAdminAuditEvent(Message message) {
         String payload = new String(message.getBody(), StandardCharsets.UTF_8);
         try {
-            AdminAuditEvent event = object
+            AdminAuditEvent event = objectMapper.readValue(payload, AdminAuditEvent.class);
+            adminAuditLogService.recordAdminAuditEvent(event);
+        } catch (Exception ex) {
+            log.error("Failed to process admin audit event. payload={}", payload, ex);
+            throw new AmqpRejectAndDontRequeueException("Invalid admin audit event", ex);
+        }
+    }
+}
