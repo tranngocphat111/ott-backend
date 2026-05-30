@@ -46,6 +46,9 @@ public class NotificationPublisher {
     @Value("${rabbitmq.routing-key.user-login:user.login}")
     private String userLoginRoutingKey;
 
+    @Value("${rabbitmq.routing-key.user-registered:user.registered}")
+    private String userRegisteredRoutingKey;
+
     public String getNotificationServiceUrl() {
         return notificationServiceUrl;
     }
@@ -150,6 +153,23 @@ public class NotificationPublisher {
         } catch (Exception e) {
             // Do not break login flow if analytics is unavailable
             log.warn("Failed to publish user.login analytics event for userId={}: {}", userId, e.getMessage());
+        }
+    }
+
+    @Async
+    public void publishUserRegisteredEvent(String userId, String registerMethod) {
+        try {
+            Map<String, Object> event = new HashMap<>();
+            event.put("event_id", UUID.randomUUID().toString());
+            event.put("user_id", userId);
+            event.put("register_method", registerMethod);
+            event.put("timestamp", Instant.now());
+
+            rabbitTemplate.convertAndSend(userEventsExchange, userRegisteredRoutingKey, event);
+            log.info("User registered analytics event published for userId={}, method={}", userId, registerMethod);
+        } catch (Exception e) {
+            // Do not break registration flow if analytics is unavailable
+            log.warn("Failed to publish user.registered analytics event for userId={}: {}", userId, e.getMessage());
         }
     }
 
