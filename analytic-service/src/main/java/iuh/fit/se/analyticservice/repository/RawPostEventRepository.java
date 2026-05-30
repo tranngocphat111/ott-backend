@@ -3,6 +3,7 @@ package iuh.fit.se.analyticservice.repository;
 import java.time.Instant;
 import java.util.List;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -25,4 +26,13 @@ public interface RawPostEventRepository extends JpaRepository<RawPostEvent, Stri
         List<Object[]> countPostsByDateAll();
 
         long countByTimestampGreaterThanEqual(Instant from);
+
+        long countByTimestampGreaterThanEqualAndTimestampLessThan(Instant from, Instant to);
+
+        List<RawPostEvent> findByTimestampGreaterThanEqualAndTimestampLessThanOrderByTimestampAsc(
+            Instant from,
+            Instant to,
+            Pageable pageable);
+
+        long deleteByTimestampGreaterThanEqualAndTimestampLessThan(Instant from, Instant to);
 }

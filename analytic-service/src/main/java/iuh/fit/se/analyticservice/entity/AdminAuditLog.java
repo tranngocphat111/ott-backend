@@ -7,6 +7,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -16,7 +17,14 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "admin_audit_logs")
+@Table(
+        name = "admin_audit_logs",
+        indexes = {
+                @Index(name = "idx_admin_audit_logs_created_at", columnList = "created_at"),
+                @Index(name = "idx_admin_audit_logs_action_type", columnList = "action_type"),
+                @Index(name = "idx_admin_audit_logs_target_user", columnList = "target_user_id")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor

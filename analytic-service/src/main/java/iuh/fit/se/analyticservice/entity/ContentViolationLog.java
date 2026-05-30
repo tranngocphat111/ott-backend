@@ -8,6 +8,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -17,7 +18,15 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "content_violation_logs")
+@Table(
+        name = "content_violation_logs",
+        indexes = {
+                @Index(name = "idx_content_violation_detected_at", columnList = "detected_at"),
+                @Index(name = "idx_content_violation_user", columnList = "user_id"),
+                @Index(name = "idx_content_violation_severity", columnList = "severity"),
+                @Index(name = "idx_content_violation_type", columnList = "violation_type")
+        }
+)
 @Getter
 @Setter
 @Builder
