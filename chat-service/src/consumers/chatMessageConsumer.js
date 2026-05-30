@@ -17,6 +17,9 @@ const deliveryParticipantsCacheTtlMs =
     process.env.CHAT_DELIVERY_PARTICIPANTS_CACHE_TTL_SECONDS,
     60,
   ) * 1000;
+const deliveryDbFallbackEnabled =
+  String(process.env.CHAT_DELIVERY_DB_FALLBACK_ENABLED || "false").toLowerCase() ===
+  "true";
 
 const participantsByConversation = new Map();
 
@@ -228,7 +231,10 @@ const handleMessageCreated = async (io, payload) => {
 
   if (activeParticipants.length === 0) return;
 
-  const message = payload.message || (await getMessageForDelivery(conversationId, msgId));
+  let message = payload.message;
+  if (!message && deliveryDbFallbackEnabled) {
+    message = await getMessageForDelivery(conversationId, msgId);
+  }
   if (!message) return;
 
   activeParticipants.forEach((participant) => {

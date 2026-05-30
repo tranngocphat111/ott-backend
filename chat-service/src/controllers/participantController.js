@@ -6,6 +6,7 @@ const Participant = require("../models/Participant");
 const Conversation = require("../models/Conversation");
 const User = require("../models/User");
 const { getActiveCall } = require("../services/callStateService");
+const conversationListCacheService = require("../services/conversationListCacheService");
 const {
   publishMessageDelivered,
   publishMessageSeen,
@@ -18,6 +19,15 @@ const envEnabled = (name, defaultValue = true) => {
 };
 
 const chatReceiptQueueEnabled = envEnabled("CHAT_RECEIPT_QUEUE_ENABLED", false);
+const conversationListDbTimeoutMs = Math.max(
+  500,
+  Number(process.env.CHAT_CONVERSATION_LIST_DB_TIMEOUT_MS || 2500),
+);
+const conversationListEnsureSelfSync = envEnabled(
+  "CHAT_CONVERSATION_LIST_ENSURE_SELF_SYNC",
+  false,
+);
+const inFlightConversationLoads = new Map();
 
 const normalizeMessageId = (value) => {
   const normalized = String(value || "0").trim();
@@ -74,11 +84,31 @@ const toPlainObject = (document) =>
 
 const isObjectIdLike = (value) => /^[a-f\d]{24}$/i.test(String(value || ""));
 
-exports.getConversationsByUserId = async (req, res) => {
-  try {
-    const { userId } = req.params;
+const withTimeout = (promise, timeoutMs, message) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(message)), timeoutMs);
+    }),
+  ]);
 
-    await ParticipantService.ensureSelfConversation(userId);
+const ensureSelfConversationBestEffort = async (userId) => {
+  const promise = ParticipantService.ensureSelfConversation(userId).catch(
+    (error) => {
+      console.warn(
+        "[ParticipantController] ensureSelfConversation failed:",
+        error?.message || error,
+      );
+    },
+  );
+
+  if (conversationListEnsureSelfSync) {
+    await promise;
+  }
+};
+
+const loadConversationListFromDb = async (userId) => {
+    await ensureSelfConversationBestEffort(userId);
 
     const participants =
       await ParticipantService.getConversationsByUserId(userId);
@@ -297,9 +327,51 @@ exports.getConversationsByUserId = async (req, res) => {
       )
     ).filter((item) => item !== null);
 
-    res.status(200).json(result);
+    return result;
+};
+
+const loadConversationListDeduped = (userId) => {
+  const key = String(userId || "");
+  if (inFlightConversationLoads.has(key)) {
+    return inFlightConversationLoads.get(key);
+  }
+
+  const promise = loadConversationListFromDb(key).finally(() => {
+    inFlightConversationLoads.delete(key);
+  });
+  inFlightConversationLoads.set(key, promise);
+  return promise;
+};
+
+exports.getConversationsByUserId = async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const cached = await conversationListCacheService.getFresh(userId);
+    if (cached) {
+      res.set("X-Chat-Conversations-Source", "cache");
+      return res.status(200).json(cached);
+    }
+
+    const result = await withTimeout(
+      loadConversationListDeduped(userId),
+      conversationListDbTimeoutMs,
+      "Conversation list DB timeout",
+    );
+
+    await conversationListCacheService.set(userId, result);
+    res.set("X-Chat-Conversations-Source", "db");
+    return res.status(200).json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    const stale = await conversationListCacheService.getStale(userId);
+    if (stale) {
+      res.set("X-Chat-Conversations-Source", "stale");
+      res.set("Warning", '110 - "Conversation list served from stale cache"');
+      return res.status(200).json(stale);
+    }
+
+    const status = String(error?.message || "").includes("timeout") ? 503 : 500;
+    return res.status(status).json({ error: error.message });
   }
 };
 
