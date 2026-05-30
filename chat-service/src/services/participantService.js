@@ -142,7 +142,8 @@ exports.addParticipant = async ({ conversationId, userId, role, addedBy, lastMsg
 exports.getConversationsByUserId = async (userId) => {
   const participants = await Participant.find({ user_id: userId })
     .populate("conversation_id")
-    .sort({ updatedAt: -1 });
+    .sort({ updatedAt: -1 })
+    .lean();
 
   return participants.filter((p) => {
     const conversation = p.conversation_id;
@@ -214,9 +215,14 @@ exports.updateLastDelivered = async (conversationId, userId, msgId) => {
   if (shouldAdvanceMessageId(participant.last_delivered_message_id, msgId)) {
     participant.last_delivered_message_id = String(msgId || "0");
     participant.last_delivered_at = new Date();
-    return await participant.save();
+    const saved = await participant.save();
+    saved.$locals = saved.$locals || {};
+    saved.$locals.cursorChanged = true;
+    return saved;
   }
 
+  participant.$locals = participant.$locals || {};
+  participant.$locals.cursorChanged = false;
   return participant;
 };
 
@@ -230,6 +236,7 @@ exports.updateLastRead = async (conversationId, userId, msgId) => {
 
   const now = new Date();
   const nextMsgId = String(msgId || "0");
+  const hadDeliveredAt = !!participant.last_delivered_at;
   const readAdvanced = shouldAdvanceMessageId(
     participant.last_read_message_id,
     nextMsgId,
@@ -254,7 +261,18 @@ exports.updateLastRead = async (conversationId, userId, msgId) => {
     participant.last_delivered_at = now;
   }
 
-  return await participant.save();
+  const cursorChanged = readAdvanced || deliveredAdvanced || !hadDeliveredAt;
+
+  if (!cursorChanged) {
+    participant.$locals = participant.$locals || {};
+    participant.$locals.cursorChanged = false;
+    return participant;
+  }
+
+  const saved = await participant.save();
+  saved.$locals = saved.$locals || {};
+  saved.$locals.cursorChanged = true;
+  return saved;
 };
 
 exports.updateConversationCategory = async (conversationId, userId, categoryId) => {

@@ -22,6 +22,15 @@ const {
   publishMessageDelivered,
   publishMessageSeen,
 } = require("./events/chatEvents");
+
+const envEnabled = (name, defaultValue = true) => {
+  const raw = process.env[name];
+  if (raw === undefined) return defaultValue;
+  return String(raw).toLowerCase() !== "false";
+};
+
+const chatReceiptQueueEnabled = envEnabled("CHAT_RECEIPT_QUEUE_ENABLED", false);
+
 connectDB();
 const app = express();
 const server = http.createServer(app);
@@ -1158,7 +1167,18 @@ io.on("connection", (socket) => {
           ? await ParticipantService.updateLastRead(conversationId, userId, msgId)
           : await ParticipantService.updateLastDelivered(conversationId, userId, msgId);
 
-      if (participant) {
+      if (!participant) {
+        socket.emit("message_receipt_error", {
+          conversationId,
+          msgId,
+          error: "Participant not found",
+        });
+        return;
+      }
+
+      const cursorChanged = participant.$locals?.cursorChanged !== false;
+
+      if (cursorChanged) {
         const participantPayload = {
           user_id: participant.user_id,
           conversation_id: String(participant.conversation_id),
@@ -1193,6 +1213,10 @@ io.on("connection", (socket) => {
         msgId,
         error: error.message,
       });
+      return;
+    }
+
+    if (!chatReceiptQueueEnabled || participant.$locals?.cursorChanged === false) {
       return;
     }
 

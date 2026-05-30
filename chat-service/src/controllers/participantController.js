@@ -4,11 +4,20 @@ const UserService = require("../services/userService");
 const Message = require("../models/Message");
 const Participant = require("../models/Participant");
 const Conversation = require("../models/Conversation");
+const User = require("../models/User");
 const { getActiveCall } = require("../services/callStateService");
 const {
   publishMessageDelivered,
   publishMessageSeen,
 } = require("../events/chatEvents");
+
+const envEnabled = (name, defaultValue = true) => {
+  const raw = process.env[name];
+  if (raw === undefined) return defaultValue;
+  return String(raw).toLowerCase() !== "false";
+};
+
+const chatReceiptQueueEnabled = envEnabled("CHAT_RECEIPT_QUEUE_ENABLED", false);
 
 const normalizeMessageId = (value) => {
   const normalized = String(value || "0").trim();
@@ -58,6 +67,13 @@ const buildConversationPreviewContent = (message) => {
   }
 };
 
+const toPlainObject = (document) =>
+  document && typeof document.toObject === "function"
+    ? document.toObject()
+    : { ...(document || {}) };
+
+const isObjectIdLike = (value) => /^[a-f\d]{24}$/i.test(String(value || ""));
+
 exports.getConversationsByUserId = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -66,6 +82,126 @@ exports.getConversationsByUserId = async (req, res) => {
 
     const participants =
       await ParticipantService.getConversationsByUserId(userId);
+
+    const conversationIds = participants
+      .map((participant) => participant.conversation_id?._id)
+      .filter(Boolean);
+
+    const memberParticipants = conversationIds.length
+      ? await Participant.find({
+          conversation_id: { $in: conversationIds },
+          "settings.removed_from_group_at": null,
+        })
+          .select(
+            "conversation_id user_id roles joined_at last_delivered_message_id last_delivered_at last_read_message_id last_read_at added_by status nickname",
+          )
+          .lean()
+      : [];
+
+    const memberUserIds = [
+      ...new Set(
+        memberParticipants
+          .map((participant) => String(participant.user_id || "").trim())
+          .filter(Boolean),
+      ),
+    ];
+
+    const objectIdUserIds = memberUserIds.filter(isObjectIdLike);
+    const userQuery = memberUserIds.length
+      ? [
+          { user_id: { $in: memberUserIds } },
+          ...(objectIdUserIds.length ? [{ _id: { $in: objectIdUserIds } }] : []),
+        ]
+      : [];
+    const users = userQuery.length
+      ? await User.find({ $or: userQuery })
+          .select("user_id name avatar is_online last_active_at")
+          .lean()
+      : [];
+
+    const userById = new Map();
+    users.forEach((user) => {
+      if (user.user_id) userById.set(String(user.user_id), user);
+      if (user._id) userById.set(String(user._id), user);
+    });
+
+    const membersByConversationId = new Map();
+    memberParticipants.forEach((participant) => {
+      const conversationId = String(participant.conversation_id || "");
+      if (!conversationId) return;
+
+      const user = userById.get(String(participant.user_id || "")) || null;
+      const member = {
+        _id: participant._id,
+        user_id: participant.user_id,
+        roles: participant.roles,
+        joined_at: participant.joined_at,
+        last_delivered_message_id:
+          participant.last_delivered_message_id || "0",
+        last_delivered_at: participant.last_delivered_at || null,
+        last_read_message_id: participant.last_read_message_id || "0",
+        last_read_at: participant.last_read_at || null,
+        added_by: participant.added_by,
+        status: participant.status,
+        nickname: participant.nickname,
+        user: user
+          ? {
+              name: user.name,
+              avatar: user.avatar,
+              is_online: user.is_online,
+              last_active_at: user.last_active_at,
+            }
+          : null,
+      };
+
+      if (!membersByConversationId.has(conversationId)) {
+        membersByConversationId.set(conversationId, []);
+      }
+      membersByConversationId.get(conversationId).push(member);
+    });
+
+    const unreadClauses = participants
+      .map((participant) => {
+        const conversation = participant.conversation_id;
+        if (!conversation?._id) return null;
+
+        const lastMsgId = conversation.last_message?.msg_id;
+        const lastReadMsgId = normalizeMessageId(
+          participant.last_read_message_id,
+        );
+        const deletedMsgId = normalizeMessageId(participant.deleted_msg_id);
+        const anchorMsgId = maxMessageId(lastReadMsgId, deletedMsgId);
+
+        if (!lastMsgId || !isMessageIdAfter(lastMsgId, anchorMsgId)) {
+          return null;
+        }
+
+        return {
+          conversation_id: conversation._id,
+          msg_id: { $gt: anchorMsgId },
+        };
+      })
+      .filter(Boolean);
+
+    const unreadCounts = unreadClauses.length
+      ? await Message.aggregate([
+          {
+            $match: {
+              $or: unreadClauses,
+              is_deleted: { $ne: true },
+              is_revoked: { $ne: true },
+              sender_id: { $ne: userId },
+              deleted_for: { $ne: userId },
+            },
+          },
+          { $group: { _id: "$conversation_id", count: { $sum: 1 } } },
+        ])
+      : [];
+
+    const unreadCountByConversationId = new Map(
+      unreadCounts.map((item) => [String(item._id), item.count || 0]),
+    );
+
     // Trả về đầy đủ participant data + conversation data + unread_count
     const result = (
       await Promise.all(
@@ -75,43 +211,11 @@ exports.getConversationsByUserId = async (req, res) => {
           // Nếu conversation không tồn tại, bỏ qua
           if (!conversation) return null;
 
-          const lastReadMsgId = normalizeMessageId(participant.last_read_message_id);
-          const deletedMsgId = normalizeMessageId(participant.deleted_msg_id);
-          const anchorMsgId = maxMessageId(lastReadMsgId, deletedMsgId);
-
-          // Last message hiển thị ở sidebar phải theo phạm vi nhìn thấy của chính user.
-          const visibleLastMessage = await Message.findOne({
-            conversation_id: conversation._id,
-            is_deleted: { $ne: true },
-            deleted_for: { $ne: userId },
-          })
-            .sort({ msg_id: -1 })
-            .select("msg_id sender_id type content createdAt")
-            .lean();
-
-          let unread_count = 0;
-          try {
-            if (
-              visibleLastMessage?.msg_id &&
-              isMessageIdAfter(visibleLastMessage.msg_id, anchorMsgId)
-            ) {
-              unread_count = await Message.countDocuments({
-                conversation_id: conversation._id,
-                msg_id: { $gt: anchorMsgId },
-                is_deleted: { $ne: true },
-                is_revoked: { $ne: true },
-                sender_id: { $ne: userId },
-                deleted_for: { $ne: userId },
-              });
-            }
-          } catch (error) {
-            console.error("Error calculating unread count:", error);
-            unread_count = 0;
-          }
-
-          const memberDetails = await ParticipantService.getConversationMembers(
-            conversation._id,
-          );
+          const conversationId = String(conversation._id);
+          const unread_count =
+            unreadCountByConversationId.get(conversationId) || 0;
+          const memberDetails =
+            membersByConversationId.get(conversationId) || [];
 
           const senderNameById = new Map(
             memberDetails.map((member) => [
@@ -120,22 +224,28 @@ exports.getConversationsByUserId = async (req, res) => {
             ]),
           );
 
-          const resolvedLastMessage = visibleLastMessage
+          const resolvedLastMessage = conversation.last_message?.msg_id
             ? {
-                msg_id: String(visibleLastMessage.msg_id || ""),
-                sender_id: String(visibleLastMessage.sender_id || ""),
+                msg_id: String(conversation.last_message.msg_id || ""),
+                sender_id: String(conversation.last_message.sender_id || ""),
                 sender_name:
                   senderNameById.get(
-                    String(visibleLastMessage.sender_id || ""),
-                  ) || "",
-                content: buildConversationPreviewContent(visibleLastMessage),
-                type: visibleLastMessage.type,
+                    String(conversation.last_message.sender_id || ""),
+                  ) ||
+                  conversation.last_message.sender_name ||
+                  "",
+                content: buildConversationPreviewContent(
+                  conversation.last_message,
+                ),
+                type: conversation.last_message.type,
                 createdAt:
-                  visibleLastMessage.createdAt || new Date().toISOString(),
+                  conversation.last_message.createdAt ||
+                  conversation.updatedAt ||
+                  new Date().toISOString(),
               }
             : undefined;
 
-          const conversationData = conversation.toObject();
+          const conversationData = toPlainObject(conversation);
           
           // Thêm thông tin cuộc gọi đang diễn ra (nếu có)
           const activeCall = getActiveCall(String(conversation._id));
@@ -289,29 +399,35 @@ exports.updateLastRead = async (req, res) => {
       participant: participantPayload,
     };
 
-    req.io.to(`user:${userId}`).emit("conversation_read_synced", syncPayload);
+    const cursorChanged = participant.$locals?.cursorChanged !== false;
 
-    const joinedParticipants =
-      await ParticipantService.getJoinedParticipants(conversationId);
-    joinedParticipants.forEach((item) => {
-      req.io.to(`user:${item.user_id}`).emit("participant_cursor_changed", {
-        ...syncPayload,
-        userId,
-      });
-    });
+    if (cursorChanged) {
+      req.io.to(`user:${userId}`).emit("conversation_read_synced", syncPayload);
 
-    try {
-      await publishMessageSeen({
-        conversationId,
-        userId,
-        msgId,
-        deviceId: req.body.deviceId || null,
+      const joinedParticipants =
+        await ParticipantService.getJoinedParticipants(conversationId);
+      joinedParticipants.forEach((item) => {
+        req.io.to(`user:${item.user_id}`).emit("participant_cursor_changed", {
+          ...syncPayload,
+          userId,
+        });
       });
-    } catch (publishError) {
-      console.error(
-        "[ParticipantController] Failed to publish seen receipt:",
-        publishError.message,
-      );
+
+      if (chatReceiptQueueEnabled) {
+        try {
+          await publishMessageSeen({
+            conversationId,
+            userId,
+            msgId,
+            deviceId: req.body.deviceId || null,
+          });
+        } catch (publishError) {
+          console.error(
+            "[ParticipantController] Failed to publish seen receipt:",
+            publishError.message,
+          );
+        }
+      }
     }
 
     res.status(200).json(participantPayload);
@@ -333,18 +449,20 @@ exports.updateLastDelivered = async (req, res) => {
       return res.status(404).json({ error: "Participant not found" });
     }
 
-    try {
-      await publishMessageDelivered({
-        conversationId,
-        userId,
-        msgId,
-        deviceId: deviceId || null,
-      });
-    } catch (publishError) {
-      console.error(
-        "[ParticipantController] Failed to publish delivered receipt:",
-        publishError.message,
-      );
+    if (participant.$locals?.cursorChanged !== false && chatReceiptQueueEnabled) {
+      try {
+        await publishMessageDelivered({
+          conversationId,
+          userId,
+          msgId,
+          deviceId: deviceId || null,
+        });
+      } catch (publishError) {
+        console.error(
+          "[ParticipantController] Failed to publish delivered receipt:",
+          publishError.message,
+        );
+      }
     }
 
     res.status(200).json(participant);

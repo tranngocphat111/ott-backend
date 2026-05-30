@@ -189,6 +189,7 @@ const handleReceipt = async (payload, routingKey) => {
     ? await ParticipantService.updateLastRead(conversationId, userId, msgId)
     : await ParticipantService.updateLastDelivered(conversationId, userId, msgId);
   if (!participant) return;
+  if (participant.$locals?.cursorChanged === false) return;
 
   const message = await Message.findOne({
     conversation_id: conversationId,
