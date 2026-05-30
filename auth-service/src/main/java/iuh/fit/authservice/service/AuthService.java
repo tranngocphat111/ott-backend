@@ -350,6 +350,7 @@ public class AuthService {
 
         UserServiceClient.UserDto user = userServiceClient.createUser(createRequest);
         log.info("Created new Google account: {}", user.getId());
+        notificationPublisher.publishUserRegisteredEvent(user.getId(), LoginMethod.GOOGLE.name().toLowerCase());
 
         return createAuthResponse(user, request, LoginMethod.GOOGLE);
     }
