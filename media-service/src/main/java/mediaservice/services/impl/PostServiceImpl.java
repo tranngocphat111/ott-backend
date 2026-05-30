@@ -204,6 +204,9 @@ public class PostServiceImpl implements PostService {
         String userId = savedPost.getAccount() != null ? savedPost.getAccount().getId() : null;
         publishPostCreatedAnalyticsAfterCommit(savedPost.getId(), userId);
         publishAfterCommit(savedPost.getId(), "POST", "CREATE");
+        if (userId != null) {
+            publishNotificationToFriendsAfterCommit(userId, savedPost.getId(), "NEW_POST", "Vừa thêm bài viết mới");
+        }
         return enrichCounts(postMapper.toResponse(savedPost), savedPost.getId());
     }
 
@@ -299,6 +302,9 @@ public class PostServiceImpl implements PostService {
         if (!hasAsyncJobs) {
             publishAfterCommit(savedPost.getId(), "POST", "CREATE");
         }
+        if (accountId != null) {
+            publishNotificationToFriendsAfterCommit(accountId, savedPost.getId(), "NEW_POST", "Vừa thêm bài viết mới");
+        }
 
         // Process hashtags and @mentions in caption (after media saved and refresh)
         processTagsAndMentions(savedPost);
@@ -367,6 +373,10 @@ public class PostServiceImpl implements PostService {
         postMapper.updateEntity(request, post);
         Post updatedPost = postRepository.save(post);
         publishAfterCommit(updatedPost.getId(), "POST", "UPDATE");
+        String userId = updatedPost.getAccount() != null ? updatedPost.getAccount().getId() : null;
+        if (userId != null) {
+            publishNotificationToFriendsAfterCommit(userId, updatedPost.getId(), "UPDATE_POST", "Vừa cập nhật bài viết");
+        }
         return enrichCounts(postMapper.toResponse(updatedPost), updatedPost.getId());
     }
 
@@ -579,6 +589,10 @@ public class PostServiceImpl implements PostService {
         if (!hasUpdateAsyncJobs && !hasDeleteJobs) {
             publishAfterCommit(post.getId(), "POST", "UPDATE");
         }
+        String updateUserId = post.getAccount() != null ? post.getAccount().getId() : null;
+        if (updateUserId != null) {
+            publishNotificationToFriendsAfterCommit(updateUserId, post.getId(), "UPDATE_POST", "Vừa cập nhật bài viết");
+        }
 
         return enrichCounts(postMapper.toResponse(updatedPost), updatedPost.getId());
     }
@@ -716,6 +730,31 @@ public class PostServiceImpl implements PostService {
         });
     }
 
+    private void publishNotificationToFriendsAfterCommit(String authorId, String postId, String type, String message) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            notifyFriends(authorId, postId, type, message);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                notifyFriends(authorId, postId, type, message);
+            }
+        });
+    }
+
+    private void notifyFriends(String authorId, String postId, String type, String message) {
+        if (authorId == null || postId == null) return;
+        List<mediaservice.models.Relationship> friends = relationshipRepository.findFriendsByUserId(authorId, RelationshipStatusType.ACCEPTED);
+        for (mediaservice.models.Relationship r : friends) {
+            if (r.getRequester() != null && r.getReceiver() != null) {
+                String friendId = r.getRequester().getId().equals(authorId) ? r.getReceiver().getId() : r.getRequester().getId();
+                notificationPublisher.publishNotification(friendId, authorId, type, message, postId);
+            }
+        }
+    }
+
     private void processTagsAndMentions(Post post) {
         if (post == null) return;
         String caption = post.getCaption();
@@ -811,8 +850,10 @@ public class PostServiceImpl implements PostService {
     @Override
     @Transactional(readOnly = true)
     public Page<PostResponse> searchPosts(String query, String viewerId, Pageable pageable) {
+        boolean isHashtag = query != null && query.startsWith("#");
         return postRepository.searchPostsWithAuthorized(
                 query,
+                isHashtag,
                 ContentStatusType.ACTIVE,
                 VisibilityType.PUBLIC,
                 VisibilityType.PRIVATE,

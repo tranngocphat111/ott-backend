@@ -127,6 +127,14 @@ public class StoryController {
     }
 
     /**
+     * GET /stories/{id} - lay chi tiet story
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<StoryResponse> getStoryById(@PathVariable String id) {
+        return ResponseEntity.ok(storyService.getStoryById(id));
+    }
+
+    /**
      * GET /stories/reel/{accountId}?suggestionLimit=8
      * - Return authorized active stories for accountId.
      * - If no active stories remain, return suggested users for friend recommendations.

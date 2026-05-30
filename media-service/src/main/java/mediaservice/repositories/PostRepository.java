@@ -105,7 +105,15 @@ public interface PostRepository extends JpaRepository<Post, String> {
     "SELECT p FROM Post p " +
     "JOIN FETCH p.account a  " +
     "WHERE p.status = :status AND " +
-    "LOWER(p.caption) LIKE LOWER(CONCAT('%', :query, '%')) AND " +
+    "( " +
+    "   (:isHashtag = true AND EXISTS (SELECT 1 FROM p.hashTags ht WHERE LOWER(ht.name) = LOWER(SUBSTRING(:query, 2)))) " +
+    "   OR " +
+    "   (:isHashtag = false AND (" +
+    "       LOWER(p.caption) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+    "       LOWER(a.displayName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+    "       LOWER(a.username) LIKE LOWER(CONCAT('%', :query, '%')) " +
+    "   )) " +
+    ") AND " +
     "( " +
         "a.id = :accountId OR " +
         "p.visibility = :publicVis OR " +
@@ -142,7 +150,15 @@ public interface PostRepository extends JpaRepository<Post, String> {
             "SELECT count(p.id) FROM Post p " +
             "JOIN Account a ON a.id = p.account.id " +
             "WHERE p.status = :status AND " +
-            "LOWER(p.caption) LIKE LOWER(CONCAT('%', :query, '%')) AND " +
+            "( " +
+            "   (:isHashtag = true AND EXISTS (SELECT 1 FROM p.hashTags ht WHERE LOWER(ht.name) = LOWER(SUBSTRING(:query, 2)))) " +
+            "   OR " +
+            "   (:isHashtag = false AND (" +
+            "       LOWER(p.caption) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+            "       LOWER(a.displayName) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+            "       LOWER(a.username) LIKE LOWER(CONCAT('%', :query, '%')) " +
+            "   )) " +
+            ") AND " +
             "( " +
                 "a.id = :accountId OR " +
                 "p.visibility = :publicVis OR " +
@@ -177,6 +193,7 @@ public interface PostRepository extends JpaRepository<Post, String> {
     )
     Page<Post> searchPostsWithAuthorized(
         @Param("query") String query,
+        @Param("isHashtag") boolean isHashtag,
         @Param("status") ContentStatusType status,
         @Param("publicVis") VisibilityType publicVis,
         @Param("privateVis") VisibilityType privateVis,

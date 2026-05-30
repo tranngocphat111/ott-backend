@@ -10,7 +10,8 @@ import java.util.Set;
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
-@Data
+@Getter
+@Setter
 @EqualsAndHashCode(callSuper = true)
 @DiscriminatorValue("USER")
 public class UserAccount extends Account{

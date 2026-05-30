@@ -72,6 +72,24 @@ public class RelationshipController {
         return ResponseEntity.ok(relationshipService.blockRelationship(id, blockerId));
     }
 
+    @PostMapping("/block")
+    public ResponseEntity<RelationshipResponse> blockRelationshipDirectly(
+            @RequestParam String requesterId,
+            @RequestParam String receiverId) {
+        return ResponseEntity.ok(relationshipService.blockUserDirectly(requesterId, receiverId));
+    }
+
+    @GetMapping("/blocked/{userId}")
+    public ResponseEntity<List<RelationshipResponse>> getBlockedUsers(@PathVariable String userId) {
+        return ResponseEntity.ok(relationshipService.getBlockedUsers(userId));
+    }
+
+    @DeleteMapping("/{id}/unblock")
+    public ResponseEntity<Void> unblockRelationship(@PathVariable String id) {
+        relationshipService.unblockRelationship(id);
+        return ResponseEntity.noContent().build();
+    }
+
     /* ─── Từ chối lời mời ─────────────────────────────────── */
     @DeleteMapping("/{id}/reject")
     public ResponseEntity<Void> rejectFriendRequest(@PathVariable String id) {

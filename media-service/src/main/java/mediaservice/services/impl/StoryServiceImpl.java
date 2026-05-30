@@ -19,8 +19,10 @@ import mediaservice.repositories.StoryItemRepository;
 import mediaservice.repositories.StoryRepository;
 import mediaservice.repositories.StoryViewRepository;
 import mediaservice.repositories.ContentViewHistoryRepository;
+import mediaservice.repositories.RelationshipRepository;
 import mediaservice.repositories.SavedContentRepository;
 import mediaservice.repositories.UserAccountRepository;
+import mediaservice.realtime.NotificationPublisher;
 import mediaservice.services.MediaDeleteJobPublisher;
 import mediaservice.services.MediaCompressionJobPublisher;
 import mediaservice.services.MediaUploadJobPublisher;
@@ -70,6 +72,8 @@ public class StoryServiceImpl implements StoryService {
     private final MediaCompressionJobPublisher mediaCompressionJobPublisher;
     private final MediaUploadJobPublisher mediaUploadJobPublisher;
     private final ContentAccessControlMapper accessControlMapper;
+    private final RelationshipRepository relationshipRepository;
+    private final NotificationPublisher notificationPublisher;
 
     @Override
     @Transactional
@@ -113,6 +117,10 @@ public class StoryServiceImpl implements StoryService {
         Story finalStory = storyRepository.save(savedStory);
 
         publishAfterCommit(finalStory.getId(), "STORY", "CREATE");
+
+        if (finalStory.getAccount() != null) {
+            publishNotificationToFriendsAfterCommit(finalStory.getAccount().getId(), finalStory.getId(), "NEW_STORY", "Vừa thêm bảng tin mới");
+        }
 
         return storyMapper.toResponse(finalStory);
     }
@@ -314,6 +322,10 @@ public class StoryServiceImpl implements StoryService {
             enqueueDeleteJob(deleteKeys, story.getId(), "STORY", "UPDATE");
         }
 
+        if (updatedStory.getAccount() != null) {
+            publishNotificationToFriendsAfterCommit(updatedStory.getAccount().getId(), updatedStory.getId(), "UPDATE_STORY", "Vừa cập nhật bảng tin");
+        }
+
         return storyMapper.toResponse(updatedStory);
     }
 
@@ -429,6 +441,31 @@ public class StoryServiceImpl implements StoryService {
                 mediaRealtimePublisher.publish(contentTargetType, contentId, operation, List.of(), List.of());
             }
         });
+    }
+
+    private void publishNotificationToFriendsAfterCommit(String authorId, String storyId, String type, String message) {
+        if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+            notifyFriends(authorId, storyId, type, message);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                notifyFriends(authorId, storyId, type, message);
+            }
+        });
+    }
+
+    private void notifyFriends(String authorId, String storyId, String type, String message) {
+        if (authorId == null || storyId == null) return;
+        List<mediaservice.models.Relationship> friends = relationshipRepository.findFriendsByUserId(authorId, RelationshipStatusType.ACCEPTED);
+        for (mediaservice.models.Relationship r : friends) {
+            if (r.getRequester() != null && r.getReceiver() != null) {
+                String friendId = r.getRequester().getId().equals(authorId) ? r.getReceiver().getId() : r.getRequester().getId();
+                notificationPublisher.publishNotification(friendId, authorId, type, message, storyId);
+            }
+        }
     }
 
     private void addKey(List<String> keys, String key) {

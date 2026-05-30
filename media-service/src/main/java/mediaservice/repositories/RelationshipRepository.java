@@ -50,4 +50,6 @@ public interface RelationshipRepository extends JpaRepository<Relationship, Stri
            "((r.requester.id = :userId1 AND r.receiver.id = :userId2) OR " +
            "(r.requester.id = :userId2 AND r.receiver.id = :userId1))")
     boolean isFriend(@Param("userId1") String userId1, @Param("userId2") String userId2);
+
+    List<Relationship> findByBlockedByIdAndStatus(String blockedById, RelationshipStatusType status);
 }
