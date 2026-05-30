@@ -5,6 +5,7 @@ const User = require("../models/User");
 const Relationship = require("../models/Relationship");
 const ConversationService = require("./conversationService");
 const messageCacheService = require("./messageCacheService");
+const chatSendCacheService = require("./chatSendCacheService");
 const {
   PutObjectCommand,
   GetObjectCommand,
@@ -101,7 +102,22 @@ const getOrLoadSendCacheValue = async (key, loader, ttlMs) => {
   if (pending) return pending;
 
   const loadPromise = Promise.resolve()
-    .then(loader)
+    .then(async () => {
+      const redisCached = await chatSendCacheService.getJson(key);
+      if (redisCached !== undefined) {
+        return redisCached;
+      }
+
+      const value = await loader();
+      if (value != null) {
+        await chatSendCacheService.setJson(
+          key,
+          value,
+          Math.ceil((ttlMs || SEND_FAST_CACHE_TTL_MS) / 1000),
+        );
+      }
+      return value;
+    })
     .then((value) => setSendCacheValue(key, value, ttlMs))
     .finally(() => {
       sendFastPathPendingLoads.delete(key);

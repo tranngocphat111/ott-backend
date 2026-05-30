@@ -10,6 +10,10 @@ const parsePositiveInt = (value, fallback) => {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
+const queuedAccountStatusCheckEnabled =
+  String(
+    process.env.CHAT_QUEUED_SEND_ACCOUNT_STATUS_CHECK_ENABLED || "false",
+  ).toLowerCase() === "true";
 
 const safeParse = (buffer) => {
   try {
@@ -71,6 +75,7 @@ const persistQueuedMessage = async (io, command = {}) => {
     pollMultipleChoice: command.pollMultipleChoice,
     pollOptions: command.pollOptions,
     systemMeta: command.systemMeta,
+    skipAccountStatusCheck: !queuedAccountStatusCheckEnabled,
   });
 
   await publishCreatedOrFallback(

@@ -20,6 +20,15 @@ const ROUTING_KEYS = {
 
 let publishChannel = null;
 let topologyReady = false;
+const waitForConfirm =
+  String(process.env.CHAT_MESSAGE_COMMAND_CONFIRM || "false").toLowerCase() ===
+  "true";
+const waitForDrain =
+  String(process.env.CHAT_MESSAGE_COMMAND_WAIT_DRAIN || "false").toLowerCase() ===
+  "true";
+const isPersistent =
+  String(process.env.CHAT_MESSAGE_COMMAND_PERSISTENT || "true").toLowerCase() !==
+  "false";
 
 const assertTopology = async (channel) => {
   await channel.assertExchange(CHAT_COMMAND_DLX, "direct", { durable: true });
@@ -43,7 +52,9 @@ const ensurePublishChannel = async () => {
   const { connection } = await connectRabbitMQ();
 
   if (!publishChannel) {
-    publishChannel = await connection.createConfirmChannel();
+    publishChannel = waitForConfirm
+      ? await connection.createConfirmChannel()
+      : await connection.createChannel();
     publishChannel.on("close", () => {
       publishChannel = null;
       topologyReady = false;
@@ -78,18 +89,20 @@ const publishMessageCommand = async (payload = {}) => {
     QUEUES.MESSAGE_COMMAND,
     Buffer.from(JSON.stringify(messagePayload)),
     {
-      persistent: true,
+      persistent: isPersistent,
       contentType: "application/json",
       messageId: commandId || undefined,
       timestamp: Date.now(),
     },
   );
 
-  if (!canContinue) {
+  if (!canContinue && waitForDrain) {
     await once(channel, "drain");
   }
 
-  await channel.waitForConfirms();
+  if (waitForConfirm && typeof channel.waitForConfirms === "function") {
+    await channel.waitForConfirms();
+  }
   return messagePayload;
 };
 
