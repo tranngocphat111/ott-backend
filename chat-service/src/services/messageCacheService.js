@@ -226,35 +226,17 @@ class MessageCacheService {
       const key = `${this.CACHE_KEY_PREFIX}${conversationId}`;
 
       const score = this.getMessageScore(message);
-
-      // Ensure the same message id appears only once in cache.
-      await this.removeByMsgId(conversationId, message.msg_id || message._id);
-
       const sanitizedMessage = sanitizeMessageForCache(message);
 
-      // Step 1: Add message to ZSET (score = Snowflake ID)
-      await this.client.zAdd(key, {
-        score,
-        value: JSON.stringify(sanitizedMessage),
-      });
-
-      logger.info(
-        `✓ Message added to cache. Conversation: ${conversationId}, Message ID: ${message.msg_id}`,
-      );
-
-      // Step 2: Trim to keep only 20 latest messages
-      const messageCount = await this.client.zCard(key);
-
-      if (messageCount > this.MAX_MESSAGES) {
-        const toRemove = messageCount - this.MAX_MESSAGES;
-        await this.client.zRemRangeByRank(key, 0, toRemove - 1);
-        logger.info(
-          `✓ Cache trimmed: Removed ${toRemove} old messages. Total: ${this.MAX_MESSAGES}`,
-        );
-      }
-
-      // Step 3: Set TTL (24 hours)
-      await this.client.expire(key, this.CACHE_TTL);
+      await this.client
+        .multi()
+        .zAdd(key, {
+          score,
+          value: JSON.stringify(sanitizedMessage),
+        })
+        .zRemRangeByRank(key, 0, -(this.MAX_MESSAGES + 1))
+        .expire(key, this.CACHE_TTL)
+        .exec();
 
       return true;
     } catch (error) {

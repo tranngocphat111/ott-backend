@@ -140,15 +140,10 @@ router.get("/conversations/:conversationId/messages", async (req, res) => {
       userId,
     );
 
-    // Determine source (cache or DB)
-    const cacheStats = await messageCacheService.getCacheStats(conversationId);
-    const source = cacheStats.isCached ? "cache" : "database";
-
     res.json({
       success: true,
       conversationId,
       messageCount: messages.length,
-      source,
       messages,
     });
   } catch (error) {

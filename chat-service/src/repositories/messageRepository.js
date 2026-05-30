@@ -86,6 +86,18 @@ const sanitizeAvatarValue = (value) => {
   if (/^data:image\//i.test(avatar)) return "";
   return avatar;
 };
+const cacheStrictDbCheckEnabled =
+  String(process.env.CHAT_MESSAGE_CACHE_STRICT_DB_CHECK || "false")
+    .toLowerCase() === "true";
+const cacheLiveReactionsEnabled =
+  String(process.env.CHAT_MESSAGE_CACHE_LIVE_REACTIONS || "false")
+    .toLowerCase() === "true";
+const cacheHydrateSendersEnabled =
+  String(process.env.CHAT_MESSAGE_CACHE_HYDRATE_SENDERS || "false")
+    .toLowerCase() === "true";
+const cacheHydrateRepliesEnabled =
+  String(process.env.CHAT_MESSAGE_CACHE_HYDRATE_REPLIES || "false")
+    .toLowerCase() === "true";
 
 class MessageRepository {
   async hydrateSenderInfo(messages = []) {
@@ -302,6 +314,28 @@ class MessageRepository {
     });
   }
 
+  async prepareCachedMessagesForResponse(conversationId, messages, userId) {
+    let prepared = messages;
+
+    if (cacheLiveReactionsEnabled) {
+      prepared = await this.hydrateLiveReactions(conversationId, prepared);
+    }
+
+    if (cacheHydrateSendersEnabled) {
+      prepared = await this.hydrateSenderInfo(prepared);
+    }
+
+    if (cacheHydrateRepliesEnabled) {
+      prepared = await this.hydrateReplyPreviews(
+        conversationId,
+        prepared,
+        userId,
+      );
+    }
+
+    return prepared;
+  }
+
   /**
    * Create and save a new message
    * 1. Save to MongoDB
@@ -349,8 +383,6 @@ class MessageRepository {
    */
   async getConversationMessages(conversationId, limit = 20, userId) {
     try {
-      const deletedMsgId = await this.getDeletedMsgId(conversationId, userId);
-
       // Step 1: Check Redis cache
       const cachedExists =
         await messageCacheService.cacheExists(conversationId);
@@ -363,35 +395,39 @@ class MessageRepository {
           logger.info(
             `✓ CACHE HIT: ${messages.length} messages for ${conversationId}`,
           );
+          const deletedMsgId = cacheStrictDbCheckEnabled
+            ? await this.getDeletedMsgId(conversationId, userId)
+            : "0";
           const visibleMessages = messages.filter((m) =>
             this.isVisibleToUser(m, userId, deletedMsgId),
           );
 
           if (visibleMessages.length > 0) {
-            const cacheLatestId = this.getLatestMessageId(visibleMessages);
-            const dbLatestId = await this.getLatestVisibleMessageId(
-              conversationId,
-              userId,
-            );
+            if (cacheStrictDbCheckEnabled) {
+              const cacheLatestId = this.getLatestMessageId(visibleMessages);
+              const dbLatestId = await this.getLatestVisibleMessageId(
+                conversationId,
+                userId,
+              );
 
-            if (!dbLatestId || cacheLatestId === dbLatestId) {
-              const liveReactionMessages = await this.hydrateLiveReactions(
+              if (dbLatestId && cacheLatestId !== dbLatestId) {
+                logger.warn(
+                  `↺ CACHE STALE: ${conversationId} cache latest ${cacheLatestId} != db latest ${dbLatestId}. Fallback DB`,
+                );
+              } else {
+                return await this.prepareCachedMessagesForResponse(
+                  conversationId,
+                  visibleMessages,
+                  userId,
+                );
+              }
+            } else {
+              return await this.prepareCachedMessagesForResponse(
                 conversationId,
                 visibleMessages,
-              );
-              const hydratedSenders =
-                await this.hydrateSenderInfo(liveReactionMessages);
-
-              return await this.hydrateReplyPreviews(
-                conversationId,
-                hydratedSenders,
                 userId,
               );
             }
-
-            logger.warn(
-              `↺ CACHE STALE: ${conversationId} cache latest ${cacheLatestId} != db latest ${dbLatestId}. Fallback DB`,
-            );
           }
 
           logger.info(
@@ -402,6 +438,7 @@ class MessageRepository {
 
       // Step 2: Cache miss - fetch from MongoDB
       logger.info(`✗ CACHE MISS: Fetching from MongoDB for ${conversationId}`);
+      const deletedMsgId = await this.getDeletedMsgId(conversationId, userId);
 
       const query = {
         conversation_id: conversationId,
