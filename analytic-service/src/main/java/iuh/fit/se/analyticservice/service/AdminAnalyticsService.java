@@ -9,9 +9,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeSet;
+import java.time.temporal.ChronoUnit;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import iuh.fit.se.analyticservice.client.UserServiceClient;
@@ -25,7 +28,9 @@ import iuh.fit.se.analyticservice.dto.MessageTypesResponse;
 import iuh.fit.se.analyticservice.dto.OverviewResponse;
 import iuh.fit.se.analyticservice.dto.RecentNewUserDTO;
 import iuh.fit.se.analyticservice.dto.UserDetailDTO;
+import iuh.fit.se.analyticservice.entity.DailyStats;
 import iuh.fit.se.analyticservice.entity.RawUserEvent;
+import iuh.fit.se.analyticservice.repository.DailyStatsRepository;
 import iuh.fit.se.analyticservice.repository.RawLoginEventRepository;
 import iuh.fit.se.analyticservice.repository.RawMessageEventRepository;
 import iuh.fit.se.analyticservice.repository.RawPostEventRepository;
@@ -42,16 +47,26 @@ public class AdminAnalyticsService {
     private final RawLoginEventRepository rawLoginEventRepository;
     private final RawMessageEventRepository rawMessageEventRepository;
     private final RawPostEventRepository rawPostEventRepository;
+    private final DailyStatsRepository dailyStatsRepository;
     private final UserServiceClient userServiceClient;
 
     @Value("${internal.api.key:}")
     private String internalApiKey;
 
+    @Cacheable(cacheNames = "analyticsOverview", key = "#timeRange", condition = "@environment.getProperty('analytics.cache.enabled', 'true') == 'true'")
     public OverviewResponse getOverview(String timeRange) {
         Instant from = resolveFrom(timeRange);
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
         Instant dauFrom = today.atStartOfDay().toInstant(ZoneOffset.UTC);
         Instant mauFrom = today.minusDays(29).atStartOfDay().toInstant(ZoneOffset.UTC);
+
+        if (from != null) {
+            Optional<OverviewResponse> aggregatedOverview = buildOverviewFromDailyStats(from);
+            if (aggregatedOverview.isPresent()) {
+                return aggregatedOverview.get();
+            }
+        }
+
         // current totals
         long totalUsers = from == null ? rawUserEventRepository.count() : rawUserEventRepository.countByTimestampGreaterThanEqual(from);
         long totalLogins = from == null ? rawLoginEventRepository.count() : rawLoginEventRepository.countByTimestampGreaterThanEqual(from);
@@ -102,6 +117,7 @@ public class AdminAnalyticsService {
         );
     }
 
+    @Cacheable(cacheNames = "analyticsRecentUsers", key = "{#timeRange, #query, #page, #size}", condition = "@environment.getProperty('analytics.cache.enabled', 'true') == 'true'")
     public PaginatedRecentUsersResponse getRecentUsers(String timeRange, String query, int page, int size) {
         Instant from = resolveFrom(timeRange);
         List<RawUserEvent> recentEvents = from == null
@@ -147,6 +163,7 @@ public class AdminAnalyticsService {
         );
     }
 
+    @Cacheable(cacheNames = "analyticsMessageTypes", key = "#timeRange", condition = "@environment.getProperty('analytics.cache.enabled', 'true') == 'true'")
     public MessageTypesResponse getMessageTypes(String timeRange) {
         Instant from = resolveFrom(timeRange);
         long text = 0;
@@ -173,6 +190,7 @@ public class AdminAnalyticsService {
         return new MessageTypesResponse(text, image, voice);
     }
 
+    @Cacheable(cacheNames = "analyticsLoginMethods", key = "#timeRange", condition = "@environment.getProperty('analytics.cache.enabled', 'true') == 'true'")
     public List<LoginMethodCountResponse> getLoginMethods(String timeRange) {
         Instant from = resolveFrom(timeRange);
         List<Object[]> rows = from == null
@@ -189,8 +207,16 @@ public class AdminAnalyticsService {
         return result;
     }
 
+    @Cacheable(cacheNames = "analyticsUserTrend", key = "#timeRange", condition = "@environment.getProperty('analytics.cache.enabled', 'true') == 'true'")
     public List<DailyUserTrendResponse> getUserDailyTrend(String timeRange) {
         Instant from = resolveFrom(timeRange);
+        if (from != null) {
+            Optional<List<DailyUserTrendResponse>> aggregatedTrend = buildUserTrendFromDailyStats(from);
+            if (aggregatedTrend.isPresent()) {
+                return aggregatedTrend.get();
+            }
+        }
+
         Map<LocalDate, Long> registrationsByDate = countRegistrationsByDate(from);
         Map<LocalDate, Long> loginsByDate = countLoginsByDate(from);
 
@@ -205,8 +231,16 @@ public class AdminAnalyticsService {
         return result;
     }
 
+    @Cacheable(cacheNames = "analyticsDailyActivity", key = "#timeRange", condition = "@environment.getProperty('analytics.cache.enabled', 'true') == 'true'")
     public List<DailyActivityResponse> getDailyActivity(String timeRange) {
         Instant from = resolveFrom(timeRange);
+        if (from != null) {
+            Optional<List<DailyActivityResponse>> aggregatedActivity = buildDailyActivityFromDailyStats(from);
+            if (aggregatedActivity.isPresent()) {
+                return aggregatedActivity.get();
+            }
+        }
+
         Map<LocalDate, Long> postsByDate = countPostsByDate(from);
         Map<LocalDate, Long> messagesByDate = countMessagesByDate(from);
 
@@ -221,8 +255,16 @@ public class AdminAnalyticsService {
         return result;
     }
 
+    @Cacheable(cacheNames = "analyticsPostDaily", key = "#timeRange", condition = "@environment.getProperty('analytics.cache.enabled', 'true') == 'true'")
     public List<DailyPostCountResponse> getPostDailyOnly(String timeRange) {
         Instant from = resolveFrom(timeRange);
+        if (from != null) {
+            Optional<List<DailyPostCountResponse>> aggregatedPosts = buildPostDailyFromDailyStats(from);
+            if (aggregatedPosts.isPresent()) {
+                return aggregatedPosts.get();
+            }
+        }
+
         Map<LocalDate, Long> postsByDate = countPostsByDate(from);
 
         List<DailyPostCountResponse> result = new ArrayList<>();
@@ -230,6 +272,80 @@ public class AdminAnalyticsService {
             result.add(new DailyPostCountResponse(date, postsByDate.getOrDefault(date, 0L)));
         }
         return result;
+    }
+
+    private Optional<OverviewResponse> buildOverviewFromDailyStats(Instant from) {
+        LocalDate startDate = from.atZone(ZoneOffset.UTC).toLocalDate();
+        LocalDate endDate = LocalDate.now(ZoneOffset.UTC);
+        List<DailyStats> stats = findCompleteDailyStats(startDate, endDate);
+        if (stats.isEmpty()) {
+            return Optional.empty();
+        }
+
+        long totalUsers = stats.stream().mapToLong(DailyStats::getRegisteredUsers).sum();
+        long totalLogins = stats.stream().mapToLong(DailyStats::getLoginEvents).sum();
+        long totalMessages = stats.stream().mapToLong(DailyStats::getMessageEvents).sum();
+        long totalPosts = stats.stream().mapToLong(DailyStats::getPostEvents).sum();
+        long dau = dailyStatsRepository.findByStatDate(endDate)
+                .map(DailyStats::getActiveUsers)
+                .orElseGet(() -> rawLoginEventRepository.countDistinctUsersFrom(endDate.atStartOfDay().toInstant(ZoneOffset.UTC)));
+        long mau = rawLoginEventRepository.countDistinctUsersFrom(endDate.minusDays(29).atStartOfDay().toInstant(ZoneOffset.UTC));
+
+        return Optional.of(new OverviewResponse(totalUsers, totalLogins, totalMessages, totalPosts, dau, mau));
+    }
+
+    private Optional<List<DailyUserTrendResponse>> buildUserTrendFromDailyStats(Instant from) {
+        LocalDate startDate = from.atZone(ZoneOffset.UTC).toLocalDate();
+        LocalDate endDate = LocalDate.now(ZoneOffset.UTC);
+        List<DailyStats> stats = findCompleteDailyStats(startDate, endDate);
+        if (stats.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return Optional.of(stats.stream()
+                .map(stat -> new DailyUserTrendResponse(
+                        stat.getStatDate(),
+                        stat.getRegisteredUsers(),
+                        stat.getLoginEvents()))
+                .toList());
+    }
+
+    private Optional<List<DailyActivityResponse>> buildDailyActivityFromDailyStats(Instant from) {
+        LocalDate startDate = from.atZone(ZoneOffset.UTC).toLocalDate();
+        LocalDate endDate = LocalDate.now(ZoneOffset.UTC);
+        List<DailyStats> stats = findCompleteDailyStats(startDate, endDate);
+        if (stats.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return Optional.of(stats.stream()
+                .map(stat -> new DailyActivityResponse(
+                        stat.getStatDate(),
+                        stat.getPostEvents(),
+                        stat.getMessageEvents()))
+                .toList());
+    }
+
+    private Optional<List<DailyPostCountResponse>> buildPostDailyFromDailyStats(Instant from) {
+        LocalDate startDate = from.atZone(ZoneOffset.UTC).toLocalDate();
+        LocalDate endDate = LocalDate.now(ZoneOffset.UTC);
+        List<DailyStats> stats = findCompleteDailyStats(startDate, endDate);
+        if (stats.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return Optional.of(stats.stream()
+                .map(stat -> new DailyPostCountResponse(stat.getStatDate(), stat.getPostEvents()))
+                .toList());
+    }
+
+    private List<DailyStats> findCompleteDailyStats(LocalDate startDate, LocalDate endDate) {
+        List<DailyStats> stats = dailyStatsRepository.findByStatDateBetweenOrderByStatDateAsc(startDate, endDate);
+        long expectedDays = ChronoUnit.DAYS.between(startDate, endDate) + 1;
+        if (stats.size() < expectedDays) {
+            return List.of();
+        }
+        return stats;
     }
 
     private Map<LocalDate, Long> countPostsByDate(Instant from) {

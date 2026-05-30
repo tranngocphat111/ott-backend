@@ -1,0 +1,855 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture Evaluation - Moderation & Analytic Services</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f4f7fb;
+        --surface: #ffffff;
+        --surface-soft: #f8fafc;
+        --ink: #0f172a;
+        --muted: #64748b;
+        --line: #dbe4ef;
+        --brand: #4f46e5;
+        --brand-soft: #eef2ff;
+        --green: #047857;
+        --green-soft: #ecfdf5;
+        --amber: #b45309;
+        --amber-soft: #fffbeb;
+        --red: #b91c1c;
+        --red-soft: #fef2f2;
+        --blue: #0369a1;
+        --blue-soft: #eff6ff;
+        --shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top left, rgba(79, 70, 229, 0.14), transparent 34rem),
+          linear-gradient(180deg, #fbfdff 0%, var(--bg) 48%, #eef3f9 100%);
+        color: var(--ink);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        line-height: 1.55;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      code {
+        border: 1px solid #dbeafe;
+        border-radius: 6px;
+        background: #eff6ff;
+        color: #1e3a8a;
+        padding: 0.1rem 0.34rem;
+        font-family: "JetBrains Mono", Consolas, monospace;
+        font-size: 0.9em;
+      }
+
+      .page {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 32px 0 56px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.4fr 0.8fr;
+        gap: 24px;
+        align-items: stretch;
+        margin-bottom: 24px;
+      }
+
+      .hero-main,
+      .hero-side,
+      .panel {
+        border: 1px solid rgba(219, 228, 239, 0.9);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(12px);
+      }
+
+      .hero-main {
+        padding: 30px;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--brand);
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        max-width: 780px;
+        margin: 0;
+        font-size: clamp(2rem, 4vw, 3.4rem);
+        line-height: 1.02;
+        letter-spacing: -0.03em;
+      }
+
+      .hero-text {
+        max-width: 760px;
+        margin: 16px 0 0;
+        color: var(--muted);
+        font-size: 1rem;
+      }
+
+      .hero-side {
+        display: grid;
+        gap: 12px;
+        padding: 18px;
+      }
+
+      .metric {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--surface-soft);
+        padding: 14px;
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 1.4rem;
+        line-height: 1;
+      }
+
+      .metric span {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+
+      .nav {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        margin: 0 0 20px;
+        padding: 10px 0;
+        background: linear-gradient(180deg, rgba(244, 247, 251, 0.96), rgba(244, 247, 251, 0.72));
+        backdrop-filter: blur(12px);
+      }
+
+      .nav a {
+        display: inline-flex;
+        white-space: nowrap;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: white;
+        padding: 9px 14px;
+        color: #334155;
+        font-size: 0.88rem;
+        font-weight: 700;
+      }
+
+      .panel {
+        margin-top: 20px;
+        padding: 24px;
+      }
+
+      .section-head {
+        display: flex;
+        gap: 18px;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 18px;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 1.55rem;
+        letter-spacing: -0.02em;
+      }
+
+      h3 {
+        margin: 22px 0 10px;
+        font-size: 1.04rem;
+      }
+
+      .section-note {
+        max-width: 760px;
+        margin: 7px 0 0;
+        color: var(--muted);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        border-radius: 999px;
+        padding: 0 10px;
+        font-size: 0.78rem;
+        font-weight: 800;
+      }
+
+      .pill.good {
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .pill.partial {
+        background: var(--amber-soft);
+        color: var(--amber);
+      }
+
+      .pill.missing {
+        background: var(--red-soft);
+        color: var(--red);
+      }
+
+      .pill.info {
+        background: var(--blue-soft);
+        color: var(--blue);
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface);
+        padding: 16px;
+      }
+
+      .card h3 {
+        margin-top: 0;
+      }
+
+      .diagram {
+        display: grid;
+        gap: 12px;
+        margin-top: 12px;
+      }
+
+      .diagram-row {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+        align-items: stretch;
+      }
+
+      .node {
+        display: flex;
+        min-height: 88px;
+        flex-direction: column;
+        justify-content: center;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        padding: 12px;
+        text-align: center;
+      }
+
+      .node strong {
+        font-size: 0.93rem;
+      }
+
+      .node span {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+
+      .arrow {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--brand);
+        font-size: 1.7rem;
+        font-weight: 900;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: white;
+      }
+
+      table {
+        width: 100%;
+        min-width: 920px;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 13px 14px;
+        vertical-align: top;
+        text-align: left;
+      }
+
+      th {
+        background: #f8fafc;
+        color: #475569;
+        font-size: 0.78rem;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      tr:last-child td {
+        border-bottom: 0;
+      }
+
+      td:first-child {
+        width: 18%;
+        font-weight: 800;
+      }
+
+      .evidence {
+        display: grid;
+        gap: 6px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .evidence li {
+        color: #334155;
+        font-size: 0.88rem;
+      }
+
+      .score-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .score-card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #ffffff;
+        padding: 14px;
+      }
+
+      .score-card strong {
+        display: block;
+        font-size: 1.5rem;
+      }
+
+      .score-card span {
+        color: var(--muted);
+        font-size: 0.83rem;
+      }
+
+      .callout {
+        border: 1px solid #bfdbfe;
+        border-radius: 16px;
+        background: #eff6ff;
+        padding: 16px;
+        color: #1e3a8a;
+      }
+
+      .list {
+        margin: 0;
+        padding-left: 1.1rem;
+      }
+
+      .list li {
+        margin: 0.4rem 0;
+      }
+
+      footer {
+        margin-top: 24px;
+        color: var(--muted);
+        text-align: center;
+        font-size: 0.85rem;
+      }
+
+      @media (max-width: 900px) {
+        .hero,
+        .grid,
+        .score-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .diagram-row {
+          grid-template-columns: 1fr;
+        }
+
+        .arrow {
+          transform: rotate(90deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <section class="hero-main">
+          <p class="eyebrow">Software Architecture and Design - Rubric Evidence</p>
+          <h1>Đánh giá Architecture Styles &amp; Architecture Characteristics</h1>
+          <p class="hero-text">
+            Phạm vi chỉ tính hai service: <strong>moderation-service</strong> và
+            <strong>analytic-service</strong>. Nội dung dưới đây đối chiếu trực tiếp
+            với source code hiện có để chỉ ra tiêu chí đã đạt, đạt một phần hoặc chưa có
+            minh chứng.
+          </p>
+        </section>
+
+        <aside class="hero-side" aria-label="Tổng quan đánh giá">
+          <div class="metric">
+            <strong>2</strong>
+            <span>Nhóm rubric được tính</span>
+          </div>
+          <div class="metric">
+            <strong>RabbitMQ</strong>
+            <span>EDA, retry, DLQ, async pipeline</span>
+          </div>
+          <div class="metric">
+            <strong>JWT + ADMIN</strong>
+            <span>Bảo vệ analytic APIs</span>
+          </div>
+        </aside>
+      </header>
+
+      <nav class="nav" aria-label="Điều hướng nội dung">
+        <a href="#styles">Architecture Styles</a>
+        <a href="#characteristics">Architecture Characteristics</a>
+        <a href="#diagrams">Context &amp; Container</a>
+        <a href="#summary">Tóm tắt chấm điểm</a>
+      </nav>
+
+      <section id="styles" class="panel">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Category 2</p>
+            <h2>Architecture Styles</h2>
+            <p class="section-note">
+              Hai service thể hiện rõ phong cách <strong>microservices</strong>,
+              <strong>event-driven architecture</strong> và xử lý bất đồng bộ bằng
+              RabbitMQ. Một số mục thuộc rubric như sơ đồ C4 cần được trình bày trong
+              báo cáo/slide; file này đã bổ sung sơ đồ dạng HTML để làm minh chứng.
+            </p>
+          </div>
+          <span class="pill good">Đáp ứng tốt</span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tiêu chí</th>
+                <th>Đánh giá</th>
+                <th>Minh chứng trong 2 service</th>
+                <th>Ghi chú chấm điểm</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Context diagram</td>
+                <td><span class="pill good">Đạt</span></td>
+                <td>
+                  <ul class="evidence">
+                    <li>Actor chính: Admin, người dùng, chat/media service.</li>
+                    <li>Hệ thống liên quan: RabbitMQ, PostgreSQL, AWS Rekognition.</li>
+                    <li>Xem sơ đồ context ở phần <a href="#context-diagram">Context View</a>.</li>
+                  </ul>
+                </td>
+                <td>Phạm vi hệ thống rõ: kiểm duyệt nội dung và dashboard phân tích.</td>
+              </tr>
+              <tr>
+                <td>Container diagram</td>
+                <td><span class="pill good">Đạt</span></td>
+                <td>
+                  <ul class="evidence">
+                    <li><code>ott-backend/docker-compose.yml</code> khai báo <code>ott-moderation</code>, <code>ott-analytic</code>, RabbitMQ.</li>
+                    <li><code>ott-backend/deploy/docker-compose.prod.yml</code> có image production cho hai service.</li>
+                    <li>Xem sơ đồ container ở phần <a href="#container-diagram">Container View</a>.</li>
+                  </ul>
+                </td>
+                <td>Frontend/backend/database/message broker được tách rõ.</td>
+              </tr>
+              <tr>
+                <td>System Design Architecture</td>
+                <td><span class="pill good">Đạt</span></td>
+                <td>
+                  <ul class="evidence">
+                    <li><code>ContentReviewConsumer.java</code>: nhận request kiểm duyệt từ queue.</li>
+                    <li><code>ModerationRouter.java</code>: route TEXT/IMAGE sang provider phù hợp.</li>
+                    <li><code>ContentViolationEventListener.java</code>: analytic lưu event vi phạm.</li>
+                    <li><code>AdminAnalyticsController.java</code>: API dashboard cho admin.</li>
+                  </ul>
+                </td>
+                <td>Luồng xử lý từ ingest, scan, publish event, ghi log và hiển thị dashboard rõ ràng.</td>
+              </tr>
+              <tr>
+                <td>Advantages / disadvantages</td>
+                <td><span class="pill good">Đạt</span></td>
+                <td>
+                  <ul class="evidence">
+                    <li>Ưu điểm: loose coupling, scale consumer độc lập, retry/DLQ.</li>
+                    <li>Nhược điểm: eventual consistency, cần quản lý schema event và DLQ.</li>
+                  </ul>
+                </td>
+                <td>Có thể trình bày trực tiếp phần ưu/nhược điểm này trong báo cáo.</td>
+              </tr>
+              <tr>
+                <td>Compare with other architectures</td>
+                <td><span class="pill good">Đạt</span></td>
+                <td>
+                  <ul class="evidence">
+                    <li>So với monolith: tách moderation và analytic giúp giảm coupling và deploy độc lập.</li>
+                    <li>So với synchronous microservices: RabbitMQ giảm block request realtime.</li>
+                  </ul>
+                </td>
+                <td>Lý do chọn EDA hợp lý vì chat/media cần latency thấp.</td>
+              </tr>
+              <tr>
+                <td>Trade-off</td>
+                <td><span class="pill good">Đạt</span></td>
+                <td>
+                  <ul class="evidence">
+                    <li>Hiệu năng: Aho-Corasick in-memory quét text nhanh.</li>
+                    <li>Chi phí: AWS Rekognition chỉ dùng cho ảnh, không gọi cho text.</li>
+                    <li>Độ phức tạp: cần DLQ, idempotency, event contract.</li>
+                  </ul>
+                </td>
+                <td>Trade-off giữa latency realtime và độ phức tạp vận hành là rõ.</td>
+              </tr>
+              <tr>
+                <td>Contextual questions</td>
+                <td><span class="pill good">Đạt</span></td>
+                <td>
+                  <ul class="evidence">
+                    <li>Traffic tăng: scale thêm consumer moderation/analytic theo queue backlog.</li>
+                    <li>Service lỗi: retry 3 lần, message lỗi đi DLQ.</li>
+                    <li>User-service lỗi khi enrich: analytic fallback, không làm sập dashboard.</li>
+                  </ul>
+                </td>
+                <td>Có câu trả lời thực tế cho traffic, downtime, scaling, fault tolerance.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="grid" style="margin-top: 16px">
+          <article class="card">
+            <h3>Style 1 - Microservices</h3>
+            <p>
+              Moderation và Analytic là hai bounded context riêng, có Dockerfile,
+              cấu hình runtime và database riêng. Điều này giúp scale và deploy độc lập.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Style 2 - Event-Driven</h3>
+            <p>
+              RabbitMQ là trục giao tiếp chính. Moderation nhận request qua queue,
+              publish violation event; Analytic consume các event để ghi log/dashboard.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Style 3 - Layered Service</h3>
+            <p>
+              Hai service đều chia lớp controller/service/repository/entity/config.
+              Moderation còn có routing/provider layer cho thuật toán kiểm duyệt.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="characteristics" class="panel">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Category 3</p>
+            <h2>Architecture Characteristics</h2>
+            <p class="section-note">
+              Nhóm này được chấm theo các đặc tính vận hành: availability, performance,
+              fault tolerance, security, scalability và maintainability. Một vài tiêu chí
+              như Redis cache/rate limiter chưa có minh chứng trong riêng hai service này.
+            </p>
+          </div>
+          <span class="pill partial">Đạt một phần</span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tiêu chí</th>
+                <th>Đánh giá</th>
+                <th>Minh chứng trong code</th>
+                <th>Ghi chú cần nói khi bảo vệ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Availability 24/7</td>
+                <td><span class="pill partial">Một phần</span></td>
+                <td>
+                  <ul class="evidence">
+                    <li><code>docker-compose.prod.yml</code>: container <code>restart: unless-stopped</code>.</li>
+                    <li>RabbitMQ healthcheck và durable queues.</li>
+                    <li>DLQ giúp không mất message lỗi.</li>
+                  </ul>
+                </td>
+                <td>Chưa thấy multi-AZ/load balancer/HPA cho riêng hai service, nên không nên nhận là 24/7 hoàn chỉnh.</td>
+              </tr>
+              <tr>
+                <td>Redis CRUD object / cache</td>
+                <td><span class="pill missing">Chưa đạt</span></td>
+                <td>
+                  <ul class="evidence">
+                    <li>Compose có Redis ở cấp hệ thống.</li>
+                    <li>Chưa thấy moderation-service hoặc analytic-service dùng Redis trực tiếp.</li>
+                  </ul>
+                </td>
+                <td>Nếu muốn ăn điểm này cần thêm cache rule dictionary metadata, dashboard summary hoặc distributed lock.</td>
+              </tr>
+              <tr>
+                <td>Rate limiter client</td>
+                <td><span class="pill missing">Chưa đạt</span></td>
+                <td>
+                  <ul class="evidence">
+                    <li>Không thấy logic rate limit ở frontend/admin client cho các API moderation/analytic.</li>
+                  </ul>
+                </td>
+                <td>Không nên claim điểm này nếu chỉ tính hai service và UI hiện tại.</td>
+              </tr>
+              <tr>
+                <td>Retry 3-5s</td>
+                <td><span class="pill good">Đạt</span></td>
+                <td>
+                  <ul class="evidence">
+                    <li><code>moderation-service/application.yml</code>: retry enabled, max-attempts 3, max-interval 5000.</li>
+                    <li><code>analytic-service/application.properties</code>: retry enabled, max-attempts 3, max-interval 5000.</li>
+                  </ul>
+                </td>
+                <td>Đây là retry cho RabbitMQ listener, phù hợp tiêu chí fault tolerance async.</td>
+              </tr>
+              <tr>
+                <td>Rate limiter server/gateway</td>
+                <td><span class="pill missing">Chưa đạt</span></td>
+                <td>
+                  <ul class="evidence">
+                    <li>Không thấy <code>RequestRateLimiter</code> hoặc cấu hình rate limiter trong hai service.</li>
+                    <li>Gateway có circuit breaker, nhưng circuit breaker không phải rate limiter.</li>
+                  </ul>
+                </td>
+                <td>Cần bổ sung gateway rate limiter bằng RedisRateLimiter nếu muốn lấy điểm này.</td>
+              </tr>
+              <tr>
+                <td>JWT security</td>
+                <td><span class="pill partial">Một phần</span></td>
+                <td>
+                  <ul class="evidence">
+                    <li><code>analytic-service/SecurityConfig.java</code>: JWT Resource Server HS512.</li>
+                    <li><code>AdminAnalyticsController.java</code> và <code>ModerationAnalyticsController.java</code>: <code>@PreAuthorize("hasRole('ADMIN')")</code>.</li>
+                    <li>Moderation rule controller chưa thấy security annotation/service-level JWT riêng.</li>
+                  </ul>
+                </td>
+                <td>Analytic đạt rõ; moderation có thể được bảo vệ qua API Gateway, nhưng trong service code chưa đủ minh chứng.</td>
+              </tr>
+              <tr>
+                <td>Scalability</td>
+                <td><span class="pill partial">Một phần</span></td>
+                <td>
+                  <ul class="evidence">
+                    <li>RabbitMQ queue cho phép scale horizontal bằng nhiều consumer instance.</li>
+                    <li>Service stateless tương đối; state nằm ở PostgreSQL/RabbitMQ.</li>
+                    <li>Compose hiện chỉ chạy 1 container mỗi service.</li>
+                  </ul>
+                </td>
+                <td>Kiến trúc hỗ trợ scale, nhưng chưa có cấu hình replica/load balancer trong repo.</td>
+              </tr>
+              <tr>
+                <td>Maintainability</td>
+                <td><span class="pill good">Đạt</span></td>
+                <td>
+                  <ul class="evidence">
+                    <li>Moderation: <code>controller</code>, <code>service</code>, <code>repository</code>, <code>entity</code>, <code>contracts</code>, <code>provider</code>, <code>routing</code>.</li>
+                    <li>Analytic: <code>controller</code>, <code>service</code>, <code>repository</code>, <code>entity</code>, <code>listener</code>, <code>dto</code>, <code>config</code>.</li>
+                    <li>Có defensive validation trong router/service/listener.</li>
+                  </ul>
+                </td>
+                <td>Cấu trúc module rõ, dễ bảo trì và mở rộng provider/event mới.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="diagrams" class="panel">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Visual evidence</p>
+            <h2>Context &amp; Container Views</h2>
+            <p class="section-note">
+              Các sơ đồ dưới đây dùng HTML/CSS để đưa trực tiếp vào báo cáo hoặc mở trên
+              trình duyệt khi bảo vệ.
+            </p>
+          </div>
+          <span class="pill info">C4-lite</span>
+        </div>
+
+        <h3 id="context-diagram">Context View</h3>
+        <div class="diagram">
+          <div class="diagram-row">
+            <div class="node">
+              <strong>Admin</strong>
+              <span>Quản lý rule, xem audit/dashboard</span>
+            </div>
+            <div class="arrow">→</div>
+            <div class="node">
+              <strong>OTT Platform</strong>
+              <span>Chat, media, moderation, analytics</span>
+            </div>
+            <div class="arrow">→</div>
+            <div class="node">
+              <strong>External AI</strong>
+              <span>AWS Rekognition quét ảnh</span>
+            </div>
+          </div>
+          <div class="diagram-row">
+            <div class="node">
+              <strong>User</strong>
+              <span>Gửi tin nhắn/bài viết/media</span>
+            </div>
+            <div class="arrow">→</div>
+            <div class="node">
+              <strong>Chat / Media</strong>
+              <span>Publish review request</span>
+            </div>
+            <div class="arrow">→</div>
+            <div class="node">
+              <strong>Moderation + Analytic</strong>
+              <span>Kiểm duyệt, lưu log, thống kê</span>
+            </div>
+          </div>
+        </div>
+
+        <h3 id="container-diagram">Container View</h3>
+        <div class="diagram">
+          <div class="diagram-row">
+            <div class="node">
+              <strong>Admin Web</strong>
+              <span>React dashboard</span>
+            </div>
+            <div class="arrow">→</div>
+            <div class="node">
+              <strong>API Gateway</strong>
+              <span>Route + JWT + circuit breaker</span>
+            </div>
+            <div class="arrow">→</div>
+            <div class="node">
+              <strong>Analytic Service</strong>
+              <span>Dashboard, audit logs, raw events</span>
+            </div>
+          </div>
+          <div class="diagram-row">
+            <div class="node">
+              <strong>Chat / Media</strong>
+              <span>ContentReviewRequest</span>
+            </div>
+            <div class="arrow">→</div>
+            <div class="node">
+              <strong>RabbitMQ</strong>
+              <span>moderation.events, user.events, DLQ</span>
+            </div>
+            <div class="arrow">→</div>
+            <div class="node">
+              <strong>Moderation Service</strong>
+              <span>Aho-Corasick + Rekognition</span>
+            </div>
+          </div>
+          <div class="diagram-row">
+            <div class="node">
+              <strong>PostgreSQL</strong>
+              <span>moderation_rules, decision_records</span>
+            </div>
+            <div class="arrow">↔</div>
+            <div class="node">
+              <strong>Moderation DB</strong>
+              <span>Rule dictionary + decisions</span>
+            </div>
+            <div class="arrow">↔</div>
+            <div class="node">
+              <strong>Analytic DB</strong>
+              <span>raw_*, content_violation_logs, admin_audit_logs</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="summary" class="panel">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Rubric summary</p>
+            <h2>Tóm tắt mức đáp ứng</h2>
+          </div>
+          <span class="pill info">Chỉ tính 2 nhóm rubric</span>
+        </div>
+
+        <div class="score-grid">
+          <div class="score-card">
+            <strong>7/7</strong>
+            <span>Architecture Styles có minh chứng tốt</span>
+          </div>
+          <div class="score-card">
+            <strong>3/8</strong>
+            <span>Architecture Characteristics đạt rõ</span>
+          </div>
+          <div class="score-card">
+            <strong>3/8</strong>
+            <span>Đạt một phần, cần giải thích khi bảo vệ</span>
+          </div>
+          <div class="score-card">
+            <strong>2/8</strong>
+            <span>Chưa có minh chứng: Redis/rate limiter</span>
+          </div>
+        </div>
+
+        <div class="callout" style="margin-top: 16px">
+          <strong>Kết luận bảo vệ:</strong>
+          Moderation và Analytic đáp ứng tốt phần architecture style nhờ microservices,
+          event-driven RabbitMQ, DLQ/retry/idempotency và service layering rõ. Phần
+          architecture characteristics đạt tốt ở retry, maintainability và một phần ở
+          availability/security/scalability. Các điểm còn thiếu nếu chấm sát rubric là
+          Redis cache, client/server rate limiter và triển khai scale nhiều instance.
+        </div>
+
+        <h3>Minh chứng nên mở khi trình bày</h3>
+        <ul class="list">
+          <li><code>moderation-service/src/main/java/moderationservice/messaging/ContentReviewConsumer.java</code></li>
+          <li><code>moderation-service/src/main/java/moderationservice/routing/ModerationRouter.java</code></li>
+          <li><code>moderation-service/src/main/java/moderationservice/provider/AhoCorasickProfanityProvider.java</code></li>
+          <li><code>analytic-service/src/main/java/iuh/fit/se/analyticservice/config/RabbitMqConfig.java</code></li>
+          <li><code>analytic-service/src/main/java/iuh/fit/se/analyticservice/config/SecurityConfig.java</code></li>
+          <li><code>analytic-service/src/main/java/iuh/fit/se/analyticservice/listener/AdminAuditEventListener.java</code></li>
+          <li><code>ott-backend/docker-compose.yml</code> và <code>ott-backend/deploy/docker-compose.prod.yml</code></li>
+        </ul>
+      </section>
+
+      <footer>
+        Architecture rubric evidence for Moderation Service (:8087) and Analytic Service (:8092) - May 2026
+      </footer>
+    </div>
+  </body>
+</html>
