@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import mediaservice.dtos.requests.CommentRequest;
 import mediaservice.dtos.responses.CommentResponse;
 import mediaservice.mappers.CommentMapper;
+import mediaservice.utils.TextTagParser;
 import mediaservice.models.Account;
 import mediaservice.models.Comment;
 import mediaservice.models.Content;
@@ -73,6 +74,21 @@ public class CommentServiceImpl implements CommentService {
                     (savedComment.getAccount() != null && savedComment.getAccount().getDisplayName() != null ? savedComment.getAccount().getDisplayName() : "Ai đó") + " đã bình luận về bài viết của bạn.", 
                     savedComment.getContent().getId()
             );
+            
+            // Process mentions
+            java.util.List<String> mentions = TextTagParser.extractMentions(request.getText());
+            if (mentions != null && !mentions.isEmpty()) {
+                for (String uname : mentions) {
+                    if (uname == null || uname.isBlank()) continue;
+                    java.util.Optional<mediaservice.models.Account> optAccount = accountRepository.findById(uname);
+                    if (optAccount.isEmpty()) {
+                        optAccount = accountRepository.findByUsername(uname);
+                    }
+                    optAccount.ifPresent(target -> {
+                        notificationPublisher.publishNotification(target.getId(), request.getAccountId(), "MENTION", "Bạn được nhắc đến trong một bình luận", savedComment.getContent().getId());
+                    });
+                }
+            }
         }
         return response;
     }
@@ -118,6 +134,21 @@ public class CommentServiceImpl implements CommentService {
         CommentResponse response = commentMapper.toResponse(updatedComment);
         if (updatedComment.getContent() != null) {
             postActivityPublisher.publish(updatedComment.getContent().getId(), "COMMENT", "UPDATE", response);
+            
+            // Process mentions
+            java.util.List<String> mentions = TextTagParser.extractMentions(request.getText());
+            if (mentions != null && !mentions.isEmpty()) {
+                for (String uname : mentions) {
+                    if (uname == null || uname.isBlank()) continue;
+                    java.util.Optional<mediaservice.models.Account> optAccount = accountRepository.findById(uname);
+                    if (optAccount.isEmpty()) {
+                        optAccount = accountRepository.findByUsername(uname);
+                    }
+                    optAccount.ifPresent(target -> {
+                        notificationPublisher.publishNotification(target.getId(), request.getAccountId(), "MENTION", "Bạn được nhắc đến trong một bình luận", updatedComment.getContent().getId());
+                    });
+                }
+            }
         }
         return response;
     }

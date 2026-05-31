@@ -39,4 +39,6 @@ public interface CommentRepository extends JpaRepository<Comment, String> {
 
     /** Đếm số comment (không xóa) của một bài post */
     long countByContent_IdAndIsDeletedFalse(String contentId);
+
+    void deleteByContent_Id(String contentId);
 }

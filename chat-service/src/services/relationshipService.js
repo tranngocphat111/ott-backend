@@ -1,6 +1,5 @@
 const Relationship = require("../models/Relationship");
 const { publishRelationshipEvent } = require("../events/relationshipEvents");
-const { publishNotification } = require("../events/notificationEvents");
 const mongoose = require("mongoose");
 
 const getUserDisplayName = async (userId) => {
@@ -181,13 +180,9 @@ exports.sendFriendRequest = async (requesterId, receiverId) => {
   );
 
   try {
-    await publishRelationshipEvent("REQUEST_SENT", relationship);
-    await publishNotification({
-      recipientId: receiverId,
-      senderId: requesterId,
-      type: "FRIEND_REQUEST",
-      content: `${requesterName} đã gửi cho bạn lời mời kết bạn`,
-      referenceId: relationship._id.toString()
+    await publishRelationshipEvent("REQUEST_SENT", relationship, {
+      actorId: requesterId,
+      requesterDisplayName: requesterName,
     });
   } catch (err) {
     console.error(`[RelationshipService] Failed to publish REQUEST_SENT event: ${err.message}`);
@@ -204,13 +199,10 @@ exports.acceptFriendRequest = async (relationshipId) => {
   await relationship.save();
 
   try {
-    await publishRelationshipEvent("REQUEST_ACCEPTED", relationship);
-    await publishNotification({
-      recipientId: relationship.requester_id,
-      senderId: relationship.receiver_id,
-      type: "FRIEND_ACCEPTED",
-      content: "Đã chấp nhận lời mời kết bạn của bạn",
-      referenceId: relationship._id.toString()
+    const receiverName = await getUserDisplayName(relationship.receiver_id);
+    await publishRelationshipEvent("REQUEST_ACCEPTED", relationship, {
+      actorId: relationship.receiver_id,
+      receiverDisplayName: receiverName,
     });
   } catch (err) {
     console.error(`[RelationshipService] Failed to publish REQUEST_ACCEPTED event: ${err.message}`);

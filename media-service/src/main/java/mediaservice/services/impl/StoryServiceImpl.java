@@ -22,6 +22,7 @@ import mediaservice.repositories.ContentViewHistoryRepository;
 import mediaservice.repositories.RelationshipRepository;
 import mediaservice.repositories.SavedContentRepository;
 import mediaservice.repositories.UserAccountRepository;
+import mediaservice.repositories.CommentRepository;
 import mediaservice.realtime.NotificationPublisher;
 import mediaservice.services.MediaDeleteJobPublisher;
 import mediaservice.services.MediaCompressionJobPublisher;
@@ -66,6 +67,7 @@ public class StoryServiceImpl implements StoryService {
     private final StoryViewRepository storyViewRepository;
     private final ContentViewHistoryRepository contentViewHistoryRepository;
     private final SavedContentRepository savedContentRepository;
+    private final CommentRepository commentRepository;
     private final MediaDeleteJobPublisher mediaDeleteJobPublisher;
     private final MediaUrlBuilder mediaUrlBuilder;
     private final MediaRealtimePublisher mediaRealtimePublisher;
@@ -389,6 +391,7 @@ public class StoryServiceImpl implements StoryService {
         storyViewRepository.deleteByStoryId(id);
         contentViewHistoryRepository.deleteByContentId(story.getId());
         savedContentRepository.deleteByContentId(story.getId());
+        commentRepository.deleteByContent_Id(story.getId());
         
         storyRepository.delete(story);
 

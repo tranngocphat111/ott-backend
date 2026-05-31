@@ -45,17 +45,14 @@ public class RelationshipNotificationConsumer {
 
         String requesterName = firstNonBlank(
                 string(payload.get("requesterDisplayName")),
-                requesterId,
                 "Người dùng"
         );
         String receiverName = firstNonBlank(
                 string(payload.get("receiverDisplayName")),
-                receiverId,
                 "Người dùng"
         );
         String blockerName = firstNonBlank(
                 string(payload.get("blockedByDisplayName")),
-                actorId,
                 "Người dùng"
         );
 
@@ -89,20 +86,7 @@ public class RelationshipNotificationConsumer {
                     .referenceId(relationshipId)
                     .build();
             case "BLOCKED" -> {
-                String recipientId = determineBlockedRecipientId(actorId, requesterId, receiverId);
-                if (recipientId == null) {
-                    yield null;
-                }
-                String senderId = actorId != null ? actorId : string(payload.get("blockedById"));
-                String content = blockerName + " đã chặn bạn";
-                yield InAppNotificationEvent.builder()
-                        .recipientId(recipientId)
-                        .senderId(senderId)
-                        .type("USER_BLOCKED")
-                        .content(content)
-                        .title("Bạn đã bị chặn")
-                        .referenceId(relationshipId)
-                        .build();
+                yield null;
             }
             default -> null;
         };

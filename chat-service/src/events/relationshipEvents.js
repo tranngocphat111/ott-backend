@@ -14,7 +14,7 @@ const initPublisher = async (ch) => {
   }
 };
 
-const publishRelationshipEvent = async (type, relationship) => {
+const publishRelationshipEvent = async (type, relationship, metadata = {}) => {
   // Use initialized channel or fallback to central one
   const ch = channel || getChannel();
 
@@ -32,6 +32,7 @@ const publishRelationshipEvent = async (type, relationship) => {
       requesterId: relationship.requester_id,
       receiverId: relationship.receiver_id,
       status: relationship.status,
+      ...metadata,
       timestamp: new Date().toISOString(),
     };
 

@@ -17,6 +17,8 @@ import org.springframework.beans.factory.annotation.Value;
 
 import mediaservice.configs.MediaDeleteProperties;
 import mediaservice.configs.MediaUploadProperties;
+import java.util.Map;
+import java.util.HashMap;
 
 @Configuration
 public class RabbitMQConfig {
@@ -114,8 +116,8 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public DirectExchange moderationEventsExchange(@Value("${moderation.rabbitmq.exchange}") String exchange) {
-        return new DirectExchange(exchange, true, false);
+    public TopicExchange moderationEventsExchange(@Value("${moderation.rabbitmq.exchange}") String exchange) {
+        return new TopicExchange(exchange, true, false);
     }
 
     @Bean
@@ -142,7 +144,7 @@ public class RabbitMQConfig {
     @Bean
     public Binding mediaModerationViolationBinding(
             Queue mediaModerationViolationQueue,
-            DirectExchange moderationEventsExchange,
+            TopicExchange moderationEventsExchange,
             @Value("${moderation.rabbitmq.routing-key.violation-detected:moderation.violation.detected}") String routingKey) {
         return BindingBuilder.bind(mediaModerationViolationQueue)
                 .to(moderationEventsExchange)
@@ -229,6 +231,7 @@ public class RabbitMQConfig {
     }
 
     @Bean
+    @org.springframework.context.annotation.Primary
     public Jackson2JsonMessageConverter jackson2JsonMessageConverter() {
         Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter();
         org.springframework.amqp.support.converter.DefaultJackson2JavaTypeMapper typeMapper = 
@@ -242,6 +245,12 @@ public class RabbitMQConfig {
             "java.time",
             "java.util"
         );
+
+        Map<String, Class<?>> idClassMapping = new HashMap<>();
+        idClassMapping.put("iuh.fit.userservice.dto.event.UserUpdatedEvent", mediaservice.dtos.events.UserUpdatedEvent.class);
+        idClassMapping.put("iuh.fit.userservice.dto.event.UserCreatedEvent", mediaservice.dtos.events.UserCreatedEvent.class);
+        typeMapper.setIdClassMapping(idClassMapping);
+
         typeMapper.setTypePrecedence(org.springframework.amqp.support.converter.Jackson2JavaTypeMapper.TypePrecedence.INFERRED);
         converter.setJavaTypeMapper(typeMapper);
         return converter;
