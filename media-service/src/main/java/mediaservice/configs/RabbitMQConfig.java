@@ -247,7 +247,7 @@ public class RabbitMQConfig {
         return converter;
     }
 
-    @Bean
+    @Bean(autowireCandidate = false)
     public MessageConverter rawRabbitMessageConverter() {
         return new MessageConverter() {
             @Override
