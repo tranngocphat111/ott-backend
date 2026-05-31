@@ -783,7 +783,11 @@ public class PostServiceImpl implements PostService {
             String senderId = post.getAccount() != null ? post.getAccount().getId() : null;
             for (String uname : mentions) {
                 if (uname == null || uname.isBlank()) continue;
-                userAccountRepository.findByUsername(uname).ifPresent(target -> {
+                java.util.Optional<mediaservice.models.UserAccount> optAccount = userAccountRepository.findById(uname);
+                if (optAccount.isEmpty()) {
+                    optAccount = userAccountRepository.findByUsername(uname);
+                }
+                optAccount.ifPresent(target -> {
                     notificationPublisher.publishNotification(target.getId(), senderId, "MENTION", "You were mentioned", post.getId());
                 });
             }
