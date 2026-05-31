@@ -237,29 +237,43 @@ const applyImageViolationToMessage = async (event, io) => {
   }
 
   message.system_meta = {
-    ...currentMeta,
-    media_policy_status: "flagged",
+    ...buildModerationMeta(event, currentMeta),
+    media_policy_status: "rejected",
     media_warnings: nextWarnings,
   };
+  message.is_revoked = true;
+  message.content = [MODERATION_PLACEHOLDER];
+  message.reactions = [];
+  message.is_pinned = false;
+  message.pinned_at = null;
+  message.pinned_by = null;
 
   const savedMessage = await message.save();
-  const payload = await getPayloadMessage(savedMessage);
+  const payload = {
+    ...(await getPayloadMessage(savedMessage)),
+    is_revoked: true,
+    is_deleted: !!savedMessage.is_deleted,
+    reactions: [],
+  };
 
-  await messageCacheService.updateMessage(
-    savedMessage.conversation_id,
-    savedMessage.msg_id,
-    payload,
-  );
+  await Promise.allSettled([
+    messageCacheService.updateMessage(
+      savedMessage.conversation_id,
+      savedMessage.msg_id,
+      payload,
+    ),
+    updateConversationLastMessage(savedMessage),
+  ]);
 
   await emitToConversationParticipants(
     io,
     savedMessage.conversation_id,
-    "tin_nhan_cap_nhat",
+    "tin_nhan_thu_hoi",
     payload,
   );
 
   logger.warn(
-    `[moderation] image message flagged: msgId=${savedMessage.msg_id}, imageIndex=${nextWarning.index}, violationId=${event.violationId}, labels=${event.matchedLabels.join(",")}`,
+    `[moderation] image message auto-hidden: msgId=${savedMessage.msg_id}, imageIndex=${nextWarning.index}, violationId=${event.violationId}, labels=${event.matchedLabels.join(",")}`,
   );
 };
 

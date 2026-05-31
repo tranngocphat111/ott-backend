@@ -6,10 +6,12 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import mediaservice.models.enums.MediaModerationStatus;
 import mediaservice.models.enums.MediaType;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Set;
 
@@ -28,6 +30,21 @@ public abstract class Media {
     private String url;
     private String caption;
     private int orderIndex;
+
+    @Enumerated(EnumType.STRING)
+    private MediaModerationStatus moderationStatus = MediaModerationStatus.CLEAN;
+
+    private String moderationViolationId;
+    private String moderationSeverity;
+    private String moderationViolationType;
+
+    @Column(columnDefinition = "TEXT")
+    private String moderationMatchedLabels;
+
+    @Column(columnDefinition = "TEXT")
+    private String moderationReason;
+
+    private Instant moderationDetectedAt;
 
     @ToString.Exclude
     @ManyToOne(fetch = FetchType.LAZY)

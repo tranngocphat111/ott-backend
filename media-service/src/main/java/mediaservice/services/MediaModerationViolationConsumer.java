@@ -8,6 +8,7 @@ import mediaservice.models.Content;
 import mediaservice.models.Media;
 import mediaservice.models.Post;
 import mediaservice.models.enums.ContentStatusType;
+import mediaservice.models.enums.MediaModerationStatus;
 import mediaservice.realtime.MediaRealtimePublisher;
 import mediaservice.repositories.MediaRepository;
 import mediaservice.repositories.PostRepository;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
+import java.time.Instant;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
@@ -30,7 +32,7 @@ public class MediaModerationViolationConsumer {
     private static final String MEDIA_SERVICE_SOURCE = "media-service";
     private static final String IMAGE_CONTENT_TYPE = "IMAGE";
     private static final String POST_TARGET_TYPE = "POST";
-    private static final String DELETE_OPERATION = "DELETE";
+    private static final String UPDATE_OPERATION = "UPDATE";
 
     private final ObjectMapper objectMapper;
     private final MediaRepository mediaRepository;
@@ -78,8 +80,15 @@ public class MediaModerationViolationConsumer {
     }
 
     private void applyViolation(ContentViolationDetectedEvent event, String mediaId) {
-        Media media = mediaRepository.findById(mediaId)
-                .orElseThrow(() -> reject("Moderation target media not found: mediaId=" + mediaId));
+        Media media = resolveTargetMedia(event, mediaId);
+        if (media == null) {
+            log.warn(
+                    "[MediaModeration] Violation target media not found: mediaId={}, objectKey={}, violationId={}",
+                    mediaId,
+                    extractEvidenceValue(event, "objectKey"),
+                    event.getViolationId());
+            return;
+        }
 
         String contentId = resolveContentId(media);
         if (contentId == null) {
@@ -103,19 +112,36 @@ public class MediaModerationViolationConsumer {
 
         if (post.getStatus() == ContentStatusType.DELETED) {
             log.info(
-                    "[MediaModeration] Duplicate violation ignored for deleted post: postId={}, mediaId={}, violationId={}",
+                    "[MediaModeration] Violation ignored for deleted post: postId={}, mediaId={}, violationId={}",
                     post.getId(),
                     mediaId,
                     event.getViolationId());
             return;
         }
 
-        post.setStatus(ContentStatusType.DELETED);
-        postRepository.save(post);
-        publishPostDeletedAfterCommit(post.getId());
+        if (MediaModerationStatus.FLAGGED == media.getModerationStatus()
+                && normalize(event.getViolationId()) != null
+                && normalize(event.getViolationId()).equals(normalize(media.getModerationViolationId()))) {
+            log.info(
+                    "[MediaModeration] Duplicate violation ignored for flagged media: postId={}, mediaId={}, violationId={}",
+                    post.getId(),
+                    mediaId,
+                    event.getViolationId());
+            return;
+        }
+
+        media.setModerationStatus(MediaModerationStatus.FLAGGED);
+        media.setModerationViolationId(normalize(event.getViolationId()));
+        media.setModerationSeverity(normalize(event.getSeverity()));
+        media.setModerationViolationType(normalize(event.getViolationType()));
+        media.setModerationMatchedLabels(toJson(event.getMatchedLabels()));
+        media.setModerationReason(buildModerationReason(event));
+        media.setModerationDetectedAt(event.getDetectedAt() != null ? event.getDetectedAt() : Instant.now());
+        mediaRepository.save(media);
+        publishPostUpdatedAfterCommit(post.getId());
 
         log.warn(
-                "[MediaModeration] Post deleted after media violation: postId={}, mediaId={}, violationId={}, labels={}",
+                "[MediaModeration] Media flagged after violation: postId={}, mediaId={}, violationId={}, labels={}",
                 post.getId(),
                 mediaId,
                 event.getViolationId(),
@@ -130,22 +156,34 @@ public class MediaModerationViolationConsumer {
                 && IMAGE_CONTENT_TYPE.equalsIgnoreCase(normalize(event.getContentType()));
     }
 
-    private void publishPostDeletedAfterCommit(String postId) {
+    private Media resolveTargetMedia(ContentViolationDetectedEvent event, String mediaId) {
+        return mediaRepository.findById(mediaId)
+                .orElseGet(() -> {
+                    String objectKey = normalize(extractEvidenceValue(event, "objectKey"));
+                    if (objectKey == null) {
+                        return null;
+                    }
+                    return mediaRepository.findFirstByUrlContaining(objectKey)
+                            .orElse(null);
+                });
+    }
+
+    private void publishPostUpdatedAfterCommit(String postId) {
         if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-            publishPostDeleted(postId);
+            publishPostUpdated(postId);
             return;
         }
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                publishPostDeleted(postId);
+                publishPostUpdated(postId);
             }
         });
     }
 
-    private void publishPostDeleted(String postId) {
-        mediaRealtimePublisher.publish(POST_TARGET_TYPE, postId, DELETE_OPERATION, List.of(), List.of());
+    private void publishPostUpdated(String postId) {
+        mediaRealtimePublisher.publish(POST_TARGET_TYPE, postId, UPDATE_OPERATION, List.of(), List.of());
     }
 
     private String resolveContentId(Media media) {
@@ -163,6 +201,45 @@ public class MediaModerationViolationConsumer {
 
     private AmqpRejectAndDontRequeueException reject(String message) {
         return new AmqpRejectAndDontRequeueException(message);
+    }
+
+    private String toJson(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(values);
+        } catch (Exception ex) {
+            return String.join(",", values);
+        }
+    }
+
+    private String buildModerationReason(ContentViolationDetectedEvent event) {
+        if (event == null) {
+            return null;
+        }
+
+        String violationType = normalize(event.getViolationType());
+        String labels = event.getMatchedLabels() == null || event.getMatchedLabels().isEmpty()
+                ? null
+                : String.join(", ", event.getMatchedLabels());
+
+        if (violationType == null) {
+            return labels;
+        }
+        if (labels == null) {
+            return violationType;
+        }
+        return violationType + ": " + labels;
+    }
+
+    private String extractEvidenceValue(ContentViolationDetectedEvent event, String key) {
+        if (event == null || event.getEvidence() == null || key == null) {
+            return null;
+        }
+
+        Object value = event.getEvidence().get(key);
+        return value == null ? null : String.valueOf(value);
     }
 
     private String normalize(String value) {

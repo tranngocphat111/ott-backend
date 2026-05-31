@@ -13,4 +13,6 @@ public interface MediaRepository extends JpaRepository<Media, String> {
 
     @Query("select account.id from Media media join media.content content join content.account account where media.id = :mediaId")
     Optional<String> findUploaderIdByMediaId(@Param("mediaId") String mediaId);
+
+    Optional<Media> findFirstByUrlContaining(String objectKey);
 }

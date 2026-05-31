@@ -1,5 +1,7 @@
 package mediaservice.mappers;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import mediaservice.dtos.requests.PostRequest;
 import mediaservice.dtos.responses.MediaResponse;
 import mediaservice.dtos.responses.PostResponse;
@@ -19,11 +21,17 @@ import java.util.List;
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public abstract class PostMapper {
 
+    private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<>() {
+    };
+
     @Autowired
     protected MediaUrlBuilder mediaUrlBuilder;
 
     @Autowired
     protected ContentAccessControlMapper contentAccessControlMapper;
+
+    @Autowired
+    protected ObjectMapper objectMapper;
 
     @Mapping(target = "hashTags", ignore = true)
     @Mapping(target = "medias", ignore = true)
@@ -75,6 +83,12 @@ public abstract class PostMapper {
         r.setUrl(mediaUrlBuilder != null ? mediaUrlBuilder.buildS3Url(S3Url, media.getUrl()) : media.getUrl());
         r.setCaption(media.getCaption());
         r.setOrderIndex(media.getOrderIndex());
+        r.setModerationStatus(media.getModerationStatus());
+        r.setModerationSeverity(media.getModerationSeverity());
+        r.setModerationViolationType(media.getModerationViolationType());
+        r.setModerationMatchedLabels(toMatchedLabels(media.getModerationMatchedLabels()));
+        r.setModerationReason(media.getModerationReason());
+        r.setModerationDetectedAt(media.getModerationDetectedAt());
         r.setCreatedAt(media.getCreatedAt());
         r.setUpdatedAt(media.getUpdatedAt());
         if (media instanceof VideoMedia vm) {
@@ -90,5 +104,16 @@ public abstract class PostMapper {
             r.setType(MediaType.IMAGE_MEDIA);
         }
         return r;
+    }
+
+    private List<String> toMatchedLabels(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(value, STRING_LIST_TYPE);
+        } catch (Exception ignored) {
+            return List.of(value);
+        }
     }
 }
