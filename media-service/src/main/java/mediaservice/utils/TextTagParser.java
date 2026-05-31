@@ -9,7 +9,8 @@ import java.util.regex.Pattern;
 
 public final class TextTagParser {
 
-    private static final Pattern MENTION_PATTERN = Pattern.compile("@([A-Za-z0-9_.-]+)");
+    // Supports both @[displayName](userId) and @username formats
+    private static final Pattern MENTION_PATTERN = Pattern.compile("@\\[.*?\\]\\(([A-Za-z0-9_-]+)\\)|@([A-Za-z0-9_.-]+)");
     private static final Pattern HASHTAG_PATTERN = Pattern.compile("#([A-Za-z0-9_.-]+)");
 
     private TextTagParser() {}
@@ -19,8 +20,9 @@ public final class TextTagParser {
         Matcher m = MENTION_PATTERN.matcher(text);
         Set<String> found = new LinkedHashSet<>();
         while (m.find()) {
-            String name = m.group(1).trim();
-            if (!name.isBlank()) found.add(name);
+            // Group 1 is for @[name](id), Group 2 is for @username
+            String target = m.group(1) != null ? m.group(1).trim() : (m.group(2) != null ? m.group(2).trim() : null);
+            if (target != null && !target.isBlank()) found.add(target);
         }
         return new ArrayList<>(found);
     }

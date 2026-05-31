@@ -106,7 +106,7 @@ public interface PostRepository extends JpaRepository<Post, String> {
     "JOIN FETCH p.account a  " +
     "WHERE p.status = :status AND " +
     "( " +
-    "   (:isHashtag = true AND EXISTS (SELECT 1 FROM p.hashTags ht WHERE LOWER(ht.name) = LOWER(SUBSTRING(:query, 2)))) " +
+    "   (:isHashtag = true AND EXISTS (SELECT 1 FROM p.hashTags ht WHERE LOWER(ht.name) LIKE LOWER(CONCAT('%', SUBSTRING(:query, 2), '%')))) " +
     "   OR " +
     "   (:isHashtag = false AND (" +
     "       LOWER(p.caption) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
@@ -151,7 +151,7 @@ public interface PostRepository extends JpaRepository<Post, String> {
             "JOIN Account a ON a.id = p.account.id " +
             "WHERE p.status = :status AND " +
             "( " +
-            "   (:isHashtag = true AND EXISTS (SELECT 1 FROM p.hashTags ht WHERE LOWER(ht.name) = LOWER(SUBSTRING(:query, 2)))) " +
+            "   (:isHashtag = true AND EXISTS (SELECT 1 FROM p.hashTags ht WHERE LOWER(ht.name) LIKE LOWER(CONCAT('%', SUBSTRING(:query, 2), '%')))) " +
             "   OR " +
             "   (:isHashtag = false AND (" +
             "       LOWER(p.caption) LIKE LOWER(CONCAT('%', :query, '%')) OR " +

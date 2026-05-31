@@ -315,6 +315,7 @@ public class RelationshipServiceImpl implements RelationshipService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<RelationshipResponse> getBlockedUsers(String userId) {
         List<Relationship> blockedRels = relationshipRepository.findByBlockedByIdAndStatus(userId, RelationshipStatusType.BLOCKED);
         return blockedRels.stream()
@@ -323,6 +324,7 @@ public class RelationshipServiceImpl implements RelationshipService {
     }
 
     @Override
+    @Transactional
     public void unblockRelationship(String relationshipId) {
         Relationship rel = relationshipRepository.findById(relationshipId)
                 .orElseThrow(() -> new RuntimeException("Relationship not found with id: " + relationshipId));
