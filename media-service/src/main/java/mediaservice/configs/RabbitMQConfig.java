@@ -232,6 +232,7 @@ public class RabbitMQConfig {
         typeMapper.setTrustedPackages(
             "mediaservice",
             "moderationservice",
+            "moderationservice.contracts",
             "iuh.fit",
             "java.lang",
             "java.time",
