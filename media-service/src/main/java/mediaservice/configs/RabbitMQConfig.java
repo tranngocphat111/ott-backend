@@ -3,10 +3,14 @@ package mediaservice.configs;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.amqp.support.converter.MessageConversionException;
+import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.beans.factory.annotation.Value;
@@ -241,5 +245,23 @@ public class RabbitMQConfig {
         typeMapper.setTypePrecedence(org.springframework.amqp.support.converter.Jackson2JavaTypeMapper.TypePrecedence.INFERRED);
         converter.setJavaTypeMapper(typeMapper);
         return converter;
+    }
+
+    @Bean
+    public MessageConverter rawRabbitMessageConverter() {
+        return new MessageConverter() {
+            @Override
+            public Message toMessage(Object object, MessageProperties messageProperties) throws MessageConversionException {
+                if (object instanceof Message message) {
+                    return message;
+                }
+                throw new MessageConversionException("rawRabbitMessageConverter only supports raw AMQP messages");
+            }
+
+            @Override
+            public Object fromMessage(Message message) throws MessageConversionException {
+                return message;
+            }
+        };
     }
 }

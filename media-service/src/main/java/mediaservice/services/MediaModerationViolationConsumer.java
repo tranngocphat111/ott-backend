@@ -40,7 +40,9 @@ public class MediaModerationViolationConsumer {
     private final MediaRealtimePublisher mediaRealtimePublisher;
 
     @Transactional
-    @RabbitListener(queues = "${moderation.rabbitmq.queue.violation:media.moderation.violation.queue}")
+    @RabbitListener(
+            queues = "${moderation.rabbitmq.queue.violation:media.moderation.violation.queue}",
+            messageConverter = "rawRabbitMessageConverter")
     public void handleContentViolation(Message message) {
         ContentViolationDetectedEvent event = readEvent(message);
 
