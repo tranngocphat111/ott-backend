@@ -141,7 +141,14 @@ exports.addParticipant = async ({ conversationId, userId, role, addedBy, lastMsg
  */
 exports.getConversationsByUserId = async (userId) => {
   const participants = await Participant.find({ user_id: userId })
-    .populate("conversation_id")
+    .select(
+      "conversation_id user_id settings last_delivered_message_id last_delivered_at last_read_message_id last_read_at deleted_msg_id nickname joined_at roles status updatedAt",
+    )
+    .populate({
+      path: "conversation_id",
+      select:
+        "type name avatar created_by member_count last_message is_deleted background is_self_conversation self_owner_id status is_dissolved invite_token blocked_user_ids createdAt updatedAt",
+    })
     .sort({ updatedAt: -1 })
     .lean();
 

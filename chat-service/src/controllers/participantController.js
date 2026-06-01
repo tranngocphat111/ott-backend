@@ -27,6 +27,10 @@ const conversationListEnsureSelfSync = envEnabled(
   "CHAT_CONVERSATION_LIST_ENSURE_SELF_SYNC",
   false,
 );
+const conversationListExactUnreadCount = envEnabled(
+  "CHAT_CONVERSATION_LIST_EXACT_UNREAD_COUNT",
+  false,
+);
 const inFlightConversationLoads = new Map();
 
 const normalizeMessageId = (value) => {
@@ -190,7 +194,7 @@ const loadConversationListFromDb = async (userId) => {
       membersByConversationId.get(conversationId).push(member);
     });
 
-    const unreadClauses = participants
+    const unreadCandidates = participants
       .map((participant) => {
         const conversation = participant.conversation_id;
         if (!conversation?._id) return null;
@@ -209,28 +213,40 @@ const loadConversationListFromDb = async (userId) => {
         return {
           conversation_id: conversation._id,
           msg_id: { $gt: anchorMsgId },
+          last_msg_id: lastMsgId,
+          last_sender_id: String(conversation.last_message?.sender_id || ""),
         };
       })
       .filter(Boolean);
 
-    const unreadCounts = unreadClauses.length
-      ? await Message.aggregate([
-          {
-            $match: {
-              $or: unreadClauses,
-              is_deleted: { $ne: true },
-              is_revoked: { $ne: true },
-              sender_id: { $ne: userId },
-              deleted_for: { $ne: userId },
-            },
-          },
-          { $group: { _id: "$conversation_id", count: { $sum: 1 } } },
-        ])
-      : [];
-
-    const unreadCountByConversationId = new Map(
-      unreadCounts.map((item) => [String(item._id), item.count || 0]),
-    );
+    const unreadCountByConversationId = conversationListExactUnreadCount
+      ? new Map(
+          (
+            unreadCandidates.length
+              ? await Message.aggregate([
+                  {
+                    $match: {
+                      $or: unreadCandidates.map((item) => ({
+                        conversation_id: item.conversation_id,
+                        msg_id: item.msg_id,
+                      })),
+                      is_deleted: { $ne: true },
+                      is_revoked: { $ne: true },
+                      sender_id: { $ne: userId },
+                      deleted_for: { $ne: userId },
+                    },
+                  },
+                  { $group: { _id: "$conversation_id", count: { $sum: 1 } } },
+                ])
+              : []
+          ).map((item) => [String(item._id), item.count || 0]),
+        )
+      : new Map(
+          unreadCandidates.map((item) => [
+            String(item.conversation_id),
+            item.last_sender_id && item.last_sender_id !== String(userId) ? 1 : 0,
+          ]),
+        );
 
     // Trả về đầy đủ participant data + conversation data + unread_count
     const result = (
