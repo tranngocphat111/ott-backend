@@ -6,6 +6,8 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import iuh.fit.se.analyticservice.entity.RawUserEvent;
 
@@ -33,9 +35,26 @@ public interface RawUserEventRepository extends JpaRepository<RawUserEvent, Stri
 
     long deleteByTimestampGreaterThanEqualAndTimestampLessThan(Instant from, Instant to);
 
-    @org.springframework.data.jpa.repository.Query("SELECT FUNCTION('DATE', r.timestamp), COUNT(r) FROM RawUserEvent r GROUP BY FUNCTION('DATE', r.timestamp) ORDER BY FUNCTION('DATE', r.timestamp)")
+    @Query(
+            value = """
+                    SELECT CAST(event_timestamp AS date) AS event_date, COUNT(*) AS event_count
+                    FROM raw_user_events
+                    GROUP BY CAST(event_timestamp AS date)
+                    ORDER BY event_date
+                    """,
+            nativeQuery = true
+    )
     List<Object[]> countRegistrationsByDateAll();
 
-    @org.springframework.data.jpa.repository.Query("SELECT FUNCTION('DATE', r.timestamp), COUNT(r) FROM RawUserEvent r WHERE r.timestamp >= :from GROUP BY FUNCTION('DATE', r.timestamp) ORDER BY FUNCTION('DATE', r.timestamp)")
-    List<Object[]> countRegistrationsByDateFrom(@org.springframework.data.repository.query.Param("from") Instant from);
+    @Query(
+            value = """
+                    SELECT CAST(event_timestamp AS date) AS event_date, COUNT(*) AS event_count
+                    FROM raw_user_events
+                    WHERE event_timestamp >= :from
+                    GROUP BY CAST(event_timestamp AS date)
+                    ORDER BY event_date
+                    """,
+            nativeQuery = true
+    )
+    List<Object[]> countRegistrationsByDateFrom(@Param("from") Instant from);
 }

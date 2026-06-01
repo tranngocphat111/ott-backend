@@ -1,8 +1,10 @@
 package iuh.fit.se.analyticservice.service;
 
 import java.sql.Date;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -493,8 +495,20 @@ public class AdminAnalyticsService {
     }
 
     private LocalDate toLocalDate(Object value) {
+        if (value instanceof LocalDate localDate) {
+            return localDate;
+        }
         if (value instanceof Date sqlDate) {
             return sqlDate.toLocalDate();
+        }
+        if (value instanceof Timestamp timestamp) {
+            return timestamp.toLocalDateTime().toLocalDate();
+        }
+        if (value instanceof LocalDateTime localDateTime) {
+            return localDateTime.toLocalDate();
+        }
+        if (value instanceof java.util.Date date) {
+            return date.toInstant().atZone(ZoneOffset.UTC).toLocalDate();
         }
         return LocalDate.parse(String.valueOf(value));
     }
