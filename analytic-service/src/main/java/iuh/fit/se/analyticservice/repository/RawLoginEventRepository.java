@@ -27,10 +27,27 @@ public interface RawLoginEventRepository extends JpaRepository<RawLoginEvent, St
 	@Query("SELECT LOWER(l.loginMethod), COUNT(l) FROM RawLoginEvent l WHERE l.timestamp >= :from GROUP BY LOWER(l.loginMethod)")
 	List<Object[]> countByLoginMethodFrom(@Param("from") Instant from);
 
-	@Query("SELECT FUNCTION('DATE', l.timestamp), COUNT(l) FROM RawLoginEvent l GROUP BY FUNCTION('DATE', l.timestamp) ORDER BY FUNCTION('DATE', l.timestamp)")
+	@Query(
+			value = """
+					SELECT CAST(event_timestamp AS date) AS event_date, COUNT(*) AS event_count
+					FROM raw_login_events
+					GROUP BY CAST(event_timestamp AS date)
+					ORDER BY event_date
+					""",
+			nativeQuery = true
+	)
 	List<Object[]> countLoginsByDateAll();
 
-	@Query("SELECT FUNCTION('DATE', l.timestamp), COUNT(l) FROM RawLoginEvent l WHERE l.timestamp >= :from GROUP BY FUNCTION('DATE', l.timestamp) ORDER BY FUNCTION('DATE', l.timestamp)")
+	@Query(
+			value = """
+					SELECT CAST(event_timestamp AS date) AS event_date, COUNT(*) AS event_count
+					FROM raw_login_events
+					WHERE event_timestamp >= :from
+					GROUP BY CAST(event_timestamp AS date)
+					ORDER BY event_date
+					""",
+			nativeQuery = true
+	)
 	List<Object[]> countLoginsByDateFrom(@Param("from") Instant from);
 
 	@Query("SELECT COUNT(DISTINCT l.userId) FROM RawLoginEvent l WHERE l.timestamp >= :from")

@@ -30,12 +30,26 @@ public interface RawMessageEventRepository extends JpaRepository<RawMessageEvent
 
         long deleteByTimestampGreaterThanEqualAndTimestampLessThan(Instant from, Instant to);
 
-        @Query("SELECT FUNCTION('DATE', m.timestamp), COUNT(m) FROM RawMessageEvent m " +
-            "GROUP BY FUNCTION('DATE', m.timestamp) ORDER BY FUNCTION('DATE', m.timestamp)")
+        @Query(
+            value = """
+                    SELECT CAST(event_timestamp AS date) AS event_date, COUNT(*) AS event_count
+                    FROM raw_message_events
+                    GROUP BY CAST(event_timestamp AS date)
+                    ORDER BY event_date
+                    """,
+            nativeQuery = true
+        )
         List<Object[]> countMessagesByDateAll();
 
-        @Query("SELECT FUNCTION('DATE', m.timestamp), COUNT(m) FROM RawMessageEvent m " +
-            "WHERE m.timestamp >= :from GROUP BY FUNCTION('DATE', m.timestamp) " +
-            "ORDER BY FUNCTION('DATE', m.timestamp)")
+        @Query(
+            value = """
+                    SELECT CAST(event_timestamp AS date) AS event_date, COUNT(*) AS event_count
+                    FROM raw_message_events
+                    WHERE event_timestamp >= :from
+                    GROUP BY CAST(event_timestamp AS date)
+                    ORDER BY event_date
+                    """,
+            nativeQuery = true
+        )
         List<Object[]> countMessagesByDateFrom(@Param("from") Instant from);
 }
