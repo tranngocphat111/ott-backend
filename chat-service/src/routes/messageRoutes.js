@@ -20,6 +20,7 @@ const express = require("express");
 const router = express.Router();
 const messageRepository = require("../repositories/messageRepository");
 const MessageService = require("../services/messageService");
+const ParticipantService = require("../services/participantService");
 const messageCacheService = require("../services/messageCacheService");
 const logger = require("../utils/logger");
 const { Readable } = require("stream");
@@ -133,11 +134,31 @@ router.get("/conversations/:conversationId/messages", async (req, res) => {
       `📥 GET /conversations/${conversationId}/messages - Loading latest 20`,
     );
 
+    let deletedMsgId = "0";
+    if (userId) {
+      const participant = await ParticipantService.getParticipant(
+        conversationId,
+        userId,
+      );
+
+      if (!participant || participant.status !== "joined") {
+        return res.json({
+          success: true,
+          conversationId,
+          messageCount: 0,
+          messages: [],
+        });
+      }
+
+      deletedMsgId = participant.deleted_msg_id || "0";
+    }
+
     // Get messages (from cache or DB)
     const messages = await messageRepository.getConversationMessages(
       conversationId,
       20,
       userId,
+      { deletedMsgId },
     );
 
     res.json({

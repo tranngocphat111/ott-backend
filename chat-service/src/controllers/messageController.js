@@ -1,5 +1,6 @@
 const MessageService = require("../services/messageService");
 const ParticipantService = require("../services/participantService");
+const messageRepository = require("../repositories/messageRepository");
 const { publishMessageCreated } = require("../events/chatEvents");
 const { publishMessageCommand } = require("../events/chatCommandEvents");
 
@@ -278,7 +279,12 @@ exports.forwardMessage = async (req, res) => {
 exports.getMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const { userId } = req.query;
+    const { userId, limit } = req.query;
+    const parsedLimit = Number.parseInt(limit, 10);
+    const safeLimit =
+      Number.isFinite(parsedLimit) && parsedLimit > 0
+        ? Math.min(parsedLimit, 50)
+        : 20;
 
     let deletedMsgId = "0";
     if (userId) {
@@ -286,15 +292,19 @@ exports.getMessages = async (req, res) => {
         conversationId,
         userId,
       );
-      if (participant) {
-        deletedMsgId = participant.deleted_msg_id || "0";
+
+      if (!participant || participant.status !== "joined") {
+        return res.status(200).json([]);
       }
+
+      deletedMsgId = participant.deleted_msg_id || "0";
     }
 
-    const messages = await MessageService.getMessageHistory(
+    const messages = await messageRepository.getConversationMessages(
       conversationId,
-      deletedMsgId,
+      safeLimit,
       userId,
+      { deletedMsgId },
     );
 
     res.status(200).json(messages);

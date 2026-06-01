@@ -381,8 +381,16 @@ class MessageRepository {
    * @param {number} limit - number of messages to retrieve
    * @returns {Promise<Array>} messages (oldest to newest)
    */
-  async getConversationMessages(conversationId, limit = 20, userId) {
+  async getConversationMessages(conversationId, limit = 20, userId, options = {}) {
     try {
+      const hasScopedDeletedMsgId = Object.prototype.hasOwnProperty.call(
+        options,
+        "deletedMsgId",
+      );
+      const scopedDeletedMsgId = hasScopedDeletedMsgId
+        ? String(options.deletedMsgId || "0")
+        : null;
+
       // Step 1: Check Redis cache
       const cachedExists =
         await messageCacheService.cacheExists(conversationId);
@@ -395,7 +403,9 @@ class MessageRepository {
           logger.info(
             `✓ CACHE HIT: ${messages.length} messages for ${conversationId}`,
           );
-          const deletedMsgId = cacheStrictDbCheckEnabled
+          const deletedMsgId = hasScopedDeletedMsgId
+            ? scopedDeletedMsgId
+            : cacheStrictDbCheckEnabled
             ? await this.getDeletedMsgId(conversationId, userId)
             : "0";
           const visibleMessages = messages.filter((m) =>
@@ -438,7 +448,9 @@ class MessageRepository {
 
       // Step 2: Cache miss - fetch from MongoDB
       logger.info(`✗ CACHE MISS: Fetching from MongoDB for ${conversationId}`);
-      const deletedMsgId = await this.getDeletedMsgId(conversationId, userId);
+      const deletedMsgId = hasScopedDeletedMsgId
+        ? scopedDeletedMsgId
+        : await this.getDeletedMsgId(conversationId, userId);
 
       const query = {
         conversation_id: conversationId,
