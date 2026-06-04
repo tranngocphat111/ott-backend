@@ -311,6 +311,46 @@ exports.getFriends = async (userId) => {
   return await User.find({ user_id: { $in: friendIds } }).lean();
 };
 
+exports.getBlockedUsers = async (userId) => {
+  const relationships = await Relationship.find({
+    requester_id: userId,
+    status: "BLOCKED",
+  }).lean();
+
+  const blockedIds = relationships
+    .map((rel) => String(rel.receiver_id || "").trim())
+    .filter(Boolean);
+
+  const User = require("../models/User");
+  const users = blockedIds.length
+    ? await User.find({ user_id: { $in: blockedIds } })
+        .select("user_id name avatar phone")
+        .lean()
+    : [];
+
+  const userById = new Map(
+    users.map((user) => [String(user.user_id || ""), user]),
+  );
+
+  return relationships.map((rel) => {
+    const receiver = userById.get(String(rel.receiver_id || "")) || {};
+    return {
+      ...rel,
+      id: rel.relationship_id || rel._id,
+      relationshipId: rel.relationship_id || rel._id,
+      requesterId: rel.requester_id,
+      receiverId: rel.receiver_id,
+      requester_id: rel.requester_id,
+      receiver_id: rel.receiver_id,
+      receiverDisplayName: receiver.name || rel.receiver_id,
+      receiverUsername: receiver.name || rel.receiver_id,
+      receiverAvatarUrl: receiver.avatar || "",
+      receiverPhoneNumber: receiver.phone || "",
+      source: "chat",
+    };
+  });
+};
+
 exports.unfriend = async (userId, friendId) => {
   console.log(`[RelationshipService] Unfriending userId: ${userId}, friendId: ${friendId}`);
   const relationship = await exports.getRelationshipBetween(userId, friendId);

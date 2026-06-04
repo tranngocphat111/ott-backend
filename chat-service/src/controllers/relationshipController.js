@@ -127,6 +127,16 @@ exports.getFriends = async (req, res) => {
   }
 };
 
+exports.getBlockedUsers = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const blockedUsers = await relationshipService.getBlockedUsers(userId);
+    res.status(200).json(blockedUsers);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+};
+
 exports.unfriend = async (req, res) => {
   try {
     const { userId, friendId } = req.body;

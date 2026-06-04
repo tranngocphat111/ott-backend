@@ -307,6 +307,11 @@ public class RelationshipServiceImpl implements RelationshipService {
         rel.setReceiver(receiver);
         rel.setStatus(RelationshipStatusType.valueOf(status));
         rel.setType(RelationshipType.FRIEND);
+        rel.setBlockedBy(
+                RelationshipStatusType.BLOCKED.name().equals(status)
+                        ? requester
+                        : null
+        );
         
         Relationship saved = relationshipRepository.save(rel);
         
