@@ -433,6 +433,19 @@ exports.updatePinStatus = async (req, res) => {
       userId,
       isPinned,
     );
+
+    if (!participant) {
+      return res.status(404).json({ error: "Participant not found" });
+    }
+
+    req.io.to(`user:${userId}`).emit("cap_nhat_ghim", {
+      conversationId,
+      userId,
+      isPinned: Boolean(participant.settings?.is_pinned),
+      pinnedAt: participant.settings?.pinned_at || null,
+      participant,
+    });
+
     res.status(200).json(participant);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -607,6 +620,9 @@ exports.leaveGroup = async (req, res) => {
       req.io.to(`user:${p.user_id}`).emit("tin_nhan", systemMessage);
       req.io.to(`user:${p.user_id}`).emit("roi_nhom", result);
     });
+
+    req.io.to(`user:${userId}`).emit("roi_nhom", result);
+    req.io.in(`user:${userId}`).socketsLeave(conversationId);
 
     res.status(200).json(result);
   } catch (error) {
@@ -810,14 +826,28 @@ exports.transferOwnership = async (req, res) => {
       systemMessage,
     );
 
+    const ownershipPayload = {
+      ...result,
+      createdBy: newOwnerId,
+      conversation: {
+        _id: conversationId,
+        created_by: newOwnerId,
+      },
+      oldOwnerRole: "user",
+      newOwnerRole: "admin",
+    };
+
     const participants =
       await ParticipantService.getParticipants(conversationId);
     participants.forEach((p) => {
       req.io.to(`user:${p.user_id}`).emit("tin_nhan", systemMessage);
-      req.io.to(`user:${p.user_id}`).emit("chuyen_quyen_truong_nhom", result);
+      req.io.to(`user:${p.user_id}`).emit(
+        "chuyen_quyen_truong_nhom",
+        ownershipPayload,
+      );
     });
 
-    res.status(200).json(result);
+    res.status(200).json(ownershipPayload);
   } catch (error) {
     const isClientError =
       error.message.includes("không tồn tại") ||
